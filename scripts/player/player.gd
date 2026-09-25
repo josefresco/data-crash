@@ -5,6 +5,7 @@ extends CharacterBody3D
 signal health_changed(health: float, max_health: float)
 signal charges_changed(charges: int)
 signal prompt_changed(text: String)
+signal weapon_changed(weapon: Weapon)
 
 ## Hitscan and aim rays hit world, vehicles, destructibles, and units (not debris).
 const AIM_MASK := 1 | 4 | 16 | 32
@@ -20,9 +21,7 @@ const AIM_MASK := 1 | 4 | 16 | 32
 @export var c4_charges := 4
 @export var plant_range := 3.0
 @export var enter_vehicle_range := 3.5
-@export var fire_range := 60.0
-@export var fire_damage := 15.0
-@export var fire_cooldown := 0.25
+@export var throw_speed := 16.0
 @export var treats := 5
 @export var treat_range := 5.0
 @export var talk_range := 3.5
@@ -35,6 +34,8 @@ var health: float
 var vehicle: Car = null
 ## Set by BuildController: clicks place structures instead of shooting.
 var build_mode := false
+var weapons: Array[Weapon] = Weapon.default_loadout()
+var weapon_index := 0
 
 var _pitch := -0.25
 var _fire_timer := 0.0
@@ -44,6 +45,8 @@ var _vehicle_change_frame := -1
 var _slow_factor := 1.0
 var _repair_debt := 0.0
 var _slow_timer := 0.0
+## While > 0, input steering is suppressed so knockback carries the player.
+var _knockback_left := 0.0
 var _gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 
 @onready var _pivot: Node3D = $CameraPivot
@@ -74,6 +77,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		_pivot.rotate_y(-motion.relative.x * mouse_sensitivity)
 		_pitch = clampf(_pitch - motion.relative.y * mouse_sensitivity, -1.2, 0.6)
 		_spring.rotation.x = _pitch
+	if not build_mode:
+		if event.is_action_pressed("next_weapon"):
+			select_weapon(weapon_index + 1)
+		elif event.is_action_pressed("prev_weapon"):
+			select_weapon(weapon_index - 1)
 
 
 func _physics_process(delta: float) -> void:
@@ -85,7 +93,7 @@ func _physics_process(delta: float) -> void:
 
 	if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and not build_mode:
 		if Input.is_action_pressed("fire") and _fire_timer <= 0.0:
-			_fire()
+			fire()
 		if Input.is_action_just_pressed("plant"):
 			_plant()
 	if Input.is_action_just_pressed("treat"):
@@ -103,6 +111,14 @@ func apply_damage(amount: float, _from: Vector3, _kind: StringName = &"generic")
 	health_changed.emit(health, max_health)
 	if health <= 0.0:
 		_respawn()
+
+
+## Shoves the player (rams, shockwaves). Adds straight onto the velocity.
+func apply_knockback(impulse: Vector3) -> void:
+	if vehicle:
+		return
+	velocity += impulse
+	_knockback_left = 0.4
 
 
 ## Slows movement to `factor` for `duration` seconds (dog bites).
@@ -215,6 +231,9 @@ func _move(delta: float) -> void:
 		_slow_timer -= delta
 		speed *= _slow_factor
 	var weight := 1.0 - exp(-acceleration * delta)
+	if _knockback_left > 0.0:
+		_knockback_left -= delta
+		weight *= 0.1  # mostly ballistic until the shove wears off
 	velocity.x = lerpf(velocity.x, direction.x * speed, weight)
 	velocity.z = lerpf(velocity.z, direction.z * speed, weight)
 
@@ -244,24 +263,88 @@ func _aim_in_reach() -> Dictionary:
 	return hit
 
 
-func _fire() -> void:
-	_fire_timer = fire_cooldown
-	var muzzle := global_position + Vector3.UP * 1.4
-	var hit := aim(fire_range)
-	if hit.is_empty():
-		var center := get_viewport().get_visible_rect().size * 0.5
-		Fx.tracer(get_parent(), muzzle, muzzle + _camera.project_ray_normal(center) * fire_range, Color(1.0, 1.0, 0.8))
+## Turns the camera so the crosshair sits on `point`. The camera orbits with
+## yaw and pitch, so a few passes converge on the offset shoulder view.
+func aim_at(point: Vector3) -> void:
+	for i in 4:
+		var direction := (point - _camera.global_position).normalized()
+		_pivot.global_rotation.y = atan2(-direction.x, -direction.z)
+		_pitch = clampf(asin(clampf(direction.y, -1.0, 1.0)), -1.2, 0.6)
+		_spring.rotation.x = _pitch
+		_spring.force_update_transform()
+		_camera.force_update_transform()
+
+
+func current_weapon() -> Weapon:
+	return weapons[weapon_index]
+
+
+func select_weapon(index: int) -> void:
+	weapon_index = wrapi(index, 0, weapons.size())
+	weapon_changed.emit(current_weapon())
+
+
+## Tops up every weapon (between waves, at the start of the defense).
+func refill_ammo() -> void:
+	for weapon in weapons:
+		weapon.refill()
+	weapon_changed.emit(current_weapon())
+
+
+## Fires the current weapon once. Public so tests can shoot without input.
+func fire() -> void:
+	var weapon := current_weapon()
+	if not weapon.has_ammo():
 		return
-	Fx.tracer(get_parent(), muzzle, hit["position"], Color(1.0, 1.0, 0.8))
+	_fire_timer = weapon.cooldown
+	if weapon.ammo > 0:
+		weapon.ammo -= 1
+	if weapon.kind == Weapon.Kind.THROWN:
+		_throw(weapon)
+	else:
+		for i in weapon.pellets:
+			_fire_pellet(weapon)
+	weapon_changed.emit(weapon)
+
+
+func _aim_direction() -> Vector3:
+	var center := get_viewport().get_visible_rect().size * 0.5
+	return _camera.project_ray_normal(center)
+
+
+func _fire_pellet(weapon: Weapon) -> void:
+	var muzzle := global_position + Vector3.UP * 1.4
+	var center := get_viewport().get_visible_rect().size * 0.5
+	var origin := _camera.project_ray_origin(center)
+	var jitter := Vector3(randf_range(-1.0, 1.0), randf_range(-1.0, 1.0), randf_range(-1.0, 1.0)) * weapon.spread
+	var direction := (_aim_direction() + jitter).normalized()
+	var query := PhysicsRayQueryParameters3D.create(origin, origin + direction * weapon.max_range, AIM_MASK, [get_rid()])
+	var hit := get_world_3d().direct_space_state.intersect_ray(query)
+	if hit.is_empty():
+		Fx.tracer(get_parent(), muzzle, origin + direction * weapon.max_range, weapon.tracer_color)
+		return
+	Fx.tracer(get_parent(), muzzle, hit["position"], weapon.tracer_color)
 	var target := hit["collider"] as Node
 	var friendly := target != null and (target.is_in_group("structures") \
 		or (target is Enemy and (target as Enemy).faction == Enemy.Faction.ALLY))
 	if target and not friendly and target.has_method("apply_damage"):
 		# `from` is the shooter: riot shields and debris direction depend on it.
-		target.call(&"apply_damage", fire_damage, muzzle, &"bullet")
+		target.call(&"apply_damage", weapon.damage, muzzle, &"bullet")
 	if target is RigidBody3D:
 		(target as RigidBody3D).apply_impulse(
 			-(hit["normal"] as Vector3) * 2.0, (hit["position"] as Vector3) - (target as Node3D).global_position)
+
+
+func _throw(weapon: Weapon) -> void:
+	var thrown := Throwable.new()
+	thrown.kind = weapon.throw_kind
+	thrown.damage = weapon.damage
+	get_parent().add_child(thrown)
+	var direction := _aim_direction()
+	thrown.global_position = global_position + Vector3.UP * 1.6 + direction * 0.6
+	thrown.add_collision_exception_with(self)
+	thrown.linear_velocity = direction * throw_speed + Vector3.UP * 3.0
+	thrown.angular_velocity = Vector3(randf_range(-6.0, 6.0), 0.0, randf_range(-6.0, 6.0))
 
 
 func _plant() -> void:

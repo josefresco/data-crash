@@ -6,6 +6,7 @@ extends CanvasLayer
 var _bars := {}
 var _cash: Label
 var _status: Label
+var _weapon: Label
 var _objective: Label
 var _prompt: Label
 var _info_box: VBoxContainer
@@ -40,16 +41,17 @@ func _ready() -> void:
 	_place(right, Control.PRESET_TOP_RIGHT, Rect2(-240, 20, 220, 0))
 	_cash = _make_label(right, 28, HORIZONTAL_ALIGNMENT_RIGHT)
 	_status = _make_label(right, 18, HORIZONTAL_ALIGNMENT_RIGHT)
+	_weapon = _make_label(right, 20, HORIZONTAL_ALIGNMENT_RIGHT)
 
-	_objective = _make_label(root, 22, HORIZONTAL_ALIGNMENT_CENTER)
-	_place(_objective, Control.PRESET_CENTER_TOP, Rect2(-400, 20, 800, 0))
-	_objective.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-
-	# Keyed lines (wave, core health, build menu) under the objective.
+	# Objective plus keyed lines (boss, wave, core health, build menu), stacked
+	# so a wrapped objective pushes the rest down instead of overlapping.
 	_info_box = VBoxContainer.new()
 	root.add_child(_info_box)
-	_place(_info_box, Control.PRESET_CENTER_TOP, Rect2(-500, 60, 1000, 0))
-	for key: String in ["wave", "core", "build"]:
+	_place(_info_box, Control.PRESET_CENTER_TOP, Rect2(-500, 20, 1000, 0))
+	_objective = _make_label(_info_box, 22, HORIZONTAL_ALIGNMENT_CENTER)
+	_objective.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_objective.custom_minimum_size = Vector2(1000, 0)
+	for key: String in ["boss", "wave", "core", "build"]:
 		var line := _make_label(_info_box, 18, HORIZONTAL_ALIGNMENT_CENTER)
 		line.visible = false
 		_info[key] = line
@@ -84,6 +86,7 @@ func _connect_player() -> void:
 	_player.health_changed.connect(func(_h: float, _m: float) -> void: _refresh_status())
 	_player.charges_changed.connect(func(_c: int) -> void: _refresh_status())
 	_player.prompt_changed.connect(func(text: String) -> void: _prompt.text = text)
+	_player.weapon_changed.connect(func(_w: Weapon) -> void: _refresh_status())
 	_refresh_status()
 
 
@@ -92,6 +95,7 @@ func _refresh_status() -> void:
 	if _player:
 		_status.text = "HP %d   C4 x%d   Treats x%d" % [
 			ceili(maxf(_player.health, 0.0)), _player.c4_charges, _player.treats]
+		_weapon.text = "[Q] %s" % _player.current_weapon().hud_label()
 
 
 func _on_info_changed(key: String, text: String) -> void:

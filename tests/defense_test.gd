@@ -8,6 +8,7 @@ const MAIN_SCENE := preload("res://scenes/levels/test_block.tscn")
 
 func _run() -> void:
 	var level := MAIN_SCENE.instantiate()
+	level.set("boss_enabled", false)
 	add_child(level)
 	var baker := level.get_node("NavBaker") as NavBaker
 	if baker.bake_count == 0:

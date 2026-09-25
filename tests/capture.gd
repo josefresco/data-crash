@@ -18,7 +18,29 @@ func _ready() -> void:
 		(node as Destructible).shatter((node as Node3D).global_position, 200.0)
 	await get_tree().create_timer(2.0).timeout
 	await _save("collapsing")
-	await get_tree().create_timer(12.0).timeout
+
+	# Boss: watch the truck come up the road, then Elmo on foot.
+	var player := level.get_node("Player") as Player
+	while level.phase != level.Phase.BOSS:
+		await get_tree().create_timer(0.25).timeout
+	player.global_position = Vector3(-6, 0.2, 8)
+	await get_tree().create_timer(2.5).timeout
+	var truck := _find(ElmoTruck)
+	if truck:
+		player.aim_at(truck.global_position + Vector3.UP)
+		await _save("boss_truck")
+		truck.apply_damage(99999.0, truck.global_position + Vector3.UP * 5.0, &"explosive")
+	await get_tree().create_timer(3.5).timeout
+	var elmo := _find(ElmoOnFoot)
+	if elmo:
+		player.global_position = elmo.global_position + Vector3(-5, 0, 5)
+		await get_tree().create_timer(0.5).timeout
+		player.aim_at(elmo.aim_point())
+		await _save("boss_elmo")
+		elmo.apply_damage(99999.0, Vector3.ZERO, &"explosive")
+	while level.phase != level.Phase.BUILD:
+		await get_tree().create_timer(0.25).timeout
+	await get_tree().create_timer(8.0).timeout
 	await _save("restored")
 
 	# Phase 3: a few defenses, then a wave, seen from behind the turrets.
@@ -34,7 +56,6 @@ func _ready() -> void:
 	build.place(2, center + Vector3(-8, 0, -6))
 	build.place(3, center + Vector3(0, 0, 16))
 	build.set_active(true)
-	var player := level.get_node("Player") as Player
 	player.global_position = center + Vector3(3, 0.2, 4)
 	(player.get_node("CameraPivot") as Node3D).rotation.y = PI
 	await get_tree().create_timer(1.0).timeout
@@ -56,6 +77,13 @@ func _ready() -> void:
 		unit._visual.rotation.y = PI * 0.9  # face the camera
 	await _save("cast")
 	get_tree().quit()
+
+
+func _find(kind: GDScript) -> Node3D:
+	for node in get_tree().get_nodes_in_group("hostiles"):
+		if node.get_script() == kind:
+			return node as Node3D
+	return null
 
 
 func _save(label: String) -> void:

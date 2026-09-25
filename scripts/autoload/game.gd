@@ -3,7 +3,7 @@ extends Node
 
 signal cash_changed(cash: int)
 signal objective_changed(text: String)
-## Keyed HUD lines ("wave", "core", "build"). Empty text hides the line.
+## Keyed HUD lines ("boss", "wave", "core", "build"). Empty text hides the line.
 signal info_changed(key: String, text: String)
 
 ## Physics layer bits. Keep in sync with [layer_names] in project.godot.
@@ -28,7 +28,7 @@ func reset() -> void:
 	cash = 0
 	district = DistrictState.new()
 	cash_changed.emit(cash)
-	for key in ["wave", "core", "build"]:
+	for key in ["boss", "wave", "core", "build"]:
 		set_info(key, "")
 
 
@@ -59,6 +59,7 @@ func _register_input_actions() -> void:
 		"toggle_mouse": KEY_ESCAPE,
 		"treat": KEY_T,
 		"repair": KEY_F,
+		"next_weapon": KEY_Q,
 		"build_mode": KEY_B,
 		"start_wave": KEY_N,
 		"rotate": KEY_R,
@@ -78,6 +79,12 @@ func _register_input_actions() -> void:
 	var click := InputEventMouseButton.new()
 	click.button_index = MOUSE_BUTTON_LEFT
 	InputMap.action_add_event("fire", click)
+
+	for pair in [["next_weapon", MOUSE_BUTTON_WHEEL_UP], ["prev_weapon", MOUSE_BUTTON_WHEEL_DOWN]]:
+		_ensure_action(pair[0])
+		var wheel := InputEventMouseButton.new()
+		wheel.button_index = pair[1]
+		InputMap.action_add_event(pair[0], wheel)
 
 	_ensure_action("cancel")
 	var right_click := InputEventMouseButton.new()

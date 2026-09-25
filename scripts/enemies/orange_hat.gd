@@ -46,6 +46,12 @@ func persuade() -> bool:
 	return true
 
 
+## Fire and chaos send them home: no trust gained, none lost.
+func scatter() -> void:
+	if not persuaded and is_alive():
+		_go_home()
+
+
 func _go_home() -> void:
 	persuaded = true
 	target = null

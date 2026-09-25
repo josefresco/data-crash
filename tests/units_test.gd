@@ -12,6 +12,7 @@ var player: Player
 
 func _run() -> void:
 	level = MAIN_SCENE.instantiate()
+	level.set("boss_enabled", false)
 	add_child(level)
 	player = level.get_node("Player") as Player
 	await _enter_defense_phase()

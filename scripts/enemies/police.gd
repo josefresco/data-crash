@@ -44,7 +44,7 @@ func _physics_process(delta: float) -> void:
 
 
 func _modify_damage(amount: float, from: Vector3, kind: StringName) -> float:
-	if kind == &"explosive" or not is_shield_up():
+	if kind == &"explosive" or kind == &"fire" or not is_shield_up():
 		return amount
 	var to_attacker := from - global_position
 	to_attacker.y = 0.0

@@ -1,12 +1,17 @@
 extends Node3D
 ## Vertical-slice test level.
 ## Phase 2 (ASSAULT): ram the fence, blow the cooling units, watch the sky clear.
+## Boss (BOSS): Elmo Mushbrains arrives in his Felsa Truck, then fights on foot.
 ## Phase 3 (BUILD / WAVE): defend the new green datacenter against waves.
 
-enum Phase { ASSAULT, BUILD, WAVE, WON, LOST }
+enum Phase { ASSAULT, BOSS, BUILD, WAVE, WON, LOST }
 
 ## Seconds between the collapse and the green core going up (lets debris settle).
 @export var core_delay := 3.0
+## Elmo shows up after the collapse. Tests that skip to Phase 3 turn this off.
+@export var boss_enabled := true
+## Seconds after the collapse before the boss truck rolls in.
+@export var boss_delay := 4.0
 ## Seconds of build time before the next wave starts on its own.
 @export var auto_wave_delay := 45.0
 ## Neighbors who join the repair crew: base + trust * per_trust.
@@ -29,6 +34,8 @@ var _auto_wave_left := -1.0
 var _planned_breach: Array[Destructible] = []
 var _breach_side := ""
 var _breach_flare: Node3D
+var _boss: Enemy
+var _boss_name := "ELMO MUSHBRAINS"
 
 @onready var _datacenter: Datacenter = $Datacenter
 @onready var _env_driver: EnvironmentDriver = $EnvironmentDriver
@@ -56,6 +63,8 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	if phase == Phase.BOSS:
+		_update_boss_bar()
 	if phase != Phase.BUILD or _auto_wave_left < 0.0:
 		return
 	_auto_wave_left -= delta
@@ -77,7 +86,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 ## Skips straight to Phase 3. Used by tests and handy for debugging.
 func start_defense() -> void:
-	if phase != Phase.ASSAULT:
+	if phase != Phase.ASSAULT and phase != Phase.BOSS:
 		return
 	phase = Phase.BUILD
 	core = GreenCore.new()
@@ -95,9 +104,25 @@ func start_defense() -> void:
 	get_tree().call_group(&"nav_baker", &"request_rebake")
 
 	_spawn_townspeople(townspeople_base + int(Game.district.trust * townspeople_per_trust))
+	_refill_player()
 	_auto_wave_left = auto_wave_delay
 	Game.set_objective("Defend the green datacenter. Build defenses, then hold off %d waves."
 		% _spawner.total_waves())
+
+
+## Rolls Elmo's truck in from the south road. Public for tests.
+func start_boss() -> void:
+	if phase != Phase.ASSAULT:
+		return
+	phase = Phase.BOSS
+	var truck := ElmoTruck.new()
+	truck.position = ($WaveSpawner/SouthRoad as Node3D).global_position
+	truck.objective = get_tree().get_first_node_in_group("player") as Node3D
+	truck.wrecked.connect(_on_truck_wrecked)
+	add_child(truck)
+	truck.rotation.y = PI  # face north, up the road
+	_boss = truck
+	Game.set_objective("ELMO MUSHBRAINS rolls in with his Felsa Truck. Wreck it! (EMP won't hack this one.)")
 
 
 func has_planned_breach() -> bool:
@@ -134,7 +159,50 @@ func _on_cooling_unit_destroyed(remaining: int) -> void:
 
 func _on_neutralized() -> void:
 	Game.set_objective("Datacenter down. The air is clearing. (+$%d)" % _datacenter.cash_reward)
+	if boss_enabled:
+		get_tree().create_timer(boss_delay).timeout.connect(start_boss)
+	else:
+		get_tree().create_timer(core_delay).timeout.connect(start_defense)
+
+
+func _on_truck_wrecked(truck: ElmoTruck) -> void:
+	var wreck := truck.global_position
+	Game.set_objective("The truck is scrap. Elmo climbs out with a flamethrower. Hit him while he posts!")
+	# Give the wreck's explosion a moment before he climbs out beside it.
+	await get_tree().create_timer(1.2).timeout
+	var elmo := ElmoOnFoot.new()
+	elmo.position = wreck + Vector3(3.5, 0.2, 0.0)
+	elmo.objective = get_tree().get_first_node_in_group("player") as Node3D
+	elmo.died.connect(_on_boss_defeated)
+	add_child(elmo)
+	_boss = elmo
+	_boss_name = "ELMO MUSHBRAINS (on foot)"
+
+
+func _on_boss_defeated(_elmo: Enemy) -> void:
+	_boss = null
+	Game.set_info("boss", "")
+	Game.district.trust += 0.15
+	Game.set_objective("Elmo is out, logged off for good. The neighbors are coming to build.")
 	get_tree().create_timer(core_delay).timeout.connect(start_defense)
+
+
+func _update_boss_bar() -> void:
+	if not is_instance_valid(_boss) or not _boss.is_alive():
+		return
+	var ratio := clampf(_boss.health / _boss.max_health, 0.0, 1.0)
+	var filled := roundi(ratio * 30.0)
+	var bar := "#".repeat(filled) + "-".repeat(30 - filled)
+	var extra := ""
+	if _boss is ElmoOnFoot and (_boss as ElmoOnFoot).is_posting:
+		extra = "   POSTING: x2.5 damage!"
+	Game.set_info("boss", "%s  [%s]%s" % [_boss_name, bar, extra])
+
+
+func _refill_player() -> void:
+	var player := get_tree().get_first_node_in_group("player") as Player
+	if player:
+		player.refill_ammo()
 
 
 func _on_wave_started(number: int, total: int) -> void:
@@ -155,6 +223,7 @@ func _on_wave_cleared(number: int, total: int) -> void:
 	phase = Phase.BUILD
 	_auto_wave_left = auto_wave_delay
 	Game.district.trust += 0.05
+	_refill_player()
 	if number + 1 >= breach_from_wave:
 		_plan_breach()
 	# High trust brings more neighbors out to help.

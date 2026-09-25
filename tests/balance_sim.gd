@@ -24,6 +24,7 @@ var _next_build := 0
 
 func _run() -> void:
 	var level := MAIN_SCENE.instantiate()
+	level.set("boss_enabled", false)
 	add_child(level)
 	var player := level.get_node("Player") as Player
 	var spawner := level.get_node("WaveSpawner") as WaveSpawner

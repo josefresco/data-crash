@@ -14,6 +14,7 @@ static var unit_types := {
 	"police": Police,
 	"frost": Frost,
 	"orange_hat": OrangeHat,
+	"felsa": FelsaCar,
 }
 
 @export var spawn_interval := 1.2
@@ -23,9 +24,9 @@ static var unit_types := {
 @export var waves: Array[Dictionary] = [
 	{"guard": 4, "dog": 3},
 	{"guard": 6, "dog": 3, "orange_hat": 2},
-	{"guard": 5, "police": 3, "frost": 1, "orange_hat": 3},
-	{"guard": 9, "police": 6, "dog": 4, "frost": 3, "orange_hat": 4},
-	{"guard": 12, "police": 8, "dog": 6, "frost": 4, "orange_hat": 5},
+	{"guard": 5, "police": 3, "frost": 1, "orange_hat": 3, "felsa": 1},
+	{"guard": 9, "police": 6, "dog": 4, "frost": 3, "orange_hat": 4, "felsa": 1},
+	{"guard": 12, "police": 8, "dog": 6, "frost": 4, "orange_hat": 5, "felsa": 2},
 ]
 
 var objective: Node3D

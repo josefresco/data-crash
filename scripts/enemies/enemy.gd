@@ -54,6 +54,7 @@ var _has_los := false
 var _is_dead := false
 var _defeated_emitted := false
 var _stuck_time := 0.0
+var _investigate_left := 0.0
 var _sidestep_left := 0.0
 var _sidestep := Vector3.ZERO
 var _gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
@@ -111,6 +112,14 @@ func apply_damage(amount: float, from: Vector3, kind: StringName = &"generic") -
 	elif not _is_valid(target) and _nav:
 		# Getting hit reveals roughly where the attacker is: go look.
 		_nav.target_position = from
+
+
+## Walk over to check out a noise (thrown rocks). Ignored while fighting.
+func investigate(point: Vector3) -> void:
+	if _is_dead or _is_valid(target) or faction != Faction.HOSTILE:
+		return
+	_investigate_left = 5.0
+	_nav.target_position = point
 
 
 func stun(duration: float) -> void:
@@ -192,6 +201,9 @@ func _think() -> void:
 		_nav.target_position = target.global_position
 		return
 	_has_los = false
+	if _investigate_left > 0.0:
+		_investigate_left -= THINK_INTERVAL
+		return
 	_idle()
 
 
@@ -407,6 +419,11 @@ func _die() -> void:
 	collision_layer = 0
 	collision_mask = Game.LAYER_WORLD
 	died.emit(self)
+	_play_death()
+
+
+## Override: death animation. Must free the node when done.
+func _play_death() -> void:
 	var tween := create_tween()
 	tween.tween_property(_visual, "rotation:x", -PI * 0.5, 0.3)
 	tween.tween_interval(1.5)
