@@ -38,6 +38,7 @@ func _init() -> void:
 	attack_range = 6.5
 	attack_interval = 0.2
 	bounty = 500
+	boss_name = "ELMO MUSHBRAINS (on foot)"
 	body_color = Color(0.13, 0.13, 0.15)
 	body_height = 1.9
 

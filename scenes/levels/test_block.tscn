@@ -23,6 +23,9 @@
 [ext_resource type="Script" path="res://scripts/activism/security_cache.gd" id="21_cache"]
 [ext_resource type="Script" path="res://scripts/activism/foreman.gd" id="22_foreman"]
 [ext_resource type="PackedScene" path="res://scenes/vehicles/bulldozer.tscn" id="23_dozer"]
+[ext_resource type="Script" path="res://scripts/bosses/crapya_control_room.gd" id="24_crapya"]
+[ext_resource type="Script" path="res://scripts/bosses/sentry_turret.gd" id="25_sentry"]
+[ext_resource type="Script" path="res://scripts/bosses/steam_vent.gd" id="26_vent"]
 
 [sub_resource type="ProceduralSkyMaterial" id="SkyMat"]
 sky_top_color = Color(0.38, 0.32, 0.25, 1)
@@ -111,6 +114,48 @@ length = 38.0
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -32)
 script = ExtResource("6_datacenter")
 
+[node name="CrapyaControlRoom" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -18, 0, -30)
+script = ExtResource("24_crapya")
+
+[node name="SentryNE" type="CharacterBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10, 8.6, -26)
+script = ExtResource("25_sentry")
+
+[node name="SentryNW" type="CharacterBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -10, 8.6, -26)
+script = ExtResource("25_sentry")
+
+[node name="SteamVent1" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 15, 0, -29.3)
+script = ExtResource("26_vent")
+
+[node name="SteamVent2" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 15, 0, -34.7)
+script = ExtResource("26_vent")
+phase_offset = 1.5
+
+[node name="RackCrusher1" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 18.5, 0, -32)
+script = ExtResource("26_vent")
+crusher = true
+radius = 1.3
+idle_time = 2.5
+warn_time = 0.8
+active_time = 0.6
+damage = 45.0
+
+[node name="RackCrusher2" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 18.5, 0, -26.7)
+script = ExtResource("26_vent")
+crusher = true
+radius = 1.3
+idle_time = 2.5
+warn_time = 0.8
+active_time = 0.6
+damage = 45.0
+phase_offset = 1.2
+
 [node name="Guard1" type="CharacterBody3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -18, 0.1, -20)
 script = ExtResource("11_guard")
@@ -186,6 +231,10 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.2, 100)
 
 [node name="West" type="Marker3D" parent="WaveSpawner"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -85, 0.2, -30)
+
+[node name="BoardroomSite" type="Marker3D" parent="WaveSpawner"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 18, 0.2, 97)
+metadata/reserved = true
 
 [node name="East" type="Marker3D" parent="WaveSpawner"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 85, 0.2, -30)

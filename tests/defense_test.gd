@@ -67,7 +67,13 @@ func _run() -> void:
 	check(build.place(1, center + Vector3(-5, 0, 8)) == null, "overlapping placement rejected")
 	check(build.place(0, center + Vector3(0, 0, 40)) == null, "out-of-zone placement rejected")
 	check(build.place(2, center + Vector3(-8, 0, -6)) is SolarPanel, "solar panel placed")
-	check(build.place(3, center + Vector3(0, 0, 16)) is EmpTrap, "EMP trap placed")
+	# Townspeople wander the site, so allow a couple of nearby tiles.
+	var trap: Node3D = null
+	for offset in [Vector3(0, 0, 16), Vector3(3, 0, 16), Vector3(-3, 0, 16), Vector3(0, 0, 19)]:
+		trap = build.place(3, center + offset)
+		if trap:
+			break
+	check(trap is EmpTrap, "EMP trap placed")
 	check(Game.cash == 2000 - build.item_cost(1) * 3 - build.item_cost(2) - build.item_cost(3), "costs deducted ($%d)" % Game.cash)
 	Game.cash = 0
 	var income_start := Game.cash

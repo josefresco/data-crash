@@ -33,8 +33,7 @@ var _auto_wave_left := -1.0
 var _planned_breach: Array[Destructible] = []
 var _breach_side := ""
 var _breach_flare: Node3D
-var _boss: Enemy
-var _boss_name := "ELMO MUSHBRAINS"
+var _boss_bar_shown := false
 var _deeds := {"water": false, "van": false, "dogs": false, "scout": false}
 var _dogs_tamed := 0
 
@@ -70,14 +69,15 @@ func _ready() -> void:
 		var dog := get_node(dog_name) as Dog
 		dog.defeated.connect(_on_stray_dog_defeated)
 	($BribeMenu as BribeMenu).bribe_bought.connect(_on_bribe_bought)
+	($CrapyaControlRoom as CrapyaControlRoom).defenses_offline.connect(func() -> void:
+		Game.set_objective("Crapya's control room is down: defenses offline, cooling units exposed. (+$300)"))
 	_update_deeds()
 
-	Game.set_objective("Help the neighborhood first (optional), or get in the car [E] and ram the fence.")
+	Game.set_objective("Help the neighborhood first (optional), or ram the fence with the car [E]. Crapya's control room shields the cooling units.")
 
 
 func _process(delta: float) -> void:
-	if phase == Phase.BOSS:
-		_update_boss_bar()
+	_update_boss_bar()
 	if phase != Phase.BUILD or _auto_wave_left < 0.0:
 		return
 	_auto_wave_left -= delta
@@ -137,7 +137,6 @@ func start_boss() -> void:
 	truck.wrecked.connect(_on_truck_wrecked)
 	add_child(truck)
 	truck.rotation.y = PI  # face north, up the road
-	_boss = truck
 	Game.set_objective("ELMO MUSHBRAINS rolls in with his Felsa Truck. Wreck it! (EMP won't hack this one.)")
 
 
@@ -164,8 +163,12 @@ func _on_fence_breached() -> void:
 	_fence_breached = true
 	phase = Phase.ASSAULT
 	_update_deeds()
-	Game.set_objective("Fence down. Plant C4 [G] on the %d cooling units, then get clear."
-		% _datacenter.cooling_remaining)
+	var room := get_node_or_null("CrapyaControlRoom") as Destructible
+	if room and not room.is_destroyed:
+		Game.set_objective("Fence down. Take out Crapya's glass control room (rifle or explosives), then C4 [G] the cooling units.")
+	else:
+		Game.set_objective("Fence down. Plant C4 [G] on the %d cooling units, then get clear."
+			% _datacenter.cooling_remaining)
 
 
 func _on_cooling_unit_destroyed(remaining: int) -> void:
@@ -177,6 +180,10 @@ func _on_cooling_unit_destroyed(remaining: int) -> void:
 
 func _on_neutralized() -> void:
 	Game.set_objective("Datacenter down. The air is clearing. (+$%d)" % _datacenter.cash_reward)
+	# The collapse takes Crapya's control room (and her defenses) down with it.
+	var room := get_node_or_null("CrapyaControlRoom") as Destructible
+	if room and not room.is_destroyed:
+		room.shatter(room.global_position + Vector3.UP * 2.0, 120.0)
 	if boss_enabled:
 		get_tree().create_timer(boss_delay).timeout.connect(start_boss)
 	else:
@@ -193,28 +200,44 @@ func _on_truck_wrecked(truck: ElmoTruck) -> void:
 	elmo.objective = get_tree().get_first_node_in_group("player") as Node3D
 	elmo.died.connect(_on_boss_defeated)
 	add_child(elmo)
-	_boss = elmo
-	_boss_name = "ELMO MUSHBRAINS (on foot)"
 
 
 func _on_boss_defeated(_elmo: Enemy) -> void:
-	_boss = null
-	Game.set_info("boss", "")
 	Game.district.trust += 0.15
 	Game.set_objective("Elmo is out, logged off for good. The neighbors are coming to build.")
 	get_tree().create_timer(core_delay).timeout.connect(start_defense)
 
 
+## Shows the first live member of group "bosses" (any node with boss_name,
+## health, max_health). Clears the line once none are left.
 func _update_boss_bar() -> void:
-	if not is_instance_valid(_boss) or not _boss.is_alive():
+	var boss: Node = null
+	for node in get_tree().get_nodes_in_group("bosses"):
+		var alive: bool = (node as Enemy).is_alive() if node is Enemy else not (node as Destructible).is_destroyed
+		if alive:
+			boss = node
+			break
+	if boss == null:
+		if _boss_bar_shown:
+			_boss_bar_shown = false
+			Game.set_info("boss", "")
 		return
-	var ratio := clampf(_boss.health / _boss.max_health, 0.0, 1.0)
+	_boss_bar_shown = true
+	var ratio := clampf(float(boss.get("health")) / float(boss.get("max_health")), 0.0, 1.0)
 	var filled := roundi(ratio * 30.0)
 	var bar := "#".repeat(filled) + "-".repeat(30 - filled)
 	var extra := ""
-	if _boss is ElmoOnFoot and (_boss as ElmoOnFoot).is_posting:
+	if boss is ElmoOnFoot and (boss as ElmoOnFoot).is_posting:
 		extra = "   POSTING: x2.5 damage!"
-	Game.set_info("boss", "%s  [%s]%s" % [_boss_name, bar, extra])
+	elif boss is ShamCrapman and (boss as ShamCrapman).is_field_shielded():
+		extra = "   FORCE FIELD: shoot the drones!"
+	elif boss is FarkPod and (boss as FarkPod).is_tracking():
+		extra = "   TRACKED: shoot the surveillance drones!"
+	elif boss is HarryPerckerson and not (boss as HarryPerckerson).is_exposed():
+		extra = "   BEHIND GLASS: heavy explosives only!"
+	elif boss is CrapyaControlRoom:
+		extra = "   bullets bounce: rifle, explosives, or the dozer"
+	Game.set_info("boss", "%s  [%s]%s" % [boss.get("boss_name"), bar, extra])
 
 
 ## Phase 1 rewards. Trust gains shrink while the datacenter's noise saps morale.
@@ -311,6 +334,9 @@ func _on_all_waves_cleared() -> void:
 	if phase == Phase.LOST:
 		return
 	phase = Phase.WON
+	# Harry's hires: their contracts are void. Everyone left goes home.
+	for node in get_tree().get_nodes_in_group("hostiles"):
+		(node as Enemy).apply_damage(99999.0, (node as Node3D).global_position, &"explosive")
 	Game.district.trust = 1.0
 	Game.district.water_table = 1.0
 	Game.set_info("wave", "")

@@ -109,7 +109,7 @@ func _test_bribes() -> void:
 	check(walls == 4, "zoning permit pre-builds 4 walls (%d)" % walls)
 	check(not Game.has_bribe("zoning_permit"), "permit consumed")
 
-	# Delay + blockade reshape wave 3 (guard 5, police 3, frost 1, orange 3, felsa 1).
+	# Delay + blockade reshape wave 3 (guard 7, police 4, frost 1, orange 3, felsa 2).
 	var spawner := level.get_node("WaveSpawner") as WaveSpawner
 	spawner.current_wave = 2
 	spawner.start_next_wave()
@@ -117,5 +117,5 @@ func _test_bribes() -> void:
 	for kind in spawner.get("_queue"):
 		kinds[(kind as GDScript).get_global_name()] = kinds.get((kind as GDScript).get_global_name(), 0) + 1
 	check(not kinds.has("Police") and not kinds.has("Frost"), "municipal delay: no police or FROST (%s)" % kinds)
-	check(kinds.get("SecurityGuard", 0) == 3, "supply blockade: 5 guards become 3 (%d)" % kinds.get("SecurityGuard", 0))
+	check(kinds.get("SecurityGuard", 0) == 4, "supply blockade: 7 guards become 4 (%d)" % kinds.get("SecurityGuard", 0))
 	check(Game.bribes.is_empty(), "wave bribes consumed")

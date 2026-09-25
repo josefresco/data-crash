@@ -16,6 +16,9 @@ func _run() -> void:
 
 	# The Phase 1 supply van drives the same road the ram test uses.
 	(level.get_node("SupplyVan") as Enemy).apply_damage(9999.0, Vector3.ZERO)
+	# Crapya's control room shields the cooling units until it falls.
+	var room := level.get_node("CrapyaControlRoom") as CrapyaControlRoom
+	room.shatter(room.global_position, 100.0)
 	await seconds(0.5)
 	var datacenter := level.get_node("Datacenter") as Datacenter
 	var car := level.get_node("Car") as Car

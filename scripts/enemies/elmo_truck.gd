@@ -41,6 +41,7 @@ func _init() -> void:
 	explosion_radius = 7.0
 	explosion_damage = 60.0
 	bounty = 300
+	boss_name = "ELMO MUSHBRAINS"
 
 
 ## Bosses shrug off hacks: a short stall and some damage, no battery fire.

@@ -48,6 +48,8 @@ var _slow_timer := 0.0
 var _knockback_left := 0.0
 var _rig: Node3D
 var _walk_phase := 0.0
+## Fark's "Algorithm Re-education": movement input is mirrored while > 0.
+var _reversed_left := 0.0
 var _gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 
 @onready var _pivot: Node3D = $CameraPivot
@@ -131,6 +133,15 @@ func apply_knockback(impulse: Vector3) -> void:
 		return
 	velocity += impulse
 	_knockback_left = 0.4
+
+
+## Mirrors movement controls for `duration` seconds.
+func apply_control_reversal(duration: float) -> void:
+	_reversed_left = maxf(_reversed_left, duration)
+
+
+func controls_reversed() -> bool:
+	return _reversed_left > 0.0
 
 
 ## Slows movement to `factor` for `duration` seconds (dog bites).
@@ -255,6 +266,9 @@ func _move(delta: float) -> void:
 		velocity.y = jump_velocity
 
 	var input := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
+	if _reversed_left > 0.0:
+		_reversed_left -= delta
+		input = -input
 	var cam_basis := _pivot.global_basis
 	var direction := cam_basis.x * input.x + cam_basis.z * input.y
 	direction.y = 0.0
@@ -454,6 +468,9 @@ func _try_enter_vehicle() -> void:
 
 
 func _update_prompt() -> void:
+	if _reversed_left > 0.0:
+		_set_prompt("ALGORITHM RE-EDUCATION: controls reversed (%ds)" % ceili(_reversed_left))
+		return
 	if _nearest_in_group("protesters", talk_range):
 		_set_prompt("[E] Talk them down")
 		return

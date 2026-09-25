@@ -25,6 +25,9 @@ var _stuck := 0.0
 var _ram_cooldowns := {}
 var _wobble_phase := randf() * TAU
 var _fire_light: OmniLight3D
+## Game-time clock and recent reversal times, for spotting a car that is wedged.
+var _clock := 0.0
+var _reversals: Array[float] = []
 
 
 func _init() -> void:
@@ -32,6 +35,7 @@ func _init() -> void:
 	sight_range = 50.0
 	attack_range = 0.0
 	structure_engage_range = 0.0
+	waypoint_reach = 3.0  # a 4 m car can't thread 0.8 m waypoints
 	bounty = 30
 	body_color = Color(0.85, 0.86, 0.9)
 
@@ -55,6 +59,7 @@ func _candidates() -> Array[Node3D]:
 func _physics_process(delta: float) -> void:
 	if _is_dead:
 		return
+	_clock += delta
 	if not is_on_floor():
 		velocity.y -= _gravity * delta
 	for id: int in _ram_cooldowns.keys():
@@ -99,7 +104,10 @@ func _drive(delta: float) -> void:
 
 	var to_goal := _goal_point() - global_position
 	to_goal.y = 0.0
-	if to_goal.length() < 1.5:
+	# Only brake at the end of the route. Stopping short of an intermediate
+	# waypoint deadlocks: the agent never advances past it.
+	var at_end := not (_is_valid(target) and _has_los) and _nav.is_navigation_finished()
+	if to_goal.length() < 1.5 and at_end:
 		speed = move_toward(speed, 0.0, acceleration * delta)
 		return
 	var sway := sin(Time.get_ticks_msec() / 1000.0 * 1.7 + _wobble_phase) * wobble
@@ -151,6 +159,12 @@ func _begin_reverse() -> void:
 	_stuck = 0.0
 	_reverse_left = randf_range(0.6, 1.1)
 	_reverse_steer = 1.0 if randf() < 0.5 else -1.0
+	# Wedged (e.g. a fence corner the navmesh thinks it can round): after
+	# four reversals in 20s the battery goes into thermal runaway.
+	_reversals.append(_clock)
+	_reversals = _reversals.filter(func(t: float) -> bool: return _clock - t < 20.0)
+	if _reversals.size() >= 4 and not is_burning:
+		_ignite()
 
 
 func _ignite() -> void:

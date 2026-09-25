@@ -93,6 +93,7 @@ func _shoot(aim: Vector3) -> void:
 	Fx.tracer(get_parent(), from, to, Color(0.5, 1.0, 0.6))
 
 
-func _is_target_valid(enemy: Enemy) -> bool:
-	return enemy != null and is_instance_valid(enemy) and enemy.is_alive() \
-		and enemy.faction == Enemy.Faction.HOSTILE
+## `enemy` is untyped: the cached target may have been freed since the last scan.
+func _is_target_valid(enemy: Variant) -> bool:
+	return enemy != null and is_instance_valid(enemy) and (enemy as Enemy).is_alive() \
+		and (enemy as Enemy).faction == Enemy.Faction.HOSTILE

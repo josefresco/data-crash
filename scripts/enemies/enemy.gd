@@ -14,6 +14,8 @@ enum Faction { HOSTILE, ALLY }
 ## Line-of-sight blockers: world, player, destructibles, other units.
 const LOS_MASK := 1 | 2 | 16 | 32
 const THINK_INTERVAL := 0.25
+## Damage let through while inside a projection drone's force field.
+const FIELD_DAMAGE_FACTOR := 0.35
 const ALLY_TINT := Color(0.3, 0.85, 0.4)
 ## Every group a unit can belong to via _faction_group().
 const FACTION_GROUPS: Array[String] = ["hostiles", "allies", "protesters", "townspeople"]
@@ -38,6 +40,10 @@ var target: Node3D
 
 ## Set by the wave spawner when a wave drags on: charge the objective, ignore the rest.
 var rushing := false
+## How close counts as reaching a path corner. Vehicles need more slack.
+var waypoint_reach := 0.8
+## Non-empty for bosses: joins group "bosses" and gets the HUD boss bar.
+var boss_name := ""
 
 var body_color := Color(0.2, 0.2, 0.25)
 var skin_color := Models.random_skin()
@@ -56,6 +62,10 @@ var _has_los := false
 var _is_dead := false
 var _defeated_emitted := false
 var _rig: Node3D
+var _speech_label: Label3D
+## Sham Crapman's projection drones keep this topped up (seconds, game time).
+var _field_left := 0.0
+var _field_bubble: MeshInstance3D
 var _walk_phase := randf() * TAU
 var _stuck_time := 0.0
 var _investigate_left := 0.0
@@ -74,12 +84,14 @@ func _ready() -> void:
 
 	_nav = NavigationAgent3D.new()
 	_nav.radius = body_radius + 0.1
-	_nav.path_desired_distance = 0.8
+	_nav.path_desired_distance = waypoint_reach
 	_nav.target_desired_distance = 1.0
 	add_child(_nav)
 	_nav.target_position = global_position
 
 	set_faction(faction)
+	if not boss_name.is_empty():
+		add_to_group("bosses")
 	_think_timer = randf() * THINK_INTERVAL  # spread thinking across frames
 
 
@@ -107,6 +119,8 @@ func apply_damage(amount: float, from: Vector3, kind: StringName = &"generic") -
 	if _is_dead:
 		return
 	amount = _modify_damage(amount, from, kind)
+	if _field_left > 0.0:
+		amount *= FIELD_DAMAGE_FACTOR
 	if amount <= 0.0:
 		return
 	health -= amount
@@ -116,6 +130,55 @@ func apply_damage(amount: float, from: Vector3, kind: StringName = &"generic") -
 	elif not _is_valid(target) and _nav:
 		# Getting hit reveals roughly where the attacker is: go look.
 		_nav.target_position = from
+
+
+## Speech bubble above the head (bosses taunt with this).
+func speak(text: String, height := -1.0) -> void:
+	if _speech_label == null:
+		_speech_label = Label3D.new()
+		_speech_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		_speech_label.pixel_size = 0.012
+		_speech_label.font_size = 40
+		_speech_label.outline_size = 10
+		_speech_label.no_depth_test = true
+		_speech_label.width = 900.0
+		_speech_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		add_child(_speech_label)
+	_speech_label.position.y = (body_height + 1.0) if height < 0.0 else height
+	_speech_label.text = text
+
+
+## Protects this unit for `duration` seconds (see FIELD_DAMAGE_FACTOR).
+func shield_field(duration: float) -> void:
+	if _is_dead:
+		return
+	_field_left = maxf(_field_left, duration)
+	if _field_bubble == null:
+		var sphere := SphereMesh.new()
+		sphere.radius = maxf(body_height, body_radius * 2.0) * 0.7
+		sphere.height = sphere.radius * 2.0
+		var bubble_mat := StandardMaterial3D.new()
+		bubble_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		bubble_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		bubble_mat.albedo_color = Color(0.4, 0.9, 1.0, 0.18)
+		_field_bubble = MeshInstance3D.new()
+		_field_bubble.mesh = sphere
+		_field_bubble.material_override = bubble_mat
+		_field_bubble.position.y = body_height * 0.5
+		add_child(_field_bubble)
+	_field_bubble.visible = true
+
+
+func is_field_shielded() -> bool:
+	return _field_left > 0.0
+
+
+func _process(delta: float) -> void:
+	# Game time, not wall time: fields must expire correctly when time scales.
+	if _field_left > 0.0:
+		_field_left -= delta
+	if _field_bubble and _field_bubble.visible and not is_field_shielded():
+		_field_bubble.visible = false
 
 
 ## Walk over to check out a noise (thrown rocks). Ignored while fighting.
