@@ -3,7 +3,7 @@ extends Node
 
 signal cash_changed(cash: int)
 signal objective_changed(text: String)
-## Keyed HUD lines ("boss", "wave", "core", "build"). Empty text hides the line.
+## Keyed HUD lines ("deeds", "boss", "wave", "core", "build", "bribe"). Empty text hides the line.
 signal info_changed(key: String, text: String)
 
 ## Physics layer bits. Keep in sync with [layer_names] in project.godot.
@@ -17,6 +17,8 @@ const LAYER_ENEMIES := 32
 var cash: int = 0
 var district: DistrictState
 var objective: String = ""
+## Pending one-shot favors bought from officials (see BribeMenu).
+var bribes := {}
 
 
 func _ready() -> void:
@@ -26,14 +28,27 @@ func _ready() -> void:
 ## Fresh state for a (re)loaded level.
 func reset() -> void:
 	cash = 0
+	bribes.clear()
 	district = DistrictState.new()
 	cash_changed.emit(cash)
-	for key in ["boss", "wave", "core", "build"]:
+	for key in ["deeds", "boss", "wave", "core", "build", "bribe"]:
 		set_info(key, "")
 
 
 func set_info(key: String, text: String) -> void:
 	info_changed.emit(key, text)
+
+
+func has_bribe(key: String) -> bool:
+	return bribes.get(key, false)
+
+
+## Uses up a pending bribe. Returns true if there was one.
+func consume_bribe(key: String) -> bool:
+	if not has_bribe(key):
+		return false
+	bribes.erase(key)
+	return true
 
 
 func add_cash(amount: int) -> void:
@@ -60,6 +75,7 @@ func _register_input_actions() -> void:
 		"treat": KEY_T,
 		"repair": KEY_F,
 		"next_weapon": KEY_Q,
+		"bribe_menu": KEY_V,
 		"build_mode": KEY_B,
 		"start_wave": KEY_N,
 		"rotate": KEY_R,

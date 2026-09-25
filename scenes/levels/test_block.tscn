@@ -14,6 +14,10 @@
 [ext_resource type="Script" path="res://scripts/enemies/dog.gd" id="12_dog"]
 [ext_resource type="Script" path="res://scripts/district/district_audio.gd" id="13_audio"]
 [ext_resource type="Script" path="res://scripts/enemies/felsa_car.gd" id="14_felsa"]
+[ext_resource type="Script" path="res://scripts/activism/water_main.gd" id="15_water"]
+[ext_resource type="Script" path="res://scripts/activism/scout_point.gd" id="16_scout"]
+[ext_resource type="Script" path="res://scripts/enemies/supply_van.gd" id="17_van"]
+[ext_resource type="Script" path="res://scripts/systems/bribe_menu.gd" id="18_bribe"]
 
 [sub_resource type="ProceduralSkyMaterial" id="SkyMat"]
 sky_top_color = Color(0.38, 0.32, 0.25, 1)
@@ -178,6 +182,30 @@ script = ExtResource("12_dog")
 [node name="PatrolFelsa" type="CharacterBody3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.2, -46)
 script = ExtResource("14_felsa")
+
+[node name="WaterMain" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6, 0, 33)
+script = ExtResource("15_water")
+
+[node name="ScoutPoint" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -30, 0, -8)
+script = ExtResource("16_scout")
+
+[node name="SupplyVan" type="CharacterBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.5, 0.2, 42)
+script = ExtResource("17_van")
+route = Array[Vector3]([Vector3(-2.5, 0.2, 42), Vector3(-2.5, 0.2, -5)])
+
+[node name="StrayDog1" type="CharacterBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 14, 0.1, 38)
+script = ExtResource("12_dog")
+
+[node name="StrayDog2" type="CharacterBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 17, 0.1, 36)
+script = ExtResource("12_dog")
+
+[node name="BribeMenu" type="Node" parent="."]
+script = ExtResource("18_bribe")
 
 [node name="BuildController" type="Node3D" parent="."]
 script = ExtResource("9_build")

@@ -25,6 +25,7 @@ var _player: Player
 
 
 func _ready() -> void:
+	add_to_group("build_controller")
 	_items = [
 		{"name": "Barricade", "kind": Barricade, "cost": 50, "size": Vector3(4.0, 1.6, 0.6)},
 		{"name": "Turret", "kind": Turret, "cost": 175, "size": Vector3(1.2, 1.6, 1.2)},
@@ -53,6 +54,10 @@ func item_cost(index: int) -> int:
 
 func set_active(value: bool) -> void:
 	active = value and enabled
+	if active:
+		var bribes := get_tree().get_first_node_in_group("bribe_menu") as BribeMenu
+		if bribes and bribes.is_open:
+			bribes.set_open(false)
 	_ghost.visible = active
 	if _player:
 		_player.build_mode = active
@@ -61,16 +66,17 @@ func set_active(value: bool) -> void:
 
 ## Places item `index` at `point` (snapped) if affordable and clear.
 ## Used by clicks and by tests. Returns the new node or null.
-func place(index: int, point: Vector3, rotation_steps := 0) -> Node3D:
+func place(index: int, point: Vector3, rotation_steps := 0, no_cost := false) -> Node3D:
 	var item := _items[index]
 	var at := _snap(point)
-	if not _is_clear(item, at, rotation_steps):
+	if not _is_clear(item, at, rotation_steps, no_cost):
 		return null
 	var node: Node3D = (item["kind"] as GDScript).new()
 	node.position = at
 	node.rotation.y = rotation_steps * PI * 0.5
 	get_parent().add_child(node)
-	Game.add_cash(-int(item["cost"]))
+	if not no_cost:
+		Game.add_cash(-int(item["cost"]))
 	if node is Structure:
 		get_tree().call_group(&"nav_baker", &"request_rebake")
 	structure_placed.emit(node)
@@ -117,8 +123,8 @@ func _process(_delta: float) -> void:
 	_ghost_mat.albedo_color = Color(0.3, 1.0, 0.4, 0.4) if _can_place else Color(1.0, 0.25, 0.2, 0.4)
 
 
-func _is_clear(item: Dictionary, at: Vector3, rotation_steps: int) -> bool:
-	if Game.cash < int(item["cost"]):
+func _is_clear(item: Dictionary, at: Vector3, rotation_steps: int, no_cost := false) -> bool:
+	if not no_cost and Game.cash < int(item["cost"]):
 		return false
 	if Vector2(at.x - center.x, at.z - center.z).length() > build_radius:
 		return false

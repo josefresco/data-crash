@@ -1,10 +1,11 @@
 extends Node3D
 ## Vertical-slice test level.
+## Phase 1 (ACTIVISM): optional good deeds for cash and trust; breaching the fence ends it.
 ## Phase 2 (ASSAULT): ram the fence, blow the cooling units, watch the sky clear.
 ## Boss (BOSS): Elmo Mushbrains arrives in his Felsa Truck, then fights on foot.
 ## Phase 3 (BUILD / WAVE): defend the new green datacenter against waves.
 
-enum Phase { ASSAULT, BOSS, BUILD, WAVE, WON, LOST }
+enum Phase { ACTIVISM, ASSAULT, BOSS, BUILD, WAVE, WON, LOST }
 
 ## Seconds between the collapse and the green core going up (lets debris settle).
 @export var core_delay := 3.0
@@ -26,7 +27,7 @@ enum Phase { ASSAULT, BOSS, BUILD, WAVE, WON, LOST }
 ## Where neighbors walk out from (front doors).
 @export var house_doors: Array[Vector3] = [Vector3(-12, 0.2, 21), Vector3(13, 0.2, 25)]
 
-var phase := Phase.ASSAULT
+var phase := Phase.ACTIVISM
 var core: GreenCore
 
 var _fence_breached := false
@@ -36,6 +37,8 @@ var _breach_side := ""
 var _breach_flare: Node3D
 var _boss: Enemy
 var _boss_name := "ELMO MUSHBRAINS"
+var _deeds := {"water": false, "van": false, "dogs": false, "scout": false}
+var _dogs_tamed := 0
 
 @onready var _datacenter: Datacenter = $Datacenter
 @onready var _env_driver: EnvironmentDriver = $EnvironmentDriver
@@ -59,7 +62,19 @@ func _ready() -> void:
 	_spawner.wave_cleared.connect(_on_wave_cleared)
 	_spawner.all_waves_cleared.connect(_on_all_waves_cleared)
 
-	Game.set_objective("Get in the car [E] and ram through the fence. Guard dogs? Try a treat [T].")
+	($WaterMain as WaterMain).fixed.connect(func(_m: WaterMain) -> void:
+		_complete_deed("water", 100, 0.1, "Water main fixed. The Hendersons have water again. (+$100)"))
+	($ScoutPoint as ScoutPoint).scouted.connect(func(_p: ScoutPoint) -> void:
+		_complete_deed("scout", 50, 0.05, "Datacenter scouted: cooling units marked. (+$50)"))
+	($SupplyVan as Enemy).died.connect(func(_v: Enemy) -> void:
+		_complete_deed("van", 0, 0.05, "Supply van intercepted. Cargo seized. (+$150)"))
+	for dog_name in ["StrayDog1", "StrayDog2"]:
+		var dog := get_node(dog_name) as Dog
+		dog.defeated.connect(_on_stray_dog_defeated)
+	($BribeMenu as BribeMenu).bribe_bought.connect(_on_bribe_bought)
+	_update_deeds()
+
+	Game.set_objective("Help the neighborhood first (optional), or get in the car [E] and ram the fence.")
 
 
 func _process(delta: float) -> void:
@@ -86,7 +101,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 ## Skips straight to Phase 3. Used by tests and handy for debugging.
 func start_defense() -> void:
-	if phase != Phase.ASSAULT and phase != Phase.BOSS:
+	if phase not in [Phase.ACTIVISM, Phase.ASSAULT, Phase.BOSS]:
 		return
 	phase = Phase.BUILD
 	core = GreenCore.new()
@@ -105,6 +120,9 @@ func start_defense() -> void:
 
 	_spawn_townspeople(townspeople_base + int(Game.district.trust * townspeople_per_trust))
 	_refill_player()
+	_update_deeds()
+	if Game.consume_bribe("zoning_permit"):
+		_place_permit_walls()
 	_auto_wave_left = auto_wave_delay
 	Game.set_objective("Defend the green datacenter. Build defenses, then hold off %d waves."
 		% _spawner.total_waves())
@@ -112,7 +130,7 @@ func start_defense() -> void:
 
 ## Rolls Elmo's truck in from the south road. Public for tests.
 func start_boss() -> void:
-	if phase != Phase.ASSAULT:
+	if phase != Phase.ACTIVISM and phase != Phase.ASSAULT:
 		return
 	phase = Phase.BOSS
 	var truck := ElmoTruck.new()
@@ -143,9 +161,11 @@ func start_next_wave() -> void:
 
 
 func _on_fence_breached() -> void:
-	if _fence_breached or phase != Phase.ASSAULT:
+	if _fence_breached or (phase != Phase.ACTIVISM and phase != Phase.ASSAULT):
 		return
 	_fence_breached = true
+	phase = Phase.ASSAULT
+	_update_deeds()
 	Game.set_objective("Fence down. Plant C4 [G] on the %d cooling units, then get clear."
 		% _datacenter.cooling_remaining)
 
@@ -197,6 +217,63 @@ func _update_boss_bar() -> void:
 	if _boss is ElmoOnFoot and (_boss as ElmoOnFoot).is_posting:
 		extra = "   POSTING: x2.5 damage!"
 	Game.set_info("boss", "%s  [%s]%s" % [_boss_name, bar, extra])
+
+
+## Phase 1 rewards. Trust gains shrink while the datacenter's noise saps morale.
+func _complete_deed(key: String, cash: int, trust: float, text: String) -> void:
+	if _deeds.get(key, true):
+		return
+	_deeds[key] = true
+	var morale := 1.0 - 0.5 * Game.district.noise
+	Game.add_cash(cash)
+	Game.district.trust += trust * morale
+	if not _deeds.values().has(false):
+		Game.add_cash(100)
+		Game.district.trust += 0.05
+		text += "  Every deed done: the neighborhood is organized! (+$100)"
+	if phase == Phase.ACTIVISM:
+		Game.set_objective(text)
+	_update_deeds()
+
+
+func _on_stray_dog_defeated(dog: Enemy) -> void:
+	if dog.faction != Enemy.Faction.ALLY:
+		return  # killed, not tamed
+	_dogs_tamed += 1
+	Game.district.trust += 0.03
+	if _dogs_tamed >= 2:
+		_complete_deed("dogs", 50, 0.05, "Both strays tamed. They'll guard the block now. (+$50)")
+	else:
+		_update_deeds()
+
+
+func _update_deeds() -> void:
+	if phase != Phase.ACTIVISM:
+		Game.set_info("deeds", "")
+		return
+	var marks := {}
+	for key: String in _deeds:
+		marks[key] = "x" if _deeds[key] else " "
+	Game.set_info("deeds", "Good deeds:  [%s] Fix the water main [F]   [%s] Intercept the supply van   [%s] Tame the strays %d/2 [T]   [%s] Scout the datacenter"
+		% [marks["water"], marks["van"], marks["dogs"], mini(_dogs_tamed, 2), marks["scout"]])
+
+
+func _on_bribe_bought(key: String) -> void:
+	# A permit bought mid-defense goes up right away.
+	if key == "zoning_permit" and phase in [Phase.BUILD, Phase.WAVE] and Game.consume_bribe(key):
+		_place_permit_walls()
+
+
+## Zoning permit: the town board lets the crew pour walls on all four sides.
+func _place_permit_walls() -> void:
+	if core == null:
+		return
+	var center := core.global_position
+	for spot in [[Vector3(0, 0, 8), 0], [Vector3(0, 0, -8), 0], [Vector3(8, 0, 0), 1], [Vector3(-8, 0, 0), 1]]:
+		for nudge in [0.0, 1.0, -1.0, 2.0]:
+			var offset: Vector3 = spot[0] * (1.0 + nudge / 8.0)
+			if _build.place(0, center + offset, spot[1], true) != null:
+				break
 
 
 func _refill_player() -> void:

@@ -169,9 +169,23 @@ func repair_target() -> Destructible:
 	return best
 
 
+## Nearest unfixed Phase 1 fixable (water mains) within its reach, or null.
+func fixable_target() -> WaterMain:
+	for node in get_tree().get_nodes_in_group("fixables"):
+		var main := node as WaterMain
+		if main and not main.is_fixed and global_position.distance_to(main.global_position) <= main.reach:
+			return main
+	return null
+
+
 func _repair(delta: float) -> void:
 	var structure := repair_target()
-	if structure == null or Game.cash <= 0:
+	if structure == null:
+		var main := fixable_target()
+		if main:
+			main.work(delta)
+		return
+	if Game.cash <= 0:
 		return
 	var affordable := Game.cash * repair_per_dollar
 	var restored := structure.repair(minf(repair_rate * delta, affordable))
@@ -393,6 +407,10 @@ func _update_prompt() -> void:
 	var damaged := repair_target()
 	if damaged:
 		_set_prompt("[F] Repair %s  (%d/%d)" % [damaged.label, ceili(damaged.health), int(damaged.max_health)])
+		return
+	var main := fixable_target()
+	if main:
+		_set_prompt("[F] Hold to fix the %s  (%d%%)" % [main.label(), roundi(main.progress * 100.0)])
 		return
 	if treats > 0 and _hostile_dog_in_reach():
 		_set_prompt("[T] Give treat")

@@ -52,7 +52,8 @@ func start_next_wave() -> bool:
 	if wave_active or not has_more_waves():
 		return false
 	current_wave += 1
-	var wave := waves[current_wave - 1]
+	var wave := waves[current_wave - 1].duplicate()
+	_apply_bribes(wave)
 	_queue.clear()
 	for key: String in wave:
 		if not unit_types.has(key):
@@ -68,6 +69,16 @@ func start_next_wave() -> bool:
 	wave_active = true
 	wave_started.emit(current_wave, waves.size())
 	return true
+
+
+## Bribes bought from officials reshape the wave about to start.
+func _apply_bribes(wave: Dictionary) -> void:
+	if Game.consume_bribe("municipal_delay"):
+		wave.erase("police")
+		wave.erase("frost")
+	if Game.consume_bribe("supply_blockade"):
+		for key: String in wave.keys():
+			wave[key] = int(floor(int(wave[key]) * 0.7))
 
 
 func _physics_process(delta: float) -> void:

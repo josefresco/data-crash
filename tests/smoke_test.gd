@@ -14,6 +14,9 @@ func _run() -> void:
 	await seconds(0.5)
 	var game := Game
 
+	# The Phase 1 supply van drives the same road the ram test uses.
+	(level.get_node("SupplyVan") as Enemy).apply_damage(9999.0, Vector3.ZERO)
+	await seconds(0.5)
 	var datacenter := level.get_node("Datacenter") as Datacenter
 	var car := level.get_node("Car") as Car
 	var fence := level.get_node("FenceFront") as FenceLine
