@@ -9,7 +9,7 @@ extends StaticBody3D
 signal damaged(amount: float, health: float)
 signal destroyed(destructible: Destructible)
 
-const MAX_LIVE_DEBRIS := 600
+const MAX_LIVE_DEBRIS := 400
 
 @export var size := Vector3(2.0, 2.0, 0.2):
 	set(value):
@@ -118,6 +118,7 @@ func _spawn_debris(from: Vector3, force: float) -> void:
 		else:
 			_spawn_box_chunks(parent, from, force, budget)
 	destroyed.emit(self)
+	get_tree().call_group(&"nav_baker", &"request_rebake")
 	queue_free()
 
 

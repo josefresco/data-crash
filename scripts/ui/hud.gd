@@ -8,6 +8,8 @@ var _cash: Label
 var _status: Label
 var _objective: Label
 var _prompt: Label
+var _info_box: VBoxContainer
+var _info := {}
 var _player: Player
 
 
@@ -43,6 +45,15 @@ func _ready() -> void:
 	_place(_objective, Control.PRESET_CENTER_TOP, Rect2(-400, 20, 800, 0))
 	_objective.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 
+	# Keyed lines (wave, core health, build menu) under the objective.
+	_info_box = VBoxContainer.new()
+	root.add_child(_info_box)
+	_place(_info_box, Control.PRESET_CENTER_TOP, Rect2(-500, 60, 1000, 0))
+	for key: String in ["wave", "core", "build"]:
+		var line := _make_label(_info_box, 18, HORIZONTAL_ALIGNMENT_CENTER)
+		line.visible = false
+		_info[key] = line
+
 	_prompt = _make_label(root, 22, HORIZONTAL_ALIGNMENT_CENTER)
 	_place(_prompt, Control.PRESET_CENTER_BOTTOM, Rect2(-300, -80, 600, 40))
 
@@ -52,6 +63,7 @@ func _ready() -> void:
 
 	Game.cash_changed.connect(func(_c: int) -> void: _refresh_status())
 	Game.objective_changed.connect(func(text: String) -> void: _objective.text = text)
+	Game.info_changed.connect(_on_info_changed)
 	_objective.text = Game.objective
 	_connect_player.call_deferred()
 
@@ -78,7 +90,15 @@ func _connect_player() -> void:
 func _refresh_status() -> void:
 	_cash.text = "$%d" % Game.cash
 	if _player:
-		_status.text = "HP %d   C4 x%d" % [ceili(maxf(_player.health, 0.0)), _player.c4_charges]
+		_status.text = "HP %d   C4 x%d   Treats x%d" % [
+			ceili(maxf(_player.health, 0.0)), _player.c4_charges, _player.treats]
+
+
+func _on_info_changed(key: String, text: String) -> void:
+	var line := _info.get(key) as Label
+	if line:
+		line.text = text
+		line.visible = not text.is_empty()
 
 
 ## Anchors `control` to `preset`, then offsets it by `rect` (relative to that anchor).

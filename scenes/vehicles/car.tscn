@@ -28,7 +28,7 @@ albedo_color = Color(0.08, 0.08, 0.08, 1)
 
 [node name="Car" type="VehicleBody3D"]
 collision_layer = 4
-collision_mask = 31
+collision_mask = 63
 mass = 900.0
 center_of_mass_mode = 1
 center_of_mass = Vector3(0, 0.35, 0)
@@ -127,7 +127,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.8, 0.2, 0.3)
 
 [node name="SpringArm3D" type="SpringArm3D" parent="CameraRig"]
 transform = Transform3D(1, 0, 0, 0, 0.9689, 0.2474, 0, -0.2474, 0.9689, 0, 1, 0)
-collision_mask = 1
+collision_mask = 17
 spring_length = 7.0
 
 [node name="Camera3D" type="Camera3D" parent="CameraRig/SpringArm3D"]

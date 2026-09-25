@@ -64,7 +64,7 @@ func detonate() -> void:
 	var query := PhysicsShapeQueryParameters3D.new()
 	query.shape = sphere
 	query.transform = Transform3D(Basis(), origin)
-	query.collision_mask = 1 | 2 | 4 | 8 | 16
+	query.collision_mask = 1 | 2 | 4 | 8 | 16 | 32
 	var hits := get_world_3d().direct_space_state.intersect_shape(query, 128)
 
 	var seen := {}
@@ -96,11 +96,12 @@ func detonate() -> void:
 
 
 ## Expanding fireball plus light. Static so other scripts (bosses, rockets) can reuse it.
-static func spawn_flash(parent: Node, at: Vector3, size: float) -> void:
+static func spawn_flash(parent: Node, at: Vector3, size: float,
+		color := Color(1.0, 0.6, 0.15)) -> void:
 	var mat := StandardMaterial3D.new()
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.albedo_color = Color(1.0, 0.6, 0.15, 0.9)
+	mat.albedo_color = Color(color, 0.9)
 	var sphere := SphereMesh.new()
 	sphere.radius = 1.0
 	sphere.height = 2.0
@@ -114,7 +115,7 @@ static func spawn_flash(parent: Node, at: Vector3, size: float) -> void:
 	flash.scale = Vector3.ONE * 0.3
 
 	var light := OmniLight3D.new()
-	light.light_color = Color(1.0, 0.6, 0.25)
+	light.light_color = color
 	light.light_energy = 12.0
 	light.omni_range = size * 4.0
 	parent.add_child(light)

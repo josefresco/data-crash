@@ -6,8 +6,8 @@ signal health_changed(health: float, max_health: float)
 signal charges_changed(charges: int)
 signal prompt_changed(text: String)
 
-## Hitscan and aim rays hit world, vehicles, and destructibles (not debris).
-const AIM_MASK := 1 | 4 | 16
+## Hitscan and aim rays hit world, vehicles, destructibles, and units (not debris).
+const AIM_MASK := 1 | 4 | 16 | 32
 
 @export var walk_speed := 5.0
 @export var sprint_speed := 8.5
@@ -23,15 +23,21 @@ const AIM_MASK := 1 | 4 | 16
 @export var fire_range := 60.0
 @export var fire_damage := 15.0
 @export var fire_cooldown := 0.25
+@export var treats := 5
+@export var treat_range := 5.0
 
 var health: float
 var vehicle: Car = null
+## Set by BuildController: clicks place structures instead of shooting.
+var build_mode := false
 
 var _pitch := -0.25
 var _fire_timer := 0.0
 var _spawn: Transform3D
 var _prompt := ""
 var _vehicle_change_frame := -1
+var _slow_factor := 1.0
+var _slow_timer := 0.0
 var _gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 
 @onready var _pivot: Node3D = $CameraPivot
@@ -71,11 +77,13 @@ func _physics_process(delta: float) -> void:
 	if global_position.y < -30.0:
 		_respawn()
 
-	if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+	if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and not build_mode:
 		if Input.is_action_pressed("fire") and _fire_timer <= 0.0:
 			_fire()
 		if Input.is_action_just_pressed("plant"):
 			_plant()
+	if Input.is_action_just_pressed("treat"):
+		give_treat()
 	if Input.is_action_just_pressed("interact") and Engine.get_physics_frames() != _vehicle_change_frame:
 		_try_enter_vehicle()
 	_update_prompt()
@@ -86,6 +94,33 @@ func apply_damage(amount: float, _from: Vector3, _kind: StringName = &"generic")
 	health_changed.emit(health, max_health)
 	if health <= 0.0:
 		_respawn()
+
+
+## Slows movement to `factor` for `duration` seconds (dog bites).
+func apply_slow(factor: float, duration: float) -> void:
+	_slow_factor = minf(_slow_factor, factor) if _slow_timer > 0.0 else factor
+	_slow_timer = maxf(_slow_timer, duration)
+
+
+## Befriends the nearest hostile dog within reach. Returns true on success.
+func give_treat() -> bool:
+	if treats <= 0:
+		return false
+	var best: Dog = null
+	var best_distance := treat_range
+	for node in get_tree().get_nodes_in_group("hostiles"):
+		var dog := node as Dog
+		if dog == null:
+			continue
+		var distance := global_position.distance_to(dog.global_position)
+		if distance < best_distance:
+			best = dog
+			best_distance = distance
+	if best == null or not best.befriend():
+		return false
+	treats -= 1
+	charges_changed.emit(c4_charges)
+	return true
 
 
 ## Called by Car. Pass a car to hide and disable the player, null to get out.
@@ -102,7 +137,7 @@ func set_driving(car: Car, exit_position := Vector3.ZERO) -> void:
 		global_position = exit_position
 		velocity = Vector3.ZERO
 		collision_layer = Game.LAYER_PLAYER
-		collision_mask = Game.LAYER_WORLD | Game.LAYER_VEHICLES | Game.LAYER_DESTRUCTIBLE
+		collision_mask = Game.LAYER_WORLD | Game.LAYER_VEHICLES | Game.LAYER_DESTRUCTIBLE | Game.LAYER_ENEMIES
 		show()
 		process_mode = Node.PROCESS_MODE_INHERIT
 		_camera.make_current()
@@ -121,6 +156,9 @@ func _move(delta: float) -> void:
 	direction = direction.normalized()
 
 	var speed := sprint_speed if Input.is_action_pressed("sprint") else walk_speed
+	if _slow_timer > 0.0:
+		_slow_timer -= delta
+		speed *= _slow_factor
 	var weight := 1.0 - exp(-acceleration * delta)
 	velocity.x = lerpf(velocity.x, direction.x * speed, weight)
 	velocity.z = lerpf(velocity.z, direction.z * speed, weight)
@@ -131,17 +169,18 @@ func _move(delta: float) -> void:
 	move_and_slide()
 
 
-func _aim(max_distance: float) -> Dictionary:
+## Ray from the screen center along the camera view.
+func aim(max_distance: float, mask := AIM_MASK) -> Dictionary:
 	var center := get_viewport().get_visible_rect().size * 0.5
 	var from := _camera.project_ray_origin(center)
 	var to := from + _camera.project_ray_normal(center) * max_distance
-	var query := PhysicsRayQueryParameters3D.create(from, to, AIM_MASK, [get_rid()])
+	var query := PhysicsRayQueryParameters3D.create(from, to, mask, [get_rid()])
 	return get_world_3d().direct_space_state.intersect_ray(query)
 
 
 ## Aim ray limited to what the player can reach with their hands.
 func _aim_in_reach() -> Dictionary:
-	var hit := _aim(_spring.spring_length + plant_range + 1.0)
+	var hit := aim(_spring.spring_length + plant_range + 1.0)
 	if hit.is_empty():
 		return hit
 	var chest := global_position + Vector3.UP
@@ -152,11 +191,16 @@ func _aim_in_reach() -> Dictionary:
 
 func _fire() -> void:
 	_fire_timer = fire_cooldown
-	var hit := _aim(fire_range)
+	var muzzle := global_position + Vector3.UP * 1.4
+	var hit := aim(fire_range)
 	if hit.is_empty():
+		var center := get_viewport().get_visible_rect().size * 0.5
+		Fx.tracer(get_parent(), muzzle, muzzle + _camera.project_ray_normal(center) * fire_range, Color(1.0, 1.0, 0.8))
 		return
+	Fx.tracer(get_parent(), muzzle, hit["position"], Color(1.0, 1.0, 0.8))
 	var target := hit["collider"] as Node
-	if target and target.has_method("apply_damage"):
+	var friendly := target != null and (target.is_in_group("structures") 		or (target is Enemy and (target as Enemy).faction == Enemy.Faction.ALLY))
+	if target and not friendly and target.has_method("apply_damage"):
 		target.call(&"apply_damage", fire_damage, hit["position"], &"bullet")
 	if target is RigidBody3D:
 		(target as RigidBody3D).apply_impulse(
@@ -203,6 +247,9 @@ func _try_enter_vehicle() -> void:
 
 
 func _update_prompt() -> void:
+	if treats > 0 and _hostile_dog_in_reach():
+		_set_prompt("[T] Give treat")
+		return
 	if _nearest_vehicle():
 		_set_prompt("[E] Drive")
 		return
@@ -215,6 +262,13 @@ func _update_prompt() -> void:
 			_set_prompt("Out of C4")
 		return
 	_set_prompt("")
+
+
+func _hostile_dog_in_reach() -> bool:
+	for node in get_tree().get_nodes_in_group("hostiles"):
+		if node is Dog and global_position.distance_to((node as Dog).global_position) < treat_range:
+			return true
+	return false
 
 
 func _set_prompt(text: String) -> void:

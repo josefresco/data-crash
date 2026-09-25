@@ -59,7 +59,7 @@ func _ready() -> void:
 		await _seconds(0.25)
 	_check(neutralized[0], "datacenter neutralized")
 	_check(game.district.smog < 0.3, "smog cleared (smog=%.2f)" % game.district.smog)
-	_check(game.cash == datacenter.cash_reward, "cash reward paid ($%d)" % game.cash)
+	_check(game.cash >= datacenter.cash_reward, "cash reward paid ($%d incl. bounties)" % game.cash)
 	var debris := get_tree().get_nodes_in_group("debris").size()
 	_check(debris <= Destructible.MAX_LIVE_DEBRIS, "debris under cap (%d)" % debris)
 	_finish()

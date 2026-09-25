@@ -20,6 +20,27 @@ func _ready() -> void:
 	await _save("collapsing")
 	await get_tree().create_timer(12.0).timeout
 	await _save("restored")
+
+	# Phase 3: a few defenses, then a wave, seen from behind the turrets.
+	var core := level.get("core") as GreenCore
+	var build := level.get_node("BuildController") as BuildController
+	for i in [9, 10]:
+		(level.get_node("FenceFront/Panel%d" % i) as Destructible).shatter(Vector3(0, 1, 0), 50.0)
+	Game.cash = 2000
+	var center := core.global_position
+	build.place(1, center + Vector3(-5, 0, 8))
+	build.place(1, center + Vector3(5, 0, 8))
+	build.place(0, center + Vector3(0, 0, 13))
+	build.place(2, center + Vector3(-8, 0, -6))
+	build.place(3, center + Vector3(0, 0, 16))
+	build.set_active(true)
+	var player := level.get_node("Player") as Player
+	player.global_position = center + Vector3(3, 0.2, 4)
+	(player.get_node("CameraPivot") as Node3D).rotation.y = PI
+	await get_tree().create_timer(1.0).timeout
+	level.call("start_next_wave")
+	await get_tree().create_timer(14.0).timeout
+	await _save("wave")
 	get_tree().quit()
 
 

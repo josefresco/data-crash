@@ -68,7 +68,7 @@ func _add_wall_run(start: Vector3, direction: Vector3, run_length: float, thickn
 	for i in count:
 		var along := direction.x != 0.0
 		var seg_size := Vector3(width, height, thickness) if along else Vector3(thickness, height, width)
-		var piece := _make_segment(seg_size, wall_color, Vector3i(3, 4, 1) if along else Vector3i(1, 4, 3))
+		var piece := _make_segment(seg_size, wall_color, Vector3i(3, 3, 1) if along else Vector3i(1, 3, 3))
 		var offset := direction * ((i + 0.5) * width)
 		# Keep walls inside the footprint edge.
 		var inset := Vector3(0.0, 0.0, -thickness * 0.5 * signf(start.z)) if along \

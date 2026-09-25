@@ -7,6 +7,11 @@
 [ext_resource type="Script" path="res://scripts/props/fence_line.gd" id="5_fence"]
 [ext_resource type="Script" path="res://scripts/props/datacenter.gd" id="6_datacenter"]
 [ext_resource type="Script" path="res://scripts/ui/hud.gd" id="7_hud"]
+[ext_resource type="Script" path="res://scripts/nav/nav_baker.gd" id="8_nav"]
+[ext_resource type="Script" path="res://scripts/build/build_controller.gd" id="9_build"]
+[ext_resource type="Script" path="res://scripts/waves/wave_spawner.gd" id="10_waves"]
+[ext_resource type="Script" path="res://scripts/enemies/security_guard.gd" id="11_guard"]
+[ext_resource type="Script" path="res://scripts/enemies/dog.gd" id="12_dog"]
 
 [sub_resource type="ProceduralSkyMaterial" id="SkyMat"]
 sky_top_color = Color(0.38, 0.32, 0.25, 1)
@@ -43,8 +48,23 @@ albedo_color = Color(0.72, 0.62, 0.5, 1)
 [sub_resource type="StandardMaterial3D" id="RoofMat"]
 albedo_color = Color(0.45, 0.2, 0.18, 1)
 
-[node name="TestBlock" type="Node3D"]
+[sub_resource type="BoxMesh" id="RoadMesh"]
+size = Vector3(8, 0.04, 52)
+
+[sub_resource type="BoxShape3D" id="HouseShape"]
+size = Vector3(10, 5, 8)
+
+[sub_resource type="BoxMesh" id="HouseMesh"]
+size = Vector3(10, 5, 8)
+
+[sub_resource type="BoxMesh" id="RoofMesh"]
+size = Vector3(10.6, 0.6, 8.6)
+
+[node name="TestBlock" type="Node3D" groups=["nav_source"]]
 script = ExtResource("1_level")
+
+[node name="NavBaker" type="NavigationRegion3D" parent="."]
+script = ExtResource("8_nav")
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = SubResource("Environment")
@@ -68,32 +88,40 @@ shape = SubResource("GroundShape")
 mesh = SubResource("GroundMesh")
 material_override = SubResource("GroundMat")
 
-[node name="Road" type="CSGBox3D" parent="."]
+[node name="Road" type="MeshInstance3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.02, 14)
-size = Vector3(8, 0.04, 52)
-material = SubResource("RoadMat")
+mesh = SubResource("RoadMesh")
+material_override = SubResource("RoadMat")
 
-[node name="House" type="CSGBox3D" parent="."]
+[node name="House" type="StaticBody3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12, 2.5, 26)
-use_collision = true
-size = Vector3(10, 5, 8)
-material = SubResource("HouseMat")
 
-[node name="Roof" type="CSGBox3D" parent="House"]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="House"]
+shape = SubResource("HouseShape")
+
+[node name="Walls" type="MeshInstance3D" parent="House"]
+mesh = SubResource("HouseMesh")
+material_override = SubResource("HouseMat")
+
+[node name="Roof" type="MeshInstance3D" parent="House"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.8, 0)
-size = Vector3(10.6, 0.6, 8.6)
-material = SubResource("RoofMat")
+mesh = SubResource("RoofMesh")
+material_override = SubResource("RoofMat")
 
-[node name="NeighborHouse" type="CSGBox3D" parent="."]
+[node name="NeighborHouse" type="StaticBody3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 13, 2.5, 30)
-use_collision = true
-size = Vector3(9, 5, 8)
-material = SubResource("HouseMat")
 
-[node name="Roof" type="CSGBox3D" parent="NeighborHouse"]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="NeighborHouse"]
+shape = SubResource("HouseShape")
+
+[node name="Walls" type="MeshInstance3D" parent="NeighborHouse"]
+mesh = SubResource("HouseMesh")
+material_override = SubResource("HouseMat")
+
+[node name="Roof" type="MeshInstance3D" parent="NeighborHouse"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.8, 0)
-size = Vector3(9.6, 0.6, 8.6)
-material = SubResource("RoofMat")
+mesh = SubResource("RoofMesh")
+material_override = SubResource("RoofMat")
 
 [node name="Player" parent="." instance=ExtResource("3_player")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, 0.1, 20)
@@ -124,6 +152,41 @@ length = 38.0
 [node name="Datacenter" type="Node3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -32)
 script = ExtResource("6_datacenter")
+
+[node name="Guard1" type="CharacterBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -18, 0.1, -20)
+script = ExtResource("11_guard")
+
+[node name="Guard2" type="CharacterBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 18, 0.1, -45)
+script = ExtResource("11_guard")
+
+[node name="Guard3" type="CharacterBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, 0.1, -18)
+script = ExtResource("11_guard")
+
+[node name="Dog1" type="CharacterBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 0.1, -16)
+script = ExtResource("12_dog")
+
+[node name="Dog2" type="CharacterBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12, 0.1, -16)
+script = ExtResource("12_dog")
+
+[node name="BuildController" type="Node3D" parent="."]
+script = ExtResource("9_build")
+
+[node name="WaveSpawner" type="Node3D" parent="."]
+script = ExtResource("10_waves")
+
+[node name="SouthRoad" type="Marker3D" parent="WaveSpawner"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.2, 45)
+
+[node name="West" type="Marker3D" parent="WaveSpawner"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -45, 0.2, -30)
+
+[node name="East" type="Marker3D" parent="WaveSpawner"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 45, 0.2, -30)
 
 [node name="Hud" type="CanvasLayer" parent="."]
 script = ExtResource("7_hud")
