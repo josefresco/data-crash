@@ -1,0 +1,129 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/levels/test_block.gd" id="1_level"]
+[ext_resource type="Script" path="res://scripts/district/environment_driver.gd" id="2_env"]
+[ext_resource type="PackedScene" path="res://scenes/player/player.tscn" id="3_player"]
+[ext_resource type="PackedScene" path="res://scenes/vehicles/car.tscn" id="4_car"]
+[ext_resource type="Script" path="res://scripts/props/fence_line.gd" id="5_fence"]
+[ext_resource type="Script" path="res://scripts/props/datacenter.gd" id="6_datacenter"]
+[ext_resource type="Script" path="res://scripts/ui/hud.gd" id="7_hud"]
+
+[sub_resource type="ProceduralSkyMaterial" id="SkyMat"]
+sky_top_color = Color(0.38, 0.32, 0.25, 1)
+sky_horizon_color = Color(0.55, 0.45, 0.32, 1)
+ground_horizon_color = Color(0.55, 0.45, 0.32, 1)
+
+[sub_resource type="Sky" id="Sky"]
+sky_material = SubResource("SkyMat")
+
+[sub_resource type="Environment" id="Environment"]
+background_mode = 2
+sky = SubResource("Sky")
+ambient_light_source = 3
+tonemap_mode = 2
+fog_enabled = true
+fog_light_color = Color(0.45, 0.36, 0.25, 1)
+fog_density = 0.035
+
+[sub_resource type="BoxShape3D" id="GroundShape"]
+size = Vector3(400, 1, 400)
+
+[sub_resource type="PlaneMesh" id="GroundMesh"]
+size = Vector2(400, 400)
+
+[sub_resource type="StandardMaterial3D" id="GroundMat"]
+albedo_color = Color(0.32, 0.3, 0.26, 1)
+
+[sub_resource type="StandardMaterial3D" id="RoadMat"]
+albedo_color = Color(0.16, 0.16, 0.17, 1)
+
+[sub_resource type="StandardMaterial3D" id="HouseMat"]
+albedo_color = Color(0.72, 0.62, 0.5, 1)
+
+[sub_resource type="StandardMaterial3D" id="RoofMat"]
+albedo_color = Color(0.45, 0.2, 0.18, 1)
+
+[node name="TestBlock" type="Node3D"]
+script = ExtResource("1_level")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+rotation_degrees = Vector3(-50, 30, 0)
+light_color = Color(1, 0.72, 0.45, 1)
+light_energy = 0.5
+shadow_enabled = true
+
+[node name="EnvironmentDriver" type="Node" parent="."]
+script = ExtResource("2_env")
+
+[node name="Ground" type="StaticBody3D" parent="."]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Ground"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.5, 0)
+shape = SubResource("GroundShape")
+
+[node name="Mesh" type="MeshInstance3D" parent="Ground"]
+mesh = SubResource("GroundMesh")
+material_override = SubResource("GroundMat")
+
+[node name="Road" type="CSGBox3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.02, 14)
+size = Vector3(8, 0.04, 52)
+material = SubResource("RoadMat")
+
+[node name="House" type="CSGBox3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12, 2.5, 26)
+use_collision = true
+size = Vector3(10, 5, 8)
+material = SubResource("HouseMat")
+
+[node name="Roof" type="CSGBox3D" parent="House"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.8, 0)
+size = Vector3(10.6, 0.6, 8.6)
+material = SubResource("RoofMat")
+
+[node name="NeighborHouse" type="CSGBox3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 13, 2.5, 30)
+use_collision = true
+size = Vector3(9, 5, 8)
+material = SubResource("HouseMat")
+
+[node name="Roof" type="CSGBox3D" parent="NeighborHouse"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.8, 0)
+size = Vector3(9.6, 0.6, 8.6)
+material = SubResource("RoofMat")
+
+[node name="Player" parent="." instance=ExtResource("3_player")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, 0.1, 20)
+
+[node name="Car" parent="." instance=ExtResource("4_car")]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 2, 0.6, 17)
+
+[node name="FenceFront" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -25, 0, -12)
+script = ExtResource("5_fence")
+length = 50.0
+
+[node name="FenceBack" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -25, 0, -50)
+script = ExtResource("5_fence")
+length = 50.0
+
+[node name="FenceLeft" type="Node3D" parent="."]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -25, 0, -12)
+script = ExtResource("5_fence")
+length = 38.0
+
+[node name="FenceRight" type="Node3D" parent="."]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 25, 0, -12)
+script = ExtResource("5_fence")
+length = 38.0
+
+[node name="Datacenter" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -32)
+script = ExtResource("6_datacenter")
+
+[node name="Hud" type="CanvasLayer" parent="."]
+script = ExtResource("7_hud")

@@ -1,0 +1,230 @@
+class_name Player
+extends CharacterBody3D
+## Third-person on-foot controller: move, look, jump, shoot, plant C4, enter vehicles.
+
+signal health_changed(health: float, max_health: float)
+signal charges_changed(charges: int)
+signal prompt_changed(text: String)
+
+## Hitscan and aim rays hit world, vehicles, and destructibles (not debris).
+const AIM_MASK := 1 | 4 | 16
+
+@export var walk_speed := 5.0
+@export var sprint_speed := 8.5
+@export var jump_velocity := 5.5
+@export var acceleration := 12.0
+@export var mouse_sensitivity := 0.0025
+@export var max_health := 100.0
+
+@export_group("Equipment")
+@export var c4_charges := 4
+@export var plant_range := 3.0
+@export var enter_vehicle_range := 3.5
+@export var fire_range := 60.0
+@export var fire_damage := 15.0
+@export var fire_cooldown := 0.25
+
+var health: float
+var vehicle: Car = null
+
+var _pitch := -0.25
+var _fire_timer := 0.0
+var _spawn: Transform3D
+var _prompt := ""
+var _vehicle_change_frame := -1
+var _gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
+
+@onready var _pivot: Node3D = $CameraPivot
+@onready var _spring: SpringArm3D = $CameraPivot/SpringArm3D
+@onready var _camera: Camera3D = $CameraPivot/SpringArm3D/Camera3D
+@onready var _body: Node3D = $Body
+
+
+func _ready() -> void:
+	add_to_group("player")
+	health = max_health
+	_spawn = global_transform
+	_spring.rotation.x = _pitch
+	_spring.add_excluded_object(get_rid())
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed("toggle_mouse"):
+		var captured := Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if captured else Input.MOUSE_MODE_CAPTURED
+	elif event is InputEventMouseButton and event.pressed \
+			and Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+		get_viewport().set_input_as_handled()
+	elif event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+		var motion := event as InputEventMouseMotion
+		_pivot.rotate_y(-motion.relative.x * mouse_sensitivity)
+		_pitch = clampf(_pitch - motion.relative.y * mouse_sensitivity, -1.2, 0.6)
+		_spring.rotation.x = _pitch
+
+
+func _physics_process(delta: float) -> void:
+	_fire_timer = maxf(_fire_timer - delta, 0.0)
+	_move(delta)
+
+	if global_position.y < -30.0:
+		_respawn()
+
+	if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+		if Input.is_action_pressed("fire") and _fire_timer <= 0.0:
+			_fire()
+		if Input.is_action_just_pressed("plant"):
+			_plant()
+	if Input.is_action_just_pressed("interact") and Engine.get_physics_frames() != _vehicle_change_frame:
+		_try_enter_vehicle()
+	_update_prompt()
+
+
+func apply_damage(amount: float, _from: Vector3, _kind: StringName = &"generic") -> void:
+	health -= amount
+	health_changed.emit(health, max_health)
+	if health <= 0.0:
+		_respawn()
+
+
+## Called by Car. Pass a car to hide and disable the player, null to get out.
+func set_driving(car: Car, exit_position := Vector3.ZERO) -> void:
+	vehicle = car
+	_vehicle_change_frame = Engine.get_physics_frames()
+	if car:
+		hide()
+		process_mode = Node.PROCESS_MODE_DISABLED
+		collision_layer = 0
+		collision_mask = 0
+		_set_prompt("")
+	else:
+		global_position = exit_position
+		velocity = Vector3.ZERO
+		collision_layer = Game.LAYER_PLAYER
+		collision_mask = Game.LAYER_WORLD | Game.LAYER_VEHICLES | Game.LAYER_DESTRUCTIBLE
+		show()
+		process_mode = Node.PROCESS_MODE_INHERIT
+		_camera.make_current()
+
+
+func _move(delta: float) -> void:
+	if not is_on_floor():
+		velocity.y -= _gravity * delta
+	elif Input.is_action_just_pressed("jump"):
+		velocity.y = jump_velocity
+
+	var input := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
+	var cam_basis := _pivot.global_basis
+	var direction := cam_basis.x * input.x + cam_basis.z * input.y
+	direction.y = 0.0
+	direction = direction.normalized()
+
+	var speed := sprint_speed if Input.is_action_pressed("sprint") else walk_speed
+	var weight := 1.0 - exp(-acceleration * delta)
+	velocity.x = lerpf(velocity.x, direction.x * speed, weight)
+	velocity.z = lerpf(velocity.z, direction.z * speed, weight)
+
+	if direction.length_squared() > 0.01:
+		_body.rotation.y = lerp_angle(_body.rotation.y, atan2(-direction.x, -direction.z), weight)
+
+	move_and_slide()
+
+
+func _aim(max_distance: float) -> Dictionary:
+	var center := get_viewport().get_visible_rect().size * 0.5
+	var from := _camera.project_ray_origin(center)
+	var to := from + _camera.project_ray_normal(center) * max_distance
+	var query := PhysicsRayQueryParameters3D.create(from, to, AIM_MASK, [get_rid()])
+	return get_world_3d().direct_space_state.intersect_ray(query)
+
+
+## Aim ray limited to what the player can reach with their hands.
+func _aim_in_reach() -> Dictionary:
+	var hit := _aim(_spring.spring_length + plant_range + 1.0)
+	if hit.is_empty():
+		return hit
+	var chest := global_position + Vector3.UP
+	if (hit["position"] as Vector3).distance_to(chest) > plant_range:
+		return {}
+	return hit
+
+
+func _fire() -> void:
+	_fire_timer = fire_cooldown
+	var hit := _aim(fire_range)
+	if hit.is_empty():
+		return
+	var target := hit["collider"] as Node
+	if target and target.has_method("apply_damage"):
+		target.call(&"apply_damage", fire_damage, hit["position"], &"bullet")
+	if target is RigidBody3D:
+		(target as RigidBody3D).apply_impulse(
+			-(hit["normal"] as Vector3) * 2.0, (hit["position"] as Vector3) - (target as Node3D).global_position)
+
+
+func _plant() -> void:
+	if c4_charges <= 0:
+		return
+	var hit := _aim_in_reach()
+	if hit.is_empty() or not (hit["collider"] is Destructible):
+		return
+
+	var c4 := Explosive.new()
+	get_tree().current_scene.add_child(c4)
+	var normal := hit["normal"] as Vector3
+	c4.global_position = (hit["position"] as Vector3) + normal * 0.05
+	if absf(normal.dot(Vector3.UP)) < 0.99:
+		c4.look_at(c4.global_position + normal, Vector3.UP)
+	c4.arm()
+
+	c4_charges -= 1
+	charges_changed.emit(c4_charges)
+
+
+func _nearest_vehicle() -> Car:
+	var best: Car = null
+	var best_distance := enter_vehicle_range
+	for node in get_tree().get_nodes_in_group("vehicles"):
+		var car := node as Car
+		if car == null:
+			continue
+		var distance := global_position.distance_to(car.global_position)
+		if distance < best_distance:
+			best = car
+			best_distance = distance
+	return best
+
+
+func _try_enter_vehicle() -> void:
+	var car := _nearest_vehicle()
+	if car:
+		car.enter(self)
+
+
+func _update_prompt() -> void:
+	if _nearest_vehicle():
+		_set_prompt("[E] Drive")
+		return
+	var hit := _aim_in_reach()
+	if not hit.is_empty() and hit["collider"] is Destructible:
+		var target := hit["collider"] as Destructible
+		if c4_charges > 0:
+			_set_prompt("[G] Plant C4 on %s" % (target.label if target.label else "target"))
+		else:
+			_set_prompt("Out of C4")
+		return
+	_set_prompt("")
+
+
+func _set_prompt(text: String) -> void:
+	if text != _prompt:
+		_prompt = text
+		prompt_changed.emit(text)
+
+
+func _respawn() -> void:
+	global_transform = _spawn
+	velocity = Vector3.ZERO
+	health = max_health
+	health_changed.emit(health, max_health)

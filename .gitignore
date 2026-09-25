@@ -1,0 +1,20 @@
+# Godot
+.godot/
+/android/
+*.translation
+export_presets.cfg
+/build/
+
+# Local engine binary (download from godotengine.org)
+Godot_*.exe
+Godot_*.zip
+
+# Env / secrets
+.env
+.env.*
+
+# OS / editor
+Thumbs.db
+.DS_Store
+*.bak
+tests/output/
