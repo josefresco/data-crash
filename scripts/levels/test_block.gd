@@ -9,12 +9,26 @@ enum Phase { ASSAULT, BUILD, WAVE, WON, LOST }
 @export var core_delay := 3.0
 ## Seconds of build time before the next wave starts on its own.
 @export var auto_wave_delay := 45.0
+## Neighbors who join the repair crew: base + trust * per_trust.
+@export var townspeople_base := 2
+@export var townspeople_per_trust := 4.0
+## Fence lines corporate crews cut through at the start of waves 2+.
+@export var breach_fences: Array[String] = ["FenceLeft", "FenceRight", "FenceBack"]
+## Panels cut per breach.
+@export var breach_width := 2
+## First wave that opens a new lane. Announced (with a flare) a build phase ahead.
+@export var breach_from_wave := 3
+## Where neighbors walk out from (front doors).
+@export var house_doors: Array[Vector3] = [Vector3(-12, 0.2, 21), Vector3(13, 0.2, 25)]
 
 var phase := Phase.ASSAULT
 var core: GreenCore
 
 var _fence_breached := false
 var _auto_wave_left := -1.0
+var _planned_breach: Array[Destructible] = []
+var _breach_side := ""
+var _breach_flare: Node3D
 
 @onready var _datacenter: Datacenter = $Datacenter
 @onready var _env_driver: EnvironmentDriver = $EnvironmentDriver
@@ -45,8 +59,11 @@ func _process(delta: float) -> void:
 	if phase != Phase.BUILD or _auto_wave_left < 0.0:
 		return
 	_auto_wave_left -= delta
-	Game.set_info("wave", "Wave %d/%d arrives in %ds  ([N] to start now)"
-		% [_spawner.current_wave + 1, _spawner.total_waves(), ceili(_auto_wave_left)])
+	var line := "Wave %d/%d arrives in %ds  ([N] to start now)" \
+		% [_spawner.current_wave + 1, _spawner.total_waves(), ceili(_auto_wave_left)]
+	if has_planned_breach():
+		line += "\nIntel: crews will cut the %s fence (red flare)" % _breach_side
+	Game.set_info("wave", line)
 	if _auto_wave_left <= 0.0:
 		start_next_wave()
 
@@ -67,6 +84,7 @@ func start_defense() -> void:
 	core.position = Vector3(_datacenter.global_position.x, 0.0, _datacenter.global_position.z)
 	add_child(core)
 	core.damaged.connect(_on_core_damaged)
+	core.repaired.connect(_on_core_damaged)
 	core.destroyed.connect(_on_core_destroyed)
 	_on_core_damaged(0.0, core.health)
 
@@ -76,9 +94,22 @@ func start_defense() -> void:
 	_build.set_active(false)
 	get_tree().call_group(&"nav_baker", &"request_rebake")
 
+	_spawn_townspeople(townspeople_base + int(Game.district.trust * townspeople_per_trust))
 	_auto_wave_left = auto_wave_delay
 	Game.set_objective("Defend the green datacenter. Build defenses, then hold off %d waves."
 		% _spawner.total_waves())
+
+
+func has_planned_breach() -> bool:
+	return not _planned_breach.is_empty()
+
+
+## World position of the next announced breach (for AI builders and markers).
+func next_breach_point() -> Vector3:
+	var sum := Vector3.ZERO
+	for panel in _planned_breach:
+		sum += panel.global_position
+	return sum / maxi(_planned_breach.size(), 1)
 
 
 func start_next_wave() -> void:
@@ -110,6 +141,9 @@ func _on_wave_started(number: int, total: int) -> void:
 	phase = Phase.WAVE
 	_auto_wave_left = -1.0
 	Game.set_info("wave", "Wave %d/%d" % [number, total])
+	if has_planned_breach():
+		Game.set_info("wave", "Wave %d/%d: they cut through the %s fence!" % [number, total, _breach_side])
+		_execute_breach()
 	Game.set_objective("Wave %d/%d incoming. Hold the line!" % [number, total])
 
 
@@ -121,6 +155,11 @@ func _on_wave_cleared(number: int, total: int) -> void:
 	phase = Phase.BUILD
 	_auto_wave_left = auto_wave_delay
 	Game.district.trust += 0.05
+	if number + 1 >= breach_from_wave:
+		_plan_breach()
+	# High trust brings more neighbors out to help.
+	if Game.district.trust >= 0.6 and get_tree().get_nodes_in_group("townspeople").size() < 8:
+		_spawn_townspeople(1)
 	Game.set_objective("Wave %d cleared. Repair, rebuild, then [N] for the next one." % number)
 
 
@@ -132,6 +171,84 @@ func _on_all_waves_cleared() -> void:
 	Game.district.water_table = 1.0
 	Game.set_info("wave", "")
 	Game.set_objective("Zone held! Water is flowing and the neighborhood is yours.")
+
+
+## Picks `breach_width` adjacent intact panels on a random fence and marks them
+## with a flare. They get cut when the next wave starts.
+func _plan_breach() -> void:
+	_clear_breach_plan()
+	var fences := breach_fences.duplicate()
+	fences.shuffle()
+	for fence_name: String in fences:
+		var fence := get_node_or_null(fence_name) as FenceLine
+		if fence == null:
+			continue
+		var panels: Array[Destructible] = []
+		for child in fence.get_children():
+			if child is Destructible and not (child as Destructible).is_destroyed:
+				panels.append(child)
+		if panels.size() < breach_width:
+			continue
+		var start := randi_range(0, panels.size() - breach_width)
+		_planned_breach = panels.slice(start, start + breach_width)
+		_breach_side = fence_name.trim_prefix("Fence").to_lower()
+		_breach_flare = _make_flare()
+		add_child(_breach_flare)
+		_breach_flare.global_position = next_breach_point()
+		return
+
+
+func _execute_breach() -> void:
+	for panel in _planned_breach:
+		if is_instance_valid(panel) and not panel.is_destroyed:
+			panel.shatter(panel.global_position + Vector3.UP, 80.0)
+	_clear_breach_plan()
+
+
+func _clear_breach_plan() -> void:
+	_planned_breach.clear()
+	if is_instance_valid(_breach_flare):
+		_breach_flare.queue_free()
+	_breach_flare = null
+
+
+## Pulsing red road flare: tall enough to spot over the fence.
+func _make_flare() -> Node3D:
+	var flare := Node3D.new()
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.albedo_color = Color(1.0, 0.15, 0.1)
+	var beam := BoxMesh.new()
+	beam.size = Vector3(0.15, 6.0, 0.15)
+	var mesh := MeshInstance3D.new()
+	mesh.mesh = beam
+	mesh.material_override = mat
+	mesh.position.y = 3.0
+	flare.add_child(mesh)
+	var light := OmniLight3D.new()
+	light.light_color = Color(1.0, 0.2, 0.1)
+	light.omni_range = 8.0
+	light.position.y = 1.0
+	flare.add_child(light)
+	var tween := light.create_tween().set_loops()
+	tween.tween_property(light, "light_energy", 4.0, 0.4)
+	tween.tween_property(light, "light_energy", 0.5, 0.4)
+	return flare
+
+
+func _spawn_townspeople(count: int) -> void:
+	for i in count:
+		var person := Townsperson.new()
+		person.objective = core
+		person.position = house_doors[i % house_doors.size()] + Vector3(randf_range(-1.5, 1.5), 0.0, 0.0)
+		person.abducted.connect(_on_townsperson_abducted)
+		add_child(person)
+		# Home is the core, so idle neighbors hang around the site.
+		person.home = core.global_position + Vector3(randf_range(-6.0, 6.0), 0.0, 8.0)
+
+
+func _on_townsperson_abducted(_person: Townsperson) -> void:
+	Game.set_info("wave", "FROST took a neighbor! Trust falling.")
 
 
 func _on_core_damaged(_amount: float, health: float) -> void:

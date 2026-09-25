@@ -6,8 +6,8 @@ extends Structure
 const SHOT_MASK := 1 | 32  # world + units
 
 @export var fire_range := 18.0
-@export var shot_damage := 9.0
-@export var fire_interval := 0.3
+@export var shot_damage := 7.0
+@export var fire_interval := 0.35
 
 var _head: Node3D
 var _target: Enemy
@@ -20,7 +20,7 @@ func _init() -> void:
 	color = Color(0.3, 0.5, 0.36)
 	max_health = 200.0
 	chunks = Vector3i(2, 2, 2)
-	cost = 150
+	cost = 175
 	label = "Turret"
 
 
@@ -46,9 +46,18 @@ func _physics_process(delta: float) -> void:
 	var aim := _target.aim_point()
 	if _head.global_position.distance_squared_to(aim) > 0.01:
 		_head.look_at(aim, Vector3.UP)
-	if _cooldown <= 0.0:
+	if _cooldown <= 0.0 and not is_picketed():
 		_cooldown = fire_interval
 		_shoot(aim)
+
+
+## True while an Orange Hat protester pickets nearby: we don't fire on civilians.
+func is_picketed() -> bool:
+	for node in get_tree().get_nodes_in_group("protesters"):
+		var protester := node as OrangeHat
+		if protester and protester.blocks_turret_at(global_position):
+			return true
+	return false
 
 
 func _find_target() -> Enemy:

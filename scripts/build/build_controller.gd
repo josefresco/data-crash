@@ -27,7 +27,7 @@ var _player: Player
 func _ready() -> void:
 	_items = [
 		{"name": "Barricade", "kind": Barricade, "cost": 50, "size": Vector3(4.0, 1.6, 0.6)},
-		{"name": "Turret", "kind": Turret, "cost": 150, "size": Vector3(1.2, 1.6, 1.2)},
+		{"name": "Turret", "kind": Turret, "cost": 175, "size": Vector3(1.2, 1.6, 1.2)},
 		{"name": "Solar panel", "kind": SolarPanel, "cost": 100, "size": Vector3(3.0, 0.9, 2.0)},
 		{"name": "EMP trap", "kind": EmpTrap, "cost": 75, "size": Vector3(1.5, 0.2, 1.5)},
 	]

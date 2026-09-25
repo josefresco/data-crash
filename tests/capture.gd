@@ -41,6 +41,20 @@ func _ready() -> void:
 	level.call("start_next_wave")
 	await get_tree().create_timer(14.0).timeout
 	await _save("wave")
+
+	# Cast lineup: one of each unit, frozen in a row in front of the camera.
+	player.global_position = Vector3(-40, 0.2, 45)
+	(player.get_node("CameraPivot") as Node3D).rotation.y = 0.0
+	var cast: Array[Enemy] = [SecurityGuard.new(), Dog.new(), Police.new(), Frost.new(),
+		OrangeHat.new(), Townsperson.new()]
+	for i in cast.size():
+		cast[i].position = Vector3(-45.0 + i * 2.0, 0.1, 38.0)
+		level.add_child(cast[i])
+		cast[i].set_physics_process(false)
+	await get_tree().create_timer(0.5).timeout
+	for unit in cast:
+		unit._visual.rotation.y = PI * 0.9  # face the camera
+	await _save("cast")
 	get_tree().quit()
 
 

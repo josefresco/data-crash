@@ -8,6 +8,7 @@ extends StaticBody3D
 
 signal damaged(amount: float, health: float)
 signal destroyed(destructible: Destructible)
+signal repaired(amount: float, health: float)
 
 const MAX_LIVE_DEBRIS := 400
 
@@ -61,6 +62,23 @@ func apply_damage(amount: float, from: Vector3, _kind: StringName = &"generic") 
 		shatter(from, amount)
 
 
+## Restores health up to max. Returns the amount actually restored.
+func repair(amount: float) -> float:
+	if is_destroyed or amount <= 0.0:
+		return 0.0
+	var restored := minf(amount, max_health - health)
+	if restored <= 0.0:
+		return 0.0
+	health += restored
+	_material.albedo_color = _damage_color()
+	repaired.emit(restored, health)
+	return restored
+
+
+func needs_repair() -> bool:
+	return not is_destroyed and health < max_health - 0.5
+
+
 ## Destroys the prop immediately regardless of health.
 func shatter(from: Vector3, force: float) -> void:
 	if is_destroyed:
@@ -103,10 +121,14 @@ func _build() -> void:
 
 func _show_damage() -> void:
 	# Darken with damage, plus a brief bright flash on each hit.
-	var damaged_color := color.darkened(0.45 * (1.0 - maxf(health, 0.0) / max_health))
+	var damaged_color := _damage_color()
 	_material.albedo_color = damaged_color.lightened(0.6)
 	var tween := create_tween()
 	tween.tween_property(_material, "albedo_color", damaged_color, 0.15)
+
+
+func _damage_color() -> Color:
+	return color.darkened(0.45 * (1.0 - clampf(health / max_health, 0.0, 1.0)))
 
 
 func _spawn_debris(from: Vector3, force: float) -> void:

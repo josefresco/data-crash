@@ -14,7 +14,7 @@ func _init() -> void:
 	sight_range = 20.0
 	attack_range = 1.5
 	attack_interval = 0.8
-	bounty = 10
+	bounty = 5
 	body_color = Color(0.45, 0.3, 0.18)
 	body_radius = 0.3
 	body_height = 0.8
@@ -27,7 +27,7 @@ func befriend() -> bool:
 	set_faction(Faction.ALLY)
 	target = null
 	health = max_health
-	defeated.emit(self)
+	_emit_defeated()
 	_flash(Color(0.6, 1.0, 0.6))
 	return true
 

@@ -25,6 +25,11 @@ const AIM_MASK := 1 | 4 | 16 | 32
 @export var fire_cooldown := 0.25
 @export var treats := 5
 @export var treat_range := 5.0
+@export var talk_range := 3.5
+@export var repair_range := 3.0
+@export var repair_rate := 60.0
+## Health restored per $1 when the player repairs.
+@export var repair_per_dollar := 5.0
 
 var health: float
 var vehicle: Car = null
@@ -37,6 +42,7 @@ var _spawn: Transform3D
 var _prompt := ""
 var _vehicle_change_frame := -1
 var _slow_factor := 1.0
+var _repair_debt := 0.0
 var _slow_timer := 0.0
 var _gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 
@@ -85,7 +91,10 @@ func _physics_process(delta: float) -> void:
 	if Input.is_action_just_pressed("treat"):
 		give_treat()
 	if Input.is_action_just_pressed("interact") and Engine.get_physics_frames() != _vehicle_change_frame:
-		_try_enter_vehicle()
+		if not talk_down():
+			_try_enter_vehicle()
+	if Input.is_action_pressed("repair"):
+		_repair(delta)
 	_update_prompt()
 
 
@@ -121,6 +130,52 @@ func give_treat() -> bool:
 	treats -= 1
 	charges_changed.emit(c4_charges)
 	return true
+
+
+## Talks the nearest protester out of it. Returns true on success.
+func talk_down() -> bool:
+	var protester := _nearest_in_group("protesters", talk_range) as OrangeHat
+	return protester != null and protester.persuade()
+
+
+## Nearest damaged structure within reach, or null.
+func repair_target() -> Destructible:
+	var best: Destructible = null
+	var best_distance := repair_range
+	for node in get_tree().get_nodes_in_group("structures"):
+		var structure := node as Destructible
+		if structure == null or not structure.needs_repair():
+			continue
+		var distance := structure.distance_to_point(global_position + Vector3.UP)
+		if distance < best_distance:
+			best = structure
+			best_distance = distance
+	return best
+
+
+func _repair(delta: float) -> void:
+	var structure := repair_target()
+	if structure == null or Game.cash <= 0:
+		return
+	var affordable := Game.cash * repair_per_dollar
+	var restored := structure.repair(minf(repair_rate * delta, affordable))
+	_repair_debt += restored / repair_per_dollar
+	if _repair_debt >= 1.0:
+		var dollars := int(_repair_debt)
+		_repair_debt -= dollars
+		Game.add_cash(-dollars)
+
+
+func _nearest_in_group(group: String, max_distance: float) -> Node3D:
+	var best: Node3D = null
+	var best_distance := max_distance
+	for node in get_tree().get_nodes_in_group(group):
+		var other := node as Node3D
+		var distance := global_position.distance_to(other.global_position)
+		if distance < best_distance:
+			best = other
+			best_distance = distance
+	return best
 
 
 ## Called by Car. Pass a car to hide and disable the player, null to get out.
@@ -199,9 +254,11 @@ func _fire() -> void:
 		return
 	Fx.tracer(get_parent(), muzzle, hit["position"], Color(1.0, 1.0, 0.8))
 	var target := hit["collider"] as Node
-	var friendly := target != null and (target.is_in_group("structures") 		or (target is Enemy and (target as Enemy).faction == Enemy.Faction.ALLY))
+	var friendly := target != null and (target.is_in_group("structures") \
+		or (target is Enemy and (target as Enemy).faction == Enemy.Faction.ALLY))
 	if target and not friendly and target.has_method("apply_damage"):
-		target.call(&"apply_damage", fire_damage, hit["position"], &"bullet")
+		# `from` is the shooter: riot shields and debris direction depend on it.
+		target.call(&"apply_damage", fire_damage, muzzle, &"bullet")
 	if target is RigidBody3D:
 		(target as RigidBody3D).apply_impulse(
 			-(hit["normal"] as Vector3) * 2.0, (hit["position"] as Vector3) - (target as Node3D).global_position)
@@ -247,6 +304,13 @@ func _try_enter_vehicle() -> void:
 
 
 func _update_prompt() -> void:
+	if _nearest_in_group("protesters", talk_range):
+		_set_prompt("[E] Talk them down")
+		return
+	var damaged := repair_target()
+	if damaged:
+		_set_prompt("[F] Repair %s  (%d/%d)" % [damaged.label, ceili(damaged.health), int(damaged.max_health)])
+		return
 	if treats > 0 and _hostile_dog_in_reach():
 		_set_prompt("[T] Give treat")
 		return

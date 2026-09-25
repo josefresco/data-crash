@@ -4,7 +4,7 @@ extends Enemy
 
 const SHOT_MASK := 1 | 2 | 16 | 32  # world, player, destructibles, units
 
-@export var shot_damage := 6.0
+@export var shot_damage := 8.0
 @export var close_accuracy := 0.8
 @export var far_accuracy := 0.3
 
@@ -15,13 +15,12 @@ func _init() -> void:
 	sight_range = 25.0
 	attack_range = 16.0
 	attack_interval = 0.7
-	bounty = 25
+	bounty = 20
 	body_color = Color(0.16, 0.17, 0.22)
 
 
 func _decorate(visual_root: Node3D) -> void:
-	var dark := StandardMaterial3D.new()
-	dark.albedo_color = Color(0.05, 0.05, 0.06)
+	var dark := _solid(Color(0.05, 0.05, 0.06))
 	_add_box(visual_root, Vector3(0.5, 0.18, 0.5), Vector3(0, body_height - 0.05, 0), dark)  # helmet
 	_add_box(visual_root, Vector3(0.1, 0.1, 0.8), Vector3(0.3, body_height * 0.6, -0.35), dark)  # rifle
 
@@ -44,12 +43,3 @@ func _attack(victim: Node3D) -> void:
 			struck.call(&"apply_damage", shot_damage, from, &"bullet")
 	Fx.tracer(get_parent(), from, to, Color(1.0, 0.85, 0.5))
 
-
-func _add_box(parent: Node3D, box_size: Vector3, at: Vector3, mat: Material) -> void:
-	var box := BoxMesh.new()
-	box.size = box_size
-	var mesh := MeshInstance3D.new()
-	mesh.mesh = box
-	mesh.material_override = mat
-	mesh.position = at
-	parent.add_child(mesh)

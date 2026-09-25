@@ -12,6 +12,7 @@
 [ext_resource type="Script" path="res://scripts/waves/wave_spawner.gd" id="10_waves"]
 [ext_resource type="Script" path="res://scripts/enemies/security_guard.gd" id="11_guard"]
 [ext_resource type="Script" path="res://scripts/enemies/dog.gd" id="12_dog"]
+[ext_resource type="Script" path="res://scripts/district/district_audio.gd" id="13_audio"]
 
 [sub_resource type="ProceduralSkyMaterial" id="SkyMat"]
 sky_top_color = Color(0.38, 0.32, 0.25, 1)
@@ -187,6 +188,9 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -45, 0.2, -30)
 
 [node name="East" type="Marker3D" parent="WaveSpawner"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 45, 0.2, -30)
+
+[node name="DistrictAudio" type="AudioStreamPlayer" parent="."]
+script = ExtResource("13_audio")
 
 [node name="Hud" type="CanvasLayer" parent="."]
 script = ExtResource("7_hud")

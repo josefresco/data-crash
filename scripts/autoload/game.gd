@@ -58,6 +58,7 @@ func _register_input_actions() -> void:
 		"plant": KEY_G,
 		"toggle_mouse": KEY_ESCAPE,
 		"treat": KEY_T,
+		"repair": KEY_F,
 		"build_mode": KEY_B,
 		"start_wave": KEY_N,
 		"rotate": KEY_R,

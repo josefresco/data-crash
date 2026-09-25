@@ -6,7 +6,7 @@ extends Structure
 func _init() -> void:
 	size = Vector3(6.0, 3.0, 6.0)
 	color = Color(0.88, 0.9, 0.86)
-	max_health = 1000.0
+	max_health = 1500.0
 	chunks = Vector3i(3, 2, 3)
 	cost = 0
 	label = "Green datacenter"

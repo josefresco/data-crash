@@ -15,6 +15,8 @@ enum Faction { HOSTILE, ALLY }
 const LOS_MASK := 1 | 2 | 16 | 32
 const THINK_INTERVAL := 0.25
 const ALLY_TINT := Color(0.3, 0.85, 0.4)
+## Every group a unit can belong to via _faction_group().
+const FACTION_GROUPS: Array[String] = ["hostiles", "allies", "protesters", "townspeople"]
 
 @export var faction := Faction.HOSTILE
 @export var max_health := 60.0
@@ -23,6 +25,9 @@ const ALLY_TINT := Color(0.3, 0.85, 0.4)
 @export var attack_range := 16.0
 @export var attack_interval := 0.7
 @export var bounty := 25
+## Max range for attacking structures. Shorter than attack_range so ranged
+## units push into turret coverage instead of sniping from outside it.
+@export var structure_engage_range := 9.0
 
 ## Hostiles with nothing to fight walk here (the green core in wave defense).
 var objective: Node3D
@@ -30,6 +35,9 @@ var objective: Node3D
 var home: Vector3
 var health: float
 var target: Node3D
+
+## Set by the wave spawner when a wave drags on: charge the objective, ignore the rest.
+var rushing := false
 
 var body_color := Color(0.2, 0.2, 0.25)
 var body_radius := 0.35
@@ -44,6 +52,10 @@ var _stun_timer := 0.0
 var _wander_timer := 0.0
 var _has_los := false
 var _is_dead := false
+var _defeated_emitted := false
+var _stuck_time := 0.0
+var _sidestep_left := 0.0
+var _sidestep := Vector3.ZERO
 var _gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 
 
@@ -68,9 +80,11 @@ func _ready() -> void:
 
 func set_faction(value: Faction) -> void:
 	faction = value
-	remove_from_group("hostiles")
-	remove_from_group("allies")
-	add_to_group("hostiles" if faction == Faction.HOSTILE else "allies")
+	for group in FACTION_GROUPS:
+		remove_from_group(group)
+	var group := _faction_group()
+	if not group.is_empty():
+		add_to_group(group)
 	if _material:
 		_material.albedo_color = _base_color()
 
@@ -84,8 +98,11 @@ func is_alive() -> bool:
 	return not _is_dead
 
 
-func apply_damage(amount: float, from: Vector3, _kind: StringName = &"generic") -> void:
+func apply_damage(amount: float, from: Vector3, kind: StringName = &"generic") -> void:
 	if _is_dead:
+		return
+	amount = _modify_damage(amount, from, kind)
+	if amount <= 0.0:
 		return
 	health -= amount
 	_flash(Color(1.0, 0.3, 0.3))
@@ -117,13 +134,13 @@ func _physics_process(delta: float) -> void:
 			_think_timer = THINK_INTERVAL
 			_think()
 
-		if _is_valid(target) and _has_los and _distance_to(target) <= attack_range:
+		if _is_valid(target) and _has_los and _distance_to(target) <= _engage_range(target):
 			_face(target.global_position, delta)
 			if _attack_timer <= 0.0:
 				_attack_timer = attack_interval
 				_attack(target)
 		else:
-			move_dir = _nav_direction()
+			move_dir = _unstick(_nav_direction(), delta)
 
 	var weight := 1.0 - exp(-10.0 * delta)
 	velocity.x = lerpf(velocity.x, move_dir.x * move_speed, weight)
@@ -134,6 +151,28 @@ func _physics_process(delta: float) -> void:
 
 	if global_position.y < -30.0:
 		_die()
+
+
+## Override: group this unit joins. Turrets and allied dogs only shoot "hostiles".
+func _faction_group() -> String:
+	return "hostiles" if faction == Faction.HOSTILE else "allies"
+
+
+## Override: armor, shields. `from` is the attacker's position.
+func _modify_damage(amount: float, _from: Vector3, _kind: StringName) -> float:
+	return amount
+
+
+## Override: extra consequences of dying (trust penalties, dropping captives).
+func _on_death() -> void:
+	pass
+
+
+## Marks this unit as no longer part of the fight (wave bookkeeping). Idempotent.
+func _emit_defeated() -> void:
+	if not _defeated_emitted:
+		_defeated_emitted = true
+		defeated.emit(self)
 
 
 ## Override: deal damage to `victim`.
@@ -153,6 +192,12 @@ func _think() -> void:
 		_nav.target_position = target.global_position
 		return
 	_has_los = false
+	_idle()
+
+
+## Override: what to do with no target. Allies tag along with the player,
+## hostiles march on their objective, everyone else wanders near home.
+func _idle() -> void:
 	if faction == Faction.ALLY:
 		_follow_player()
 	elif _is_valid(objective):
@@ -161,7 +206,35 @@ func _think() -> void:
 		_wander()
 
 
+## Units blocked by things the navmesh can't see (parked cars, crowds) sidestep.
+func _unstick(move_dir: Vector3, delta: float) -> Vector3:
+	if move_dir == Vector3.ZERO:
+		_stuck_time = 0.0
+		return move_dir
+	if _sidestep_left > 0.0:
+		_sidestep_left -= delta
+		return (move_dir * 0.3 + _sidestep).normalized()
+	var real := get_real_velocity()
+	if Vector2(real.x, real.z).length() < move_speed * 0.2:
+		_stuck_time += delta
+	else:
+		_stuck_time = 0.0
+	if _stuck_time > 1.0:
+		_stuck_time = 0.0
+		_sidestep_left = randf_range(0.6, 1.2)
+		_sidestep = move_dir.cross(Vector3.UP) * (1.0 if randf() < 0.5 else -1.0)
+	return move_dir
+
+
+func _engage_range(other: Node3D) -> float:
+	if other is Destructible:
+		return minf(attack_range, structure_engage_range)
+	return attack_range
+
+
 func _pick_target() -> Node3D:
+	if rushing and faction == Faction.HOSTILE and _is_valid(objective):
+		return objective
 	var best: Node3D = null
 	var best_distance := sight_range
 	for candidate in _candidates():
@@ -191,8 +264,8 @@ func _candidates() -> Array[Node3D]:
 
 
 func _can_see(other: Node3D) -> bool:
-	if other is Destructible or other is VehicleBody3D:
-		return true  # big, static-ish targets: skip the ray
+	if other is VehicleBody3D:
+		return true  # not on the LOS mask; bullets just bounce off anyway
 	var from := global_position + Vector3.UP * body_height * 0.8
 	var to := _aim_point_of(other)
 	var query := PhysicsRayQueryParameters3D.create(from, to, LOS_MASK, [get_rid()])
@@ -257,8 +330,9 @@ func _is_friend(other: Object) -> bool:
 	return faction == Faction.ALLY and (other is Player or (other is Node and (other as Node).is_in_group("structures")))
 
 
-func _is_valid(node: Node3D) -> bool:
-	if node == null or not is_instance_valid(node) or not node.is_inside_tree():
+## `node` is untyped: targets may be freed between think ticks.
+func _is_valid(node: Variant) -> bool:
+	if node == null or not is_instance_valid(node) or not (node as Node).is_inside_tree():
 		return false
 	if node is Enemy:
 		return (node as Enemy).is_alive()
@@ -295,6 +369,23 @@ func _build_body() -> void:
 	_decorate(_visual)
 
 
+func _add_box(parent: Node3D, box_size: Vector3, at: Vector3, mat: Material) -> MeshInstance3D:
+	var box := BoxMesh.new()
+	box.size = box_size
+	var mesh := MeshInstance3D.new()
+	mesh.mesh = box
+	mesh.material_override = mat
+	mesh.position = at
+	parent.add_child(mesh)
+	return mesh
+
+
+func _solid(color: Color) -> StandardMaterial3D:
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = color
+	return mat
+
+
 func _flash(color: Color) -> void:
 	if _material == null:
 		return
@@ -307,11 +398,12 @@ func _die() -> void:
 	if _is_dead:
 		return
 	_is_dead = true
-	if faction == Faction.HOSTILE:
+	if faction == Faction.HOSTILE and not _defeated_emitted:
 		Game.add_cash(bounty)
-		defeated.emit(self)
-	remove_from_group("hostiles")
-	remove_from_group("allies")
+	_emit_defeated()
+	_on_death()
+	for group in FACTION_GROUPS:
+		remove_from_group(group)
 	collision_layer = 0
 	collision_mask = Game.LAYER_WORLD
 	died.emit(self)
