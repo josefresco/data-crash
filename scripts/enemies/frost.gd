@@ -90,7 +90,8 @@ func _on_death() -> void:
 
 func _decorate(visual_root: Node3D) -> void:
 	var armor := _solid(Color(0.15, 0.18, 0.25))
-	_add_box(visual_root, Vector3(0.95, 0.8, 0.6), Vector3(0.0, body_height * 0.62, 0.0), armor)
-	_add_box(visual_root, Vector3(0.55, 0.35, 0.55), Vector3(0.0, body_height - 0.1, 0.0), armor)
+	_add_box(visual_root, Vector3(0.62, 0.55, 0.36), Vector3(0.0, body_height * 0.64, 0.0), armor)  # plate carrier
+	_add_box(visual_root, Vector3(0.36, 0.3, 0.38), Vector3(0.0, body_height * 0.9, 0.0), armor)  # helmet
 	# Visor stripe so they read at a distance.
-	_add_box(visual_root, Vector3(0.5, 0.08, 0.05), Vector3(0.0, body_height - 0.1, -0.29), _solid(Color(0.4, 0.8, 1.0)))
+	_add_box(visual_root, Vector3(0.3, 0.07, 0.04), Vector3(0.0, body_height * 0.89, -0.2), _solid(Color(0.4, 0.8, 1.0)))
+	_add_box(visual_root, Vector3(0.14, 0.14, 0.6), Vector3(0.3, body_height * 0.55, -0.3), armor)  # capture launcher

@@ -41,7 +41,7 @@ func _enter_defense_phase() -> void:
 	level.set("_auto_wave_left", 9999.0)
 	await seconds(12.0)  # debris clears
 	# Keep the test player out of every fight.
-	player.global_position = Vector3(-55, 0.2, 60)
+	player.global_position = Vector3(-85, 0.2, 100)
 	check(get_tree().get_nodes_in_group("townspeople").size() >= 2, "townspeople joined (%d)"
 		% get_tree().get_nodes_in_group("townspeople").size())
 
@@ -53,7 +53,7 @@ func _spawn(unit: Enemy, at: Vector3) -> Enemy:
 
 
 func _test_police_shield() -> void:
-	var cop := _spawn(Police.new(), Vector3(-40, 0.1, 40)) as Police
+	var cop := _spawn(Police.new(), Vector3(-84, 0.1, 40)) as Police
 	await seconds(0.1)
 	cop.set_physics_process(false)  # hold still, face -Z
 	var facing := -cop._visual.global_basis.z
@@ -73,9 +73,9 @@ func _test_police_shield() -> void:
 
 
 func _test_frost_rescue() -> void:
-	var person := _spawn(Townsperson.new(), Vector3(-30, 0.1, 45)) as Townsperson
-	var agent := _spawn(Frost.new(), Vector3(-30, 0.1, 50)) as Frost
-	agent.home = Vector3(-55, 0.1, 50)
+	var person := _spawn(Townsperson.new(), Vector3(-84, 0.1, 55)) as Townsperson
+	var agent := _spawn(Frost.new(), Vector3(-84, 0.1, 60)) as Frost
+	agent.home = Vector3(-84, 0.1, 85)
 	for i in 40:
 		if agent.captive:
 			break
@@ -89,9 +89,9 @@ func _test_frost_rescue() -> void:
 
 func _test_frost_abduction() -> void:
 	var trust := Game.district.trust
-	var person := _spawn(Townsperson.new(), Vector3(-35, 0.1, 45)) as Townsperson
-	var agent := _spawn(Frost.new(), Vector3(-35, 0.1, 48)) as Frost
-	agent.home = Vector3(-35, 0.1, 55)
+	var person := _spawn(Townsperson.new(), Vector3(-86, 0.1, 10)) as Townsperson
+	var agent := _spawn(Frost.new(), Vector3(-86, 0.1, 13)) as Frost
+	agent.home = Vector3(-86, 0.1, 20)
 	var gone := [false]
 	person.abducted.connect(func(_p: Townsperson) -> void: gone[0] = true)
 	for i in 80:
@@ -125,7 +125,7 @@ func _test_orange_hat() -> void:
 	var trust := Game.district.trust
 	check(player.talk_down(), "player talks the protester down")
 	check(Game.district.trust > trust, "talking down earns trust")
-	player.global_position = Vector3(-55, 0.2, 60)
+	player.global_position = Vector3(-85, 0.2, 100)
 	await seconds(2.0)
 	check(guard.health < guard.max_health or not guard.is_alive(), "turret fires once the picket ends")
 	if guard.is_alive():

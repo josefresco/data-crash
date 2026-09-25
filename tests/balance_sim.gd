@@ -40,7 +40,7 @@ func _run() -> void:
 	while level.phase != level.Phase.BUILD:
 		await seconds(0.25)
 	level.set("_auto_wave_left", 9999.0)
-	player.global_position = Vector3(-55, 0.2, 60)
+	player.global_position = Vector3(-85, 0.2, 100)
 	player.set_physics_process(false)
 	await seconds(10.0)
 

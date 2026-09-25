@@ -115,6 +115,7 @@ func _on_death() -> void:
 
 
 func _decorate(visual_root: Node3D) -> void:
-	# Hard hat and tool belt: this is the repair crew.
-	_add_box(visual_root, Vector3(0.5, 0.15, 0.5), Vector3(0.0, body_height, 0.0), _solid(Color(0.95, 0.8, 0.1)))
-	_add_box(visual_root, Vector3(0.75, 0.12, 0.45), Vector3(0.0, body_height * 0.45, 0.0), _solid(Color(0.35, 0.25, 0.15)))
+	# Hard hat, hi-vis stripe, and tool belt: this is the repair crew.
+	_add_box(visual_root, Vector3(0.34, 0.12, 0.36), Vector3(0.0, body_height * 0.97, 0.0), _solid(Color(0.95, 0.8, 0.1)))
+	_add_box(visual_root, Vector3(0.44, 0.06, 0.27), Vector3(0.0, body_height * 0.7, 0.0), _solid(Color(0.95, 0.9, 0.2)))
+	_add_box(visual_root, Vector3(0.46, 0.1, 0.28), Vector3(0.0, body_height * 0.48, 0.0), _solid(Color(0.35, 0.25, 0.15)))

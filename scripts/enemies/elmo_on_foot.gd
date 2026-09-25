@@ -111,11 +111,11 @@ func _attack(victim: Node3D) -> void:
 
 func _decorate(visual_root: Node3D) -> void:
 	# Fuel tank on the back, nozzle forward (-Z), phone for posting.
-	_add_box(visual_root, Vector3(0.45, 0.7, 0.3), Vector3(0.0, 1.2, 0.35), _solid(Color(0.6, 0.15, 0.1)))
-	_add_box(visual_root, Vector3(0.1, 0.1, 0.8), Vector3(0.25, 1.1, -0.45), _solid(Color(0.2, 0.2, 0.2)))
+	_add_box(visual_root, Vector3(0.36, 0.6, 0.24), Vector3(0.0, body_height * 0.62, 0.26), _solid(Color(0.6, 0.15, 0.1)))
+	_add_box(visual_root, Vector3(0.08, 0.08, 0.8), Vector3(0.25, body_height * 0.52, -0.4), _solid(Color(0.2, 0.2, 0.2)))
 	var screen := StandardMaterial3D.new()
 	screen.albedo_color = Color(0.6, 0.8, 1.0)
 	screen.emission_enabled = true
 	screen.emission = Color(0.5, 0.7, 1.0)
-	_phone = _add_box(visual_root, Vector3(0.12, 0.22, 0.03), Vector3(-0.15, 1.5, -0.4), screen)
+	_phone = _add_box(visual_root, Vector3(0.1, 0.18, 0.03), Vector3(-0.18, body_height * 0.72, -0.3), screen)
 	_phone.visible = false

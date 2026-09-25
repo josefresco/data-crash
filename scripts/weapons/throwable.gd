@@ -1,15 +1,19 @@
 class_name Throwable
 extends RigidBody3D
-## Thrown object. On first contact (or after `max_flight`), a molotov leaves a
-## FireZone on the ground; a rock deals light damage and lures nearby hostiles.
+## Thrown object. On first contact (or after `max_flight`): a molotov leaves a
+## FireZone, a rocket explodes, a rock deals light damage and lures nearby
+## hostiles. Grenades bounce and explode when their `fuse` runs out.
 
 @export var kind := &"rock"
 @export var damage := 5.0
+## Grenades ignore contact and go off after this long.
+@export var fuse := 2.2
 @export var max_flight := 4.0
 ## Hostiles within this distance of a rock's landing spot go to investigate.
 @export var lure_radius := 10.0
 
 var _done := false
+var _trail_left := 0.0
 
 
 func _ready() -> void:
@@ -19,6 +23,13 @@ func _ready() -> void:
 	max_contacts_reported = 2
 	continuous_cd = true
 	body_entered.connect(_on_body_entered)
+	if kind == &"rocket":
+		gravity_scale = 0.0
+	elif kind == &"grenade":
+		var bouncy := PhysicsMaterial.new()
+		bouncy.bounce = 0.35
+		bouncy.friction = 0.8
+		physics_material_override = bouncy
 
 	var shape := SphereShape3D.new()
 	shape.radius = 0.12
@@ -28,7 +39,21 @@ func _ready() -> void:
 
 	var mat := StandardMaterial3D.new()
 	var mesh := MeshInstance3D.new()
-	if kind == &"molotov":
+	if kind == &"grenade":
+		var shell := SphereMesh.new()
+		shell.radius = 0.1
+		shell.height = 0.22
+		mesh.mesh = shell
+		mat.albedo_color = Color(0.25, 0.3, 0.2)
+	elif kind == &"rocket":
+		var body := CylinderMesh.new()
+		body.top_radius = 0.07
+		body.bottom_radius = 0.07
+		body.height = 0.7
+		mesh.mesh = body
+		mesh.rotation.x = PI * 0.5  # along the flight axis
+		mat.albedo_color = Color(0.35, 0.38, 0.3)
+	elif kind == &"molotov":
 		var bottle := CylinderMesh.new()
 		bottle.top_radius = 0.05
 		bottle.bottom_radius = 0.09
@@ -47,11 +72,26 @@ func _ready() -> void:
 	mesh.material_override = mat
 	add_child(mesh)
 
-	get_tree().create_timer(max_flight).timeout.connect(_impact.bind(null))
+	var lifetime := fuse if kind == &"grenade" else max_flight
+	get_tree().create_timer(lifetime).timeout.connect(_impact.bind(null))
+
+
+func _physics_process(delta: float) -> void:
+	if kind != &"rocket" or _done:
+		return
+	if linear_velocity.length_squared() > 1.0:
+		look_at(global_position + linear_velocity, Vector3.UP if absf(linear_velocity.normalized().y) < 0.99 else Vector3.RIGHT)
+	_trail_left -= delta
+	if _trail_left <= 0.0:
+		_trail_left = 0.03
+		Fx.flame_puff(get_parent(), global_position, 0.25, 0.25)
 
 
 func _on_body_entered(body: Node) -> void:
-	_impact(body)
+	if kind == &"grenade":
+		return  # bounces; the fuse decides
+	# Deferred: contact callbacks run while the physics space is locked.
+	_impact.call_deferred(body)
 
 
 func _impact(body: Variant) -> void:
@@ -60,6 +100,13 @@ func _impact(body: Variant) -> void:
 	_done = true
 	var point := global_position
 	match kind:
+		&"grenade", &"rocket":
+			var blast := Explosive.new()
+			blast.damage = damage
+			blast.radius = 5.0 if kind == &"grenade" else 4.0
+			get_parent().add_child(blast)
+			blast.global_position = point
+			blast.detonate()
 		&"molotov":
 			var fire := FireZone.new()
 			get_parent().add_child(fire)

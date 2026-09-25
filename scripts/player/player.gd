@@ -21,7 +21,6 @@ const AIM_MASK := 1 | 4 | 16 | 32
 @export var c4_charges := 4
 @export var plant_range := 3.0
 @export var enter_vehicle_range := 3.5
-@export var throw_speed := 16.0
 @export var treats := 5
 @export var treat_range := 5.0
 @export var talk_range := 3.5
@@ -47,6 +46,8 @@ var _repair_debt := 0.0
 var _slow_timer := 0.0
 ## While > 0, input steering is suppressed so knockback carries the player.
 var _knockback_left := 0.0
+var _rig: Node3D
+var _walk_phase := 0.0
 var _gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 
 @onready var _pivot: Node3D = $CameraPivot
@@ -57,6 +58,13 @@ var _gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 
 func _ready() -> void:
 	add_to_group("player")
+	# Swap the placeholder capsule for a rig: orange hoodie, jeans.
+	for child in _body.get_children():
+		(child as Node3D).visible = false
+	_rig = Models.humanoid(Models.mat(Color(0.92, 0.5, 0.15)), Color(0.2, 0.3, 0.5), Color(0.8, 0.6, 0.45))
+	_body.add_child(_rig)
+	Models.box(_rig.get_node("head") as Node3D, Vector3(0.3, 0.14, 0.3), Vector3(0.0, 0.07, 0.02),
+		Models.mat(Color(0.85, 0.45, 0.12)))  # hood
 	health = max_health
 	_spawn = global_transform
 	_spring.rotation.x = _pitch
@@ -100,7 +108,11 @@ func _physics_process(delta: float) -> void:
 		give_treat()
 	if Input.is_action_just_pressed("interact") and Engine.get_physics_frames() != _vehicle_change_frame:
 		if not talk_down():
-			_try_enter_vehicle()
+			var stall := _nearest_vendor()
+			if stall:
+				stall.buy(self)
+			else:
+				_try_enter_vehicle()
 	if Input.is_action_pressed("repair"):
 		_repair(delta)
 	_update_prompt()
@@ -196,6 +208,14 @@ func _repair(delta: float) -> void:
 		Game.add_cash(-dollars)
 
 
+func _nearest_vendor() -> GunShow:
+	for node in get_tree().get_nodes_in_group("vendors"):
+		var stall := node as GunShow
+		if stall and stall.in_reach(self):
+			return stall
+	return null
+
+
 func _nearest_in_group(group: String, max_distance: float) -> Node3D:
 	var best: Node3D = null
 	var best_distance := max_distance
@@ -255,6 +275,9 @@ func _move(delta: float) -> void:
 		_body.rotation.y = lerp_angle(_body.rotation.y, atan2(-direction.x, -direction.z), weight)
 
 	move_and_slide()
+	var ground_speed := Vector2(velocity.x, velocity.z).length()
+	_walk_phase += ground_speed * delta * 3.0
+	Models.animate_walk(_rig, _walk_phase, clampf(ground_speed / walk_speed, 0.0, 1.2))
 
 
 ## Ray from the screen center along the camera view.
@@ -293,9 +316,38 @@ func current_weapon() -> Weapon:
 	return weapons[weapon_index]
 
 
+## Selects `index`, skipping locked weapons in the direction of travel.
 func select_weapon(index: int) -> void:
-	weapon_index = wrapi(index, 0, weapons.size())
+	var step := 1 if index >= weapon_index else -1
+	for i in weapons.size():
+		var candidate := wrapi(index + i * step, 0, weapons.size())
+		if weapons[candidate].owned:
+			weapon_index = candidate
+			break
 	weapon_changed.emit(current_weapon())
+
+
+func weapon_named(weapon_name: String) -> Weapon:
+	for weapon in weapons:
+		if weapon.display_name == weapon_name:
+			return weapon
+	return null
+
+
+## Unlocks a weapon (gun show, security cache) and adds ammo. Returns it.
+func unlock_weapon(weapon_name: String, ammo := 0) -> Weapon:
+	var weapon := weapon_named(weapon_name)
+	if weapon == null:
+		return null
+	weapon.owned = true
+	if weapon.max_ammo < 0:
+		weapon.ammo = -1
+	elif ammo > 0:
+		weapon.ammo = maxi(weapon.ammo, 0) + ammo
+	else:
+		weapon.ammo = weapon.max_ammo
+	weapon_changed.emit(current_weapon())
+	return weapon
 
 
 ## Tops up every weapon (between waves, at the start of the defense).
@@ -357,7 +409,8 @@ func _throw(weapon: Weapon) -> void:
 	var direction := _aim_direction()
 	thrown.global_position = global_position + Vector3.UP * 1.6 + direction * 0.6
 	thrown.add_collision_exception_with(self)
-	thrown.linear_velocity = direction * throw_speed + Vector3.UP * 3.0
+	var lob := Vector3.ZERO if weapon.throw_kind == &"rocket" else Vector3.UP * 3.0
+	thrown.linear_velocity = direction * weapon.throw_speed + lob
 	thrown.angular_velocity = Vector3(randf_range(-6.0, 6.0), 0.0, randf_range(-6.0, 6.0))
 
 
@@ -415,8 +468,17 @@ func _update_prompt() -> void:
 	if treats > 0 and _hostile_dog_in_reach():
 		_set_prompt("[T] Give treat")
 		return
-	if _nearest_vehicle():
-		_set_prompt("[E] Drive")
+	var nearby := _nearest_vehicle()
+	if nearby:
+		if nearby.can_enter():
+			_set_prompt("[E] Drive")
+		else:
+			_set_prompt("Locked: the foreman wants more neighborhood trust (%d%% / %d%%)" % [
+				roundi(Game.district.trust * 100.0), roundi(nearby.required_trust * 100.0)])
+		return
+	var stall := _nearest_vendor()
+	if stall:
+		_set_prompt(stall.offer_text(self))
 		return
 	var hit := _aim_in_reach()
 	if not hit.is_empty() and hit["collider"] is Destructible:

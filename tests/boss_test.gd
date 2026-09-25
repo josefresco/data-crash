@@ -20,9 +20,10 @@ func _run() -> void:
 
 
 func _test_felsa_car() -> void:
-	player.global_position = Vector3(-40, 0.2, 45)
+	# Open field west of the houses.
+	player.global_position = Vector3(-84, 0.2, 70)
 	var car := FelsaCar.new()
-	car.position = Vector3(-40, 0.2, 25)
+	car.position = Vector3(-84, 0.2, 50)
 	level.add_child(car)
 	var hits := [0]
 	player.health_changed.connect(func(_h: float, _m: float) -> void: hits[0] += 1)

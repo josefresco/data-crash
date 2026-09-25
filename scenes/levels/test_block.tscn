@@ -18,6 +18,11 @@
 [ext_resource type="Script" path="res://scripts/activism/scout_point.gd" id="16_scout"]
 [ext_resource type="Script" path="res://scripts/enemies/supply_van.gd" id="17_van"]
 [ext_resource type="Script" path="res://scripts/systems/bribe_menu.gd" id="18_bribe"]
+[ext_resource type="Script" path="res://scripts/levels/neighborhood_builder.gd" id="19_hood"]
+[ext_resource type="Script" path="res://scripts/activism/gun_show.gd" id="20_gunshow"]
+[ext_resource type="Script" path="res://scripts/activism/security_cache.gd" id="21_cache"]
+[ext_resource type="Script" path="res://scripts/activism/foreman.gd" id="22_foreman"]
+[ext_resource type="PackedScene" path="res://scenes/vehicles/bulldozer.tscn" id="23_dozer"]
 
 [sub_resource type="ProceduralSkyMaterial" id="SkyMat"]
 sky_top_color = Color(0.38, 0.32, 0.25, 1)
@@ -44,27 +49,6 @@ size = Vector2(400, 400)
 
 [sub_resource type="StandardMaterial3D" id="GroundMat"]
 albedo_color = Color(0.32, 0.3, 0.26, 1)
-
-[sub_resource type="StandardMaterial3D" id="RoadMat"]
-albedo_color = Color(0.16, 0.16, 0.17, 1)
-
-[sub_resource type="StandardMaterial3D" id="HouseMat"]
-albedo_color = Color(0.72, 0.62, 0.5, 1)
-
-[sub_resource type="StandardMaterial3D" id="RoofMat"]
-albedo_color = Color(0.45, 0.2, 0.18, 1)
-
-[sub_resource type="BoxMesh" id="RoadMesh"]
-size = Vector3(8, 0.04, 52)
-
-[sub_resource type="BoxShape3D" id="HouseShape"]
-size = Vector3(10, 5, 8)
-
-[sub_resource type="BoxMesh" id="HouseMesh"]
-size = Vector3(10, 5, 8)
-
-[sub_resource type="BoxMesh" id="RoofMesh"]
-size = Vector3(10.6, 0.6, 8.6)
 
 [node name="TestBlock" type="Node3D" groups=["nav_source"]]
 script = ExtResource("1_level")
@@ -94,40 +78,8 @@ shape = SubResource("GroundShape")
 mesh = SubResource("GroundMesh")
 material_override = SubResource("GroundMat")
 
-[node name="Road" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.02, 14)
-mesh = SubResource("RoadMesh")
-material_override = SubResource("RoadMat")
-
-[node name="House" type="StaticBody3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12, 2.5, 26)
-
-[node name="CollisionShape3D" type="CollisionShape3D" parent="House"]
-shape = SubResource("HouseShape")
-
-[node name="Walls" type="MeshInstance3D" parent="House"]
-mesh = SubResource("HouseMesh")
-material_override = SubResource("HouseMat")
-
-[node name="Roof" type="MeshInstance3D" parent="House"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.8, 0)
-mesh = SubResource("RoofMesh")
-material_override = SubResource("RoofMat")
-
-[node name="NeighborHouse" type="StaticBody3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 13, 2.5, 30)
-
-[node name="CollisionShape3D" type="CollisionShape3D" parent="NeighborHouse"]
-shape = SubResource("HouseShape")
-
-[node name="Walls" type="MeshInstance3D" parent="NeighborHouse"]
-mesh = SubResource("HouseMesh")
-material_override = SubResource("HouseMat")
-
-[node name="Roof" type="MeshInstance3D" parent="NeighborHouse"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.8, 0)
-mesh = SubResource("RoofMesh")
-material_override = SubResource("RoofMat")
+[node name="Neighborhood" type="Node3D" parent="."]
+script = ExtResource("19_hood")
 
 [node name="Player" parent="." instance=ExtResource("3_player")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, 0.1, 20)
@@ -194,15 +146,31 @@ script = ExtResource("16_scout")
 [node name="SupplyVan" type="CharacterBody3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.5, 0.2, 42)
 script = ExtResource("17_van")
-route = Array[Vector3]([Vector3(-2.5, 0.2, 42), Vector3(-2.5, 0.2, -5)])
+route = Array[Vector3]([Vector3(-2.5, 0.2, 96), Vector3(-2.5, 0.2, -5)])
 
 [node name="StrayDog1" type="CharacterBody3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 14, 0.1, 38)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 24, 0.1, 31)
 script = ExtResource("12_dog")
 
 [node name="StrayDog2" type="CharacterBody3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 17, 0.1, 36)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 28, 0.1, 29)
 script = ExtResource("12_dog")
+
+[node name="GunShow" type="Node3D" parent="."]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -12, 0, 57)
+script = ExtResource("20_gunshow")
+
+[node name="SecurityCache" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -18, 0, -44)
+script = ExtResource("21_cache")
+
+[node name="Bulldozer" parent="." instance=ExtResource("23_dozer")]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 26, 0.8, 57)
+
+[node name="Foreman" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 22, 0, 54)
+script = ExtResource("22_foreman")
+vehicle_path = NodePath("../Bulldozer")
 
 [node name="BribeMenu" type="Node" parent="."]
 script = ExtResource("18_bribe")
@@ -214,13 +182,13 @@ script = ExtResource("9_build")
 script = ExtResource("10_waves")
 
 [node name="SouthRoad" type="Marker3D" parent="WaveSpawner"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.2, 45)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.2, 100)
 
 [node name="West" type="Marker3D" parent="WaveSpawner"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -45, 0.2, -30)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -85, 0.2, -30)
 
 [node name="East" type="Marker3D" parent="WaveSpawner"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 45, 0.2, -30)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 85, 0.2, -30)
 
 [node name="DistrictAudio" type="AudioStreamPlayer" parent="."]
 script = ExtResource("13_audio")

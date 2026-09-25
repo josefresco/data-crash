@@ -21,8 +21,9 @@ func _init() -> void:
 
 func _decorate(visual_root: Node3D) -> void:
 	var dark := _solid(Color(0.05, 0.05, 0.06))
-	_add_box(visual_root, Vector3(0.5, 0.18, 0.5), Vector3(0, body_height - 0.05, 0), dark)  # helmet
-	_add_box(visual_root, Vector3(0.1, 0.1, 0.8), Vector3(0.3, body_height * 0.6, -0.35), dark)  # rifle
+	_add_box(visual_root, Vector3(0.34, 0.12, 0.36), Vector3(0, body_height * 0.965, 0), dark)  # helmet
+	_add_box(visual_root, Vector3(0.44, 0.34, 0.3), Vector3(0, body_height * 0.66, 0), dark)  # vest
+	_add_box(visual_root, Vector3(0.08, 0.08, 0.75), Vector3(0.25, body_height * 0.56, -0.32), dark)  # rifle
 
 
 func _attack(victim: Node3D) -> void:

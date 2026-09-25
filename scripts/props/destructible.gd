@@ -34,6 +34,8 @@ const MAX_LIVE_DEBRIS := 400
 @export var debris_lifetime := 8.0
 ## Optional pre-fractured model: every MeshInstance3D inside becomes a debris piece.
 @export var fractured_scene: PackedScene
+## Below 1 renders see-through (chain-link fences, glass).
+@export_range(0.05, 1.0) var opacity := 1.0
 ## Name shown in HUD prompts, e.g. "Cooling unit".
 @export var label := ""
 
@@ -110,7 +112,9 @@ func _build() -> void:
 	_mesh.position.y = size.y * 0.5
 
 	_material = StandardMaterial3D.new()
-	_material.albedo_color = color
+	_material.albedo_color = Color(color, opacity)
+	if opacity < 1.0:
+		_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	_mesh.material_override = _material
 
 	var box_shape := BoxShape3D.new()
@@ -128,7 +132,7 @@ func _show_damage() -> void:
 
 
 func _damage_color() -> Color:
-	return color.darkened(0.45 * (1.0 - clampf(health / max_health, 0.0, 1.0)))
+	return Color(color.darkened(0.45 * (1.0 - clampf(health / max_health, 0.0, 1.0))), opacity)
 
 
 func _spawn_debris(from: Vector3, force: float) -> void:

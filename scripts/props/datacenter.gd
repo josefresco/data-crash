@@ -33,6 +33,7 @@ var _fans: Array[Node3D] = []
 
 func _ready() -> void:
 	_build_shell()
+	_decorate_shell()
 	_build_cooling_units()
 
 
@@ -89,6 +90,37 @@ func _make_segment(seg_size: Vector3, seg_color: Color, seg_chunks: Vector3i) ->
 	piece.label = "Datacenter wall"
 	add_child(piece)
 	return piece
+
+
+## Surface detail: wall vents, rooftop HVAC, and the corporate sign. All are
+## children of the segments they sit on, so they fall with them.
+func _decorate_shell() -> void:
+	var grille := Models.mat(Color(0.12, 0.13, 0.15))
+	for piece in _structure:
+		var along := piece.size.x > piece.size.z
+		var out := Vector3(0.0, 0.0, piece.size.z * 0.5 + 0.03) if along else Vector3(piece.size.x * 0.5 + 0.03, 0.0, 0.0)
+		out *= signf(piece.position.z) if along else signf(piece.position.x)
+		var vent_size := Vector3(1.6, 1.0, 0.06) if along else Vector3(0.06, 1.0, 1.6)
+		Models.box(piece, vent_size, out + Vector3.UP * height * 0.7, grille)
+		Models.box(piece, vent_size * Vector3(1.0, 0.25, 1.0), out + Vector3.UP * 0.3, Models.mat(Color(0.5, 0.52, 0.55)))
+	var metal := Models.mat(Color(0.55, 0.57, 0.6))
+	for i in range(0, _roof.size(), 2):
+		var hvac := _roof[i]
+		Models.box(hvac, Vector3(1.8, 1.0, 1.4), Vector3(0.0, hvac.size.y + 0.5, 0.0), metal)
+		Models.cylinder(hvac, 0.5, 0.1, Vector3(0.0, hvac.size.y + 1.05, 0.0), grille, 10)
+	# Sign over the front (the wall facing the neighborhood, +Z).
+	var front: Array[Destructible] = _structure.filter(func(p: Destructible) -> bool:
+		return p.size.x > p.size.z and p.position.z > 0.0)
+	if not front.is_empty():
+		var middle: Destructible = front[front.size() >> 1]
+		var sign_label := Label3D.new()
+		sign_label.text = "FELSA CLOUD  //  REGION US-SUBURB-1"
+		sign_label.pixel_size = 0.02
+		sign_label.font_size = 64
+		sign_label.outline_size = 8
+		sign_label.modulate = Color(0.75, 0.9, 1.0)
+		sign_label.position = Vector3(0.0, height * 0.85, middle.size.z * 0.5 + 0.06)
+		middle.add_child(sign_label)
 
 
 func _build_cooling_units() -> void:

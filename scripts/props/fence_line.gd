@@ -43,8 +43,13 @@ func _rebuild() -> void:
 		panel.damage_threshold = damage_threshold
 		panel.chunks = Vector3i(3, 2, 1)
 		panel.label = "Fence"
+		panel.opacity = 0.45  # chain link
 		panel.position = Vector3((i + 0.5) * width, 0.0, 0.0)
 		add_child(panel)
+		# Posts stay standing when the mesh is torn out.
+		var post := Models.cylinder(self, 0.06, height + 0.2, Vector3(i * width, (height + 0.2) * 0.5, 0.0),
+			Models.mat(Color(0.4, 0.42, 0.45)), 6)
+		post.set_meta(&"generated", true)
 		if not Engine.is_editor_hint():
 			panel.destroyed.connect(_on_panel_destroyed)
 

@@ -61,8 +61,11 @@ func _decorate(visual_root: Node3D) -> void:
 	var shield_mat := StandardMaterial3D.new()
 	shield_mat.albedo_color = Color(0.7, 0.8, 0.9, 0.55)
 	shield_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	_shield = _add_box(visual_root, Vector3(0.9, 1.3, 0.08), Vector3(0.0, 0.9, -0.5), shield_mat)
-	_add_box(visual_root, Vector3(0.5, 0.12, 0.55), Vector3(0.0, body_height - 0.02, 0.0), _solid(Color(0.05, 0.08, 0.2)))
+	_shield = _add_box(visual_root, Vector3(0.9, 1.3, 0.08), Vector3(-0.1, 0.9, -0.5), shield_mat)
+	var navy := _solid(Color(0.05, 0.08, 0.2))
+	_add_box(visual_root, Vector3(0.34, 0.1, 0.36), Vector3(0.0, body_height * 0.97, 0.0), navy)  # cap
+	_add_box(visual_root, Vector3(0.36, 0.03, 0.18), Vector3(0.0, body_height * 0.945, -0.2), navy)  # brim
+	_add_box(visual_root, Vector3(0.1, 0.06, 0.06), Vector3(0.1, body_height * 0.72, -0.14), _solid(Color(0.9, 0.8, 0.2)))  # badge
 
 
 func _attack(victim: Node3D) -> void:

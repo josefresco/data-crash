@@ -79,7 +79,7 @@ func _run() -> void:
 	var cleared := [false]
 	spawner.wave_cleared.connect(func(_n: int, _t: int) -> void: cleared[0] = true)
 	# Park the (passive) test player out of sight so guards go for the core, not us.
-	player.global_position = Vector3(-55, 0.2, 60)
+	player.global_position = Vector3(-85, 0.2, 100)
 	level.start_next_wave()
 	check(spawner.wave_active and level.phase == level.Phase.WAVE, "wave 1 started")
 	var closest := [INF]

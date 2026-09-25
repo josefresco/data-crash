@@ -32,14 +32,8 @@ func befriend() -> bool:
 	return true
 
 
-func _decorate(visual_root: Node3D) -> void:
-	var box := BoxMesh.new()
-	box.size = Vector3(0.3, 0.3, 0.45)
-	var snout := MeshInstance3D.new()
-	snout.mesh = box
-	snout.material_override = _material
-	snout.position = Vector3(0.0, body_height * 0.75, -0.35)
-	visual_root.add_child(snout)
+func _build_visual() -> Node3D:
+	return Models.dog(_material, body_height)
 
 
 func _attack(victim: Node3D) -> void:

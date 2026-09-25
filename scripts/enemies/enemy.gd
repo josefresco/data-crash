@@ -40,6 +40,8 @@ var target: Node3D
 var rushing := false
 
 var body_color := Color(0.2, 0.2, 0.25)
+var skin_color := Models.random_skin()
+var body_bulk := 1.0
 var body_radius := 0.35
 var body_height := 1.8
 
@@ -53,6 +55,8 @@ var _wander_timer := 0.0
 var _has_los := false
 var _is_dead := false
 var _defeated_emitted := false
+var _rig: Node3D
+var _walk_phase := randf() * TAU
 var _stuck_time := 0.0
 var _investigate_left := 0.0
 var _sidestep_left := 0.0
@@ -157,6 +161,7 @@ func _physics_process(delta: float) -> void:
 	if move_dir != Vector3.ZERO:
 		_face(global_position + move_dir, delta)
 	move_and_slide()
+	_animate(delta)
 
 	if global_position.y < -30.0:
 		_die()
@@ -216,6 +221,15 @@ func _idle() -> void:
 		_nav.target_position = objective.global_position
 	else:
 		_wander()
+
+
+func _animate(delta: float) -> void:
+	if _rig == null:
+		return
+	var real := get_real_velocity()
+	var speed := Vector2(real.x, real.z).length()
+	_walk_phase += speed * delta * 3.2
+	Models.animate_walk(_rig, _walk_phase, clampf(speed / maxf(move_speed, 0.1), 0.0, 1.0))
 
 
 ## Units blocked by things the navmesh can't see (parked cars, crowds) sidestep.
@@ -368,17 +382,18 @@ func _build_body() -> void:
 
 	_visual = Node3D.new()
 	add_child(_visual)
-	var capsule := CapsuleMesh.new()
-	capsule.radius = body_radius
-	capsule.height = shape.height
 	_material = StandardMaterial3D.new()
 	_material.albedo_color = _base_color()
-	var mesh := MeshInstance3D.new()
-	mesh.mesh = capsule
-	mesh.material_override = _material
-	mesh.position.y = shape.height * 0.5
-	_visual.add_child(mesh)
+	_rig = _build_visual()
+	if _rig:
+		_visual.add_child(_rig)
 	_decorate(_visual)
+
+
+## Override: the model under _visual. `_material` is this unit's own shirt /
+## fur material (tinted for allies, flashed on hits).
+func _build_visual() -> Node3D:
+	return Models.humanoid(_material, body_color.darkened(0.55), skin_color, body_height, body_bulk)
 
 
 func _add_box(parent: Node3D, box_size: Vector3, at: Vector3, mat: Material) -> MeshInstance3D:

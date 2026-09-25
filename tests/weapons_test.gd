@@ -15,8 +15,8 @@ func _run() -> void:
 	add_child(level)
 	player = level.get_node("Player") as Player
 	await seconds(0.5)
-	# An open patch of lawn well away from the Phase 2 guards.
-	player.global_position = Vector3(-40, 0.2, 45)
+	# The open field west of the neighborhood, away from houses and guards.
+	player.global_position = Vector3(-84, 0.2, 70)
 	await seconds(0.3)
 
 	await _test_shotgun()

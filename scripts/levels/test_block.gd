@@ -24,8 +24,6 @@ enum Phase { ACTIVISM, ASSAULT, BOSS, BUILD, WAVE, WON, LOST }
 @export var breach_width := 2
 ## First wave that opens a new lane. Announced (with a flare) a build phase ahead.
 @export var breach_from_wave := 3
-## Where neighbors walk out from (front doors).
-@export var house_doors: Array[Vector3] = [Vector3(-12, 0.2, 21), Vector3(13, 0.2, 25)]
 
 var phase := Phase.ACTIVISM
 var core: GreenCore
@@ -386,11 +384,19 @@ func _spawn_townspeople(count: int) -> void:
 	for i in count:
 		var person := Townsperson.new()
 		person.objective = core
-		person.position = house_doors[i % house_doors.size()] + Vector3(randf_range(-1.5, 1.5), 0.0, 0.0)
+		person.position = _nearest_doors()[i % 4] + Vector3(randf_range(-1.0, 1.0), 0.0, 0.0)
 		person.abducted.connect(_on_townsperson_abducted)
 		add_child(person)
 		# Home is the core, so idle neighbors hang around the site.
 		person.home = core.global_position + Vector3(randf_range(-6.0, 6.0), 0.0, 8.0)
+
+
+## The four front doors closest to the datacenter site (quickest to arrive).
+func _nearest_doors() -> Array[Vector3]:
+	var doors := ($Neighborhood as NeighborhoodBuilder).door_positions().duplicate()
+	var site := _datacenter.global_position
+	doors.sort_custom(func(a: Vector3, b: Vector3) -> bool: return a.distance_to(site) < b.distance_to(site))
+	return doors.slice(0, 4)
 
 
 func _on_townsperson_abducted(_person: Townsperson) -> void:

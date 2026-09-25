@@ -9,6 +9,10 @@ extends VehicleBody3D
 @export var steer_speed := 3.0
 @export var ram_min_speed := 4.0
 @export var ram_damage_per_mps := 9.0
+## 0 = no limit. The bulldozer tops out slow.
+@export var max_speed := 0.0
+## Neighborhood trust needed before the owner hands over the keys.
+@export var required_trust := 0.0
 
 var driver: Player = null
 
@@ -32,14 +36,19 @@ func _ready() -> void:
 	_cam_rig.global_position = global_position
 
 
-func enter(player: Player) -> void:
-	if driver:
-		return
+func can_enter() -> bool:
+	return driver == null and (Game.district == null or Game.district.trust >= required_trust)
+
+
+func enter(player: Player) -> bool:
+	if not can_enter():
+		return false
 	driver = player
 	_driver_change_frame = Engine.get_physics_frames()
 	brake = 0.0
 	player.set_driving(self)
 	_camera.make_current()
+	return true
 
 
 func exit() -> void:
@@ -80,6 +89,8 @@ func _physics_process(delta: float) -> void:
 	else:
 		engine_force = throttle * max_engine_force
 		brake = 0.0
+	if max_speed > 0.0 and absf(forward_speed) > max_speed and signf(throttle) == signf(forward_speed):
+		engine_force = 0.0
 	if Input.is_action_pressed("jump"):
 		brake = max_brake
 

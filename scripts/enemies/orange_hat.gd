@@ -113,7 +113,7 @@ func _on_death() -> void:
 
 func _decorate(visual_root: Node3D) -> void:
 	var orange := _solid(Color(1.0, 0.45, 0.05))
-	_add_box(visual_root, Vector3(0.45, 0.2, 0.45), Vector3(0.0, body_height + 0.02, 0.0), orange)
-	_add_box(visual_root, Vector3(0.6, 0.06, 0.1), Vector3(0.0, body_height - 0.08, -0.25), orange)  # brim
-	_add_box(visual_root, Vector3(0.05, 1.2, 0.05), Vector3(0.35, body_height * 0.8, 0.0), _solid(Color(0.5, 0.35, 0.2)))
-	_add_box(visual_root, Vector3(0.8, 0.5, 0.04), Vector3(0.35, body_height + 0.5, 0.0), _solid(Color(0.95, 0.95, 0.9)))
+	_add_box(visual_root, Vector3(0.32, 0.14, 0.32), Vector3(0.0, body_height * 0.98, 0.0), orange)
+	_add_box(visual_root, Vector3(0.36, 0.03, 0.2), Vector3(0.0, body_height * 0.935, -0.2), orange)  # brim
+	_add_box(visual_root, Vector3(0.05, 1.2, 0.05), Vector3(0.35, body_height * 0.8, -0.1), _solid(Color(0.5, 0.35, 0.2)))
+	_add_box(visual_root, Vector3(0.8, 0.5, 0.04), Vector3(0.35, body_height + 0.45, -0.1), _solid(Color(0.95, 0.95, 0.9)))
