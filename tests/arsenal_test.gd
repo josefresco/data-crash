@@ -35,24 +35,34 @@ func _dummy(unit: Enemy, at: Vector3) -> Enemy:
 
 
 func _test_gun_show() -> void:
-	var stall := level.get_node("GunShow") as GunShow
-	player.global_position = stall.global_position + Vector3(2.0, 0.2, 0.0)
-	await seconds(0.1)
-	check(player.nearest_interactable() == stall, "gun show in reach")
+	var tables := get_tree().get_nodes_in_group("hardware_store")
+	check(tables.size() >= 8, "DUECE Hardware lays out its stock (%d tables)" % tables.size())
+	var mg: WeaponPickup = null
+	for node in tables:
+		if (node as WeaponPickup).gun_name == "Machine gun":
+			mg = node
 	check(not player.weapon_named("Machine gun").owned, "machine gun starts locked")
 	player.select_weapon(player.weapons.find(player.weapon_named("Machine gun")))
 	check(player.current_weapon().display_name != "Machine gun", "locked weapons are skipped")
-	Game.cash = 100
-	check(not stall.buy_item(3, player), "can't afford the machine gun with $100")
-	Game.cash = 1000
-	check(stall.buy_item(3, player), "bought the machine gun")
-	check(player.weapon_named("Machine gun").owned, "machine gun unlocked")
-	check(not stall.buy_item(3, player), "guns sell once")
-	check(stall.buy_item(4, player) and player.weapon_named("Grenades").ammo == 3, "then grenade packs (3)")
-	check(Game.cash == 1000 - 450 - 150, "gun show took $600 ($%d)" % Game.cash)
-	stall.interact(player)
-	check(stall.is_open, "[E] opens the gun show table")
-	stall.interact(player)
+	player.global_position = mg.global_position + Vector3(0.0, 0.2, 1.2)
+	await seconds(0.1)
+	check(player.nearest_interactable() == mg, "the machine gun table is in reach")
+	Game.cash = 0
+	mg.interact(player)
+	check(player.weapon_named("Machine gun").owned and player.weapon_named("Machine gun").ammo == 150,
+		"took the machine gun with no cash: it's free, fully loaded")
+	check(Game.cash == 0, "nothing was charged")
+	for node in tables:
+		var pickup := node as WeaponPickup
+		if pickup.gun_name == "Grenades":
+			pickup.interact(player)
+	check(player.weapon_named("Grenades").owned and player.weapon_named("Grenades").ammo == 3, "grenades too (3)")
+	player.weapon_named("Machine gun").ammo = 10
+	for node in tables:
+		var pickup := node as WeaponPickup
+		if pickup.kind == &"ammo":
+			pickup.interact(player)
+	check(player.weapon_named("Machine gun").ammo == 150, "the ammo crate tops everything up")
 
 
 func _test_machine_gun() -> void:

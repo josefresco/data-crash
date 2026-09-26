@@ -245,6 +245,15 @@ def alarm():
     save("alarm_0", lowpass(tone, 3500) * np.clip(t / 0.05, 0, 1) * np.clip((seconds - t) / 0.2, 0, 1))
 
 
+def siren():
+    """Police wail, a seamless 3 s loop (one full up-down sweep)."""
+    seconds = 3.0
+    t = t_axis(seconds)
+    f = 700 + 450 * (0.5 - 0.5 * np.cos(2 * np.pi * t / seconds))
+    tone = signal.sawtooth(2 * np.pi * np.cumsum(f) / RATE, width=0.5)
+    save("siren_loop_0", lowpass(tone, 3000))
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--kenney", type=Path, help="folder holding the unzipped kenney_* packs")
@@ -256,6 +265,7 @@ def main():
     barks()
     voices()
     alarm()
+    siren()
     if args.kenney:
         copy_kenney(args.kenney)
     print(f"wrote {len(list(OUT.glob('*.*')))} files to {OUT}")

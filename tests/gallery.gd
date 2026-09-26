@@ -85,6 +85,10 @@ func _ready() -> void:
 			print("saved hands %s" % weapon_name)
 			side.clear_current()
 		side.queue_free()
+	if _want("stores"):
+		await _shot("store_hardware", Vector3(-8, 0.2, 31), Vector3(-14, 2.0, 21))
+		await _shot("store_row", Vector3(6, 0.2, 34), Vector3(-26, 4.0, 18))
+		await _shot("store_south", Vector3(0, 0.2, 27), Vector3(14, 4.0, 42))
 	if _want("sites"):
 		await _shot("site_felsa_gate", Vector3(10, 0.2, 2), Vector3(0, 3.0, -30))
 		await _shot("site_felsa_lobby", Vector3(-3, 0.2, -30), Vector3(4, 1.5, -39))
@@ -154,7 +158,7 @@ func _ready() -> void:
 	await _shot("turbines", Vector3(-4, 0.2, -57), Vector3(0, 5.0, -45))
 	await _shot("crapya", Vector3(-10, 0.2, -18), Vector3(-18, 1.5, -30))
 	await _shot("dozer", Vector3(18, 0.2, 48), Vector3(25, 1.0, 57))
-	await _shot("gunshow", Vector3(-4, 0.2, 52), Vector3(-12, 1.2, 57))
+	await _shot("hardware", Vector3(-6, 0.2, 30), Vector3(-14, 2.5, 20))
 
 	var field := Vector3(-84, 0.1, 40)
 	for kind: GDScript in [ShamCrapman, FarkPod]:

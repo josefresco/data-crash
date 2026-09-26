@@ -32,18 +32,24 @@ enum Phase { ACTIVISM, ASSAULT, BOSS, BUILD, WAVE, WON, LOST }
 	[Vector3(-20.0, 0.1, 64.8), Vector3(-20.0, 0.0, 75.2)],
 ]
 ## The house getting repainted: the builder door nearest this point.
-@export var paint_job_near := Vector3(30.0, 0.0, 24.0)
+@export var paint_job_near := Vector3(46.0, 0.0, 24.0)
 ## Litter to clean up (walk over it).
 @export var litter_spots: Array[Vector3] = [
 	Vector3(-12, 0, 33.5), Vector3(8, 0, 24.5), Vector3(-26, 0, 24.8), Vector3(36, 0, 35.2),
-	Vector3(-50, 0, 55), Vector3(-34, 0, 62), Vector3(-18, 0, 58), Vector3(5.5, 0, 52),
+	Vector3(-50, 0, 55), Vector3(-34, 0, 62), Vector3(-18, 0, 62.5), Vector3(5.5, 0, 52),
 	Vector3(-5.5, 0, 64), Vector3(46, 0, 63), Vector3(18, 0, 75.5), Vector3(-44, 0, 75.4),
 	Vector3(-5.8, 0, 118), Vector3(30, 0, 115.3), Vector3(-52, 0, 104.8), Vector3(5.8, 0, 140),
 ]
+## Neighbors strolling the block at the start, and how many more come out
+## once trust reaches 50%.
+@export var resident_count := 30
+@export var resident_bonus := 12
+## The farmer's market stalls in the park (where the gun show used to be).
+@export var market_position := Vector3(-24.0, 0.0, 58.0)
 ## [kind, position] of the weapon pickups (WeaponPickup) around the block.
 @export var pickup_spots: Array = [
-	[&"shovel", Vector3(-8.5, 0.0, 22.5)], [&"shovel", Vector3(24.0, 0.0, 56.0)], [&"shovel", Vector3(-44.0, 0.0, 60.0)],
-	[&"rocks", Vector3(-10.0, 0.0, 26.0)], [&"rocks", Vector3(-30.0, 0.0, 57.0)], [&"rocks", Vector3(40.0, 0.0, 61.0)],
+	[&"shovel", Vector3(24.0, 0.0, 56.0)], [&"shovel", Vector3(-44.0, 0.0, 60.0)],
+	[&"rocks", Vector3(-50.0, 0.0, 60.0)], [&"rocks", Vector3(40.0, 0.0, 61.0)],
 	[&"rocks", Vector3(22.0, 0.0, 37.5)], [&"molotovs", Vector3(28.0, 0.0, 60.0)],
 ]
 ## Fence lines corporate crews cut through at the start of waves 2+.
@@ -68,6 +74,7 @@ var _boss_bar_shown := false
 var _deeds := {"water": false, "van": false, "dogs": false, "scout": false, "ladies": false, "paint": false, "litter": false}
 var _dogs_tamed := 0
 var _cameras_total := 0
+var _residents_bonus_spawned := false
 var _ladies_total := 0
 var _ladies_helped := 0
 var _litter_total := 0
@@ -111,6 +118,13 @@ func _ready() -> void:
 	($BribeMenu as BribeMenu).bribe_bought.connect(_on_bribe_bought)
 	_spawn_grock_cameras()
 	_spawn_pickups()
+	_spawn_hardware_store()
+	_spawn_police()
+	var market := FarmersMarket.new()
+	market.name = "FarmersMarket"
+	market.position = market_position
+	add_child(market)
+	_spawn_residents(resident_count)
 	_spawn_neighborly_deeds()
 	var tips := TipDirector.new()
 	tips.level = self
@@ -127,6 +141,10 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if phase != Phase.WON and phase != Phase.LOST:
 		Game.count("time", delta)
+	if not _residents_bonus_spawned and Game.district and Game.district.trust >= 0.5:
+		_residents_bonus_spawned = true
+		_spawn_residents(resident_bonus)
+		Game.notify("Trust is up: more neighbors are coming outside again.", 4.0)
 	_update_boss_bar()
 	if phase != Phase.BUILD or _auto_wave_left < 0.0:
 		return
@@ -388,7 +406,7 @@ func raise_alarm(site_id: StringName, reason := "") -> void:
 		return
 	Game.alarms[site_id] = true
 	var site_node := site(site_id)
-	var site_name := site_node.display_name if site_node else String(site_id)
+	var site_name := site_node.display_name if site_node else "the police"
 	Game.notify("ALARM at %s! You hit the %s. Its security is engaging." % [site_name,
 		reason.to_lower() if not reason.is_empty() else "site"], 7.0)
 	if site_node:
@@ -397,6 +415,10 @@ func raise_alarm(site_id: StringName, reason := "") -> void:
 			Game.tip("alarm", "Scgrewgle's roof water cannons soak and shove you: take out its gas turbines to cut their power, or break Crapya's control room.")
 		elif site_node.boss == DatacenterSite.Boss.ELMO:
 			Game.tip("alarm_elmo", "Elmo's making a run for his Cyberdouche at the back dock. Catch him first, or wreck the truck.")
+	if site_node:
+		_dispatch_police(site_node)
+	elif site_id == &"police":
+		Game.notify("You attacked the police! Every cop in town is after you now.", 6.0)
 	_start_assault()
 	_update_sites()
 
@@ -459,6 +481,103 @@ func _on_litter_collected(_piece: Litter) -> void:
 		_complete_deed("litter", 40, 0.05, "The block is spotless. (+$40)")
 	else:
 		_update_deeds()
+
+
+## DUECE Hardware, next to where the player starts: every gun, grenades,
+## molotovs, shovels, rocks, and ammo on tables out front, all free.
+func _spawn_hardware_store() -> void:
+	var door := ($Neighborhood as NeighborhoodBuilder).store_door("DUECE HARDWARE")
+	if door == Vector3.ZERO:
+		return
+	var stock := [
+		[&"shovel", ""], [&"weapon", "Pistol"], [&"weapon", "Shotgun"], [&"weapon", "Hunting rifle"],
+		[&"weapon", "Machine gun"], [&"weapon", "Grenades"], [&"molotovs", ""], [&"rocks", ""], [&"ammo", ""],
+	]
+	for i in stock.size():
+		var pickup := WeaponPickup.new()
+		pickup.kind = stock[i][0]
+		pickup.gun_name = stock[i][1]
+		pickup.respawn = 20.0
+		pickup.position = Vector3(door.x - 9.6 + i * 2.4, 0.0, door.z - 0.6)
+		pickup.add_to_group("hardware_store")
+		add_child(pickup)
+	Game.set_meta(&"hardware_door", door)
+
+
+## Two patrol cars loop the first street and the main road, and two officers
+## stand outside the station. All of them are site &"police": passive unless
+## the player attacks the police. A datacenter alarm dispatches a cruiser.
+func _spawn_police() -> void:
+	var door := ($Neighborhood as NeighborhoodBuilder).store_door("POLICE")
+	if door == Vector3.ZERO:
+		return
+	var loop: Array[Vector3] = [Vector3(2.5, 0.2, -2), Vector3(2.5, 0.2, 28), Vector3(62, 0.2, 28), Vector3(62, 0.2, 32),
+		Vector3(-62, 0.2, 32), Vector3(-62, 0.2, 28), Vector3(-2.5, 0.2, 28)]
+	for i in 2:
+		var cruiser := PoliceCruiser.new()
+		cruiser.name = "PoliceCruiser%d" % (i + 1)
+		cruiser.site = &"police"
+		cruiser.route = loop.duplicate()
+		cruiser.set("_leg", 1 + i * 3)
+		cruiser.position = Vector3(door.x + 4.0 * i, 0.2, 28.0)
+		cruiser.rotation.y = -PI * 0.5
+		add_child(cruiser)
+	for side in [-1.0, 1.0]:
+		var officer := Police.new()
+		officer.site = &"police"
+		officer.position = door + Vector3(side * 2.0, 0.0, 0.5)
+		add_child(officer)
+
+
+## Nearest free cruiser (or a fresh one from the station) drives the roads to
+## the site's front gate and deploys two riot officers.
+func _dispatch_police(site_node: DatacenterSite) -> void:
+	var gate := site_node.at(Vector3(7.0, 0.2, site_node.compound.y * 0.5 + 7.0))
+	var best: PoliceCruiser = null
+	for node in get_tree().get_nodes_in_group("hostiles"):
+		var car := node as PoliceCruiser
+		if car and not car.responding and car.is_alive() and (best == null
+				or car.global_position.distance_to(gate) < best.global_position.distance_to(gate)):
+			best = car
+	if best == null:
+		var door := ($Neighborhood as NeighborhoodBuilder).store_door("POLICE")
+		best = PoliceCruiser.new()
+		best.site = &"police"
+		best.position = Vector3(door.x, 0.2, 28.0)
+		add_child(best)
+	best.dispatch(road_route(best.global_position, gate), site_node.site_id)
+
+
+## Waypoints along the roads from `from` to `to`: over to the first street,
+## along it to the main road or the access road, then up to the destination.
+func road_route(from: Vector3, to: Vector3) -> Array[Vector3]:
+	var street := 30.0
+	var points: Array[Vector3] = []
+	if absf(from.z - street) > 6.0:
+		points.append(Vector3(2.5 if from.x >= 0.0 else -2.5, 0.2, from.z))
+	points.append(Vector3(points[-1].x if not points.is_empty() else from.x, 0.2, street - 2.0))
+	if absf(to.x) > 90.0:
+		points.append(Vector3(signf(to.x) * (absf(to.x) - 4.0), 0.2, street - 2.0))
+	else:
+		points.append(Vector3(2.5, 0.2, street - 2.0))
+		points.append(Vector3(2.5, 0.2, to.z + 4.0))
+	points.append(to)
+	return points
+
+
+## Neighbors on the sidewalks, walking between front doors, shops, the
+## market, and the park.
+func _spawn_residents(count: int) -> void:
+	var destinations: Array[Vector3] = ($Neighborhood as NeighborhoodBuilder).door_positions().duplicate()
+	destinations.append(market_position + Vector3(0.0, 0.2, 3.5))
+	for x in [-50.0, -36.0, -24.0]:
+		destinations.append(Vector3(x, 0.2, 60.0))
+	for i in count:
+		var person := Resident.new()
+		person.destinations = destinations
+		var start: Vector3 = destinations.pick_random()
+		person.position = start + Vector3(randf_range(-2.0, 2.0), 0.0, randf_range(-2.0, 2.0))
+		add_child(person)
 
 
 ## The player starts with bare hands: shovels, rock piles, and a crate of

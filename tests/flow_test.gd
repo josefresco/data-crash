@@ -51,6 +51,7 @@ func _run() -> void:
 	await _test_dogs()
 	await _test_grock_cameras()
 	await _test_parked_cars()
+	await _test_market_and_residents()
 	await _test_vehicles()
 	await _test_reply_guys()
 	await _test_site_life()
@@ -175,6 +176,23 @@ func _test_reply_guys() -> void:
 	check(get_tree().get_nodes_in_group("reply_guys").is_empty(), "reply guys log off when Elmo goes down")
 
 
+func _test_market_and_residents() -> void:
+	var residents := get_tree().get_nodes_in_group("residents")
+	check(residents.size() >= 30, "neighbors are out on the block (%d)" % residents.size())
+	var market := level.get_node("FarmersMarket") as FarmersMarket
+	player.global_position = market.global_position + Vector3(0, 0.2, 4)
+	await seconds(0.1)
+	check(player.nearest_interactable() == market, "[E] reaches the farmer's market")
+	player.health = 50.0
+	Game.cash = 100
+	var trust := Game.district.trust
+	check(market.buy(0, player), "bought fresh bread")
+	check(Game.cash == 85 and is_equal_approx(player.health, 75.0), "bread costs $15 and heals 25 ($%d, %d hp)" % [Game.cash, int(player.health)])
+	check(Game.district.trust > trust, "buying local raises trust")
+	check(market.buy(4, player) and Game.cash == 5, "the $80 quilt leaves $5")
+	check(not market.buy(0, player), "can't afford bread with $5")
+
+
 ## Cars right themselves, turbo boosts and drains, and a dog in the road
 ## gets shoved aside instead of stopping the car dead.
 func _test_vehicles() -> void:
@@ -238,6 +256,20 @@ func _test_site_life() -> void:
 	level.call("raise_alarm", &"forprofit", "test")
 	await seconds(1.0)
 	check(worker.fled, "the tech flees when the alarm goes off")
+	var cruiser: PoliceCruiser = null
+	for node in get_tree().get_nodes_in_group("hostiles"):
+		if node is PoliceCruiser and (node as PoliceCruiser).respond_site == &"forprofit":
+			cruiser = node
+	check(cruiser != null and cruiser.responding, "the alarm dispatches a police cruiser")
+	for i in 240:
+		if cruiser == null or cruiser.deployed:
+			break
+		await seconds(0.25)
+	check(cruiser != null and cruiser.deployed, "it drives the roads to ForProfitSI and deploys (at %s)"
+		% (cruiser.global_position.snapped(Vector3.ONE) if cruiser else Vector3.ZERO))
+	var officers := get_tree().get_nodes_in_group("hostiles").filter(func(n: Node) -> bool:
+		return n is Police and (n as Police).site == &"forprofit")
+	check(officers.size() == 2, "two riot officers join the fight (%d)" % officers.size())
 
 
 func _test_pause_and_end() -> void:

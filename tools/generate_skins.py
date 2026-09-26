@@ -62,6 +62,11 @@ OUTFITS = {
     "foreman": ((1.0, 0.55, 0.1), "skin", (0.25, 0.3, 0.42), (0.35, 0.25, 0.15), (0.95, 0.95, 0.9)),
     # Elmo's Twatter reply guys: faded black fan tee, khakis, white sneakers.
     "reply_guy": ((0.16, 0.16, 0.18), "skin", (0.62, 0.56, 0.42), (0.95, 0.95, 0.95), (0.85, 0.85, 0.9)),
+    # Neighborhood residents, out and about.
+    "resident_a": ((0.8, 0.28, 0.25), "skin", (0.22, 0.3, 0.5), (0.9, 0.9, 0.9), None),
+    "resident_b": ((0.3, 0.58, 0.38), "shirt", (0.6, 0.53, 0.4), (0.35, 0.25, 0.18), None),
+    "resident_c": ((0.93, 0.93, 0.9), "skin", (0.18, 0.18, 0.2), (0.75, 0.2, 0.2), None),
+    "resident_d": ((0.5, 0.36, 0.7), "shirt", (0.3, 0.32, 0.36), (0.9, 0.9, 0.9), None),
     # Datacenter tech: company polo with a lanyard badge, khakis.
     "tech": ((0.22, 0.42, 0.72), "skin", (0.56, 0.5, 0.38), (0.15, 0.15, 0.17), (0.95, 0.95, 0.95)),
     # Neighborhood grandmas: lavender cardigan, gray slacks, sensible shoes.

@@ -15,7 +15,6 @@
 [ext_resource type="Script" path="res://scripts/enemies/supply_van.gd" id="17_van"]
 [ext_resource type="Script" path="res://scripts/systems/bribe_menu.gd" id="18_bribe"]
 [ext_resource type="Script" path="res://scripts/levels/neighborhood_builder.gd" id="19_hood"]
-[ext_resource type="Script" path="res://scripts/activism/gun_show.gd" id="20_gunshow"]
 [ext_resource type="Script" path="res://scripts/activism/security_cache.gd" id="21_cache"]
 [ext_resource type="Script" path="res://scripts/props/datacenter_site.gd" id="27_site"]
 [ext_resource type="Script" path="res://scripts/activism/foreman.gd" id="22_foreman"]
@@ -142,10 +141,6 @@ stray = true
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 28, 0.1, 29)
 script = ExtResource("12_dog")
 stray = true
-
-[node name="GunShow" type="Node3D" parent="."]
-transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -12, 0, 57)
-script = ExtResource("20_gunshow")
 
 [node name="SecurityCache" type="Node3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -24, 0, -20)

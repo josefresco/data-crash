@@ -6,8 +6,11 @@ extends Node3D
 
 signal picked_up(pickup: WeaponPickup)
 
-## &"shovel", &"rocks", or &"molotovs".
+## &"shovel", &"rocks", &"molotovs", &"weapon" (any gun, see `gun_name`), or
+## &"ammo" (tops up every weapon you own).
 @export var kind := &"rocks"
+## For kind &"weapon": the Weapon.display_name it hands out (free, full ammo).
+@export var gun_name := "Pistol"
 @export var reach := 2.6
 ## Seconds until it's back (0 = gone for good).
 @export var respawn := 45.0
@@ -30,6 +33,18 @@ func _ready() -> void:
 			shovel.rotation = Vector3(0.0, randf() * TAU, PI * 0.5)
 			shovel.position.y = 0.05
 			_visual.add_child(shovel)
+		&"weapon":
+			respawn = 0.0
+			var table := Models.box(_visual, Vector3(1.4, 0.8, 0.7), Vector3(0.0, 0.4, 0.0), Models.mat(Color(0.55, 0.4, 0.25)))
+			table.name = "Table"
+			var model := WeaponModels.build(_weapon_model())
+			if model:
+				model.position = Vector3(0.0, 0.86, 0.0)
+				model.rotation = Vector3(0.0, PI * 0.5, 0.0)
+				_visual.add_child(model)
+		&"ammo":
+			var box := Models.box(_visual, Vector3(1.0, 0.55, 0.6), Vector3(0.0, 0.28, 0.0), Models.mat(Color(0.3, 0.36, 0.22), &"paint"))
+			Models.box(box, Vector3(0.7, 0.12, 0.02), Vector3(0.0, 0.05, 0.31), Models.mat(Color(0.95, 0.8, 0.2)))
 		&"molotovs":
 			var crate := Models.box(_visual, Vector3(0.8, 0.4, 0.55), Vector3(0.0, 0.2, 0.0), Models.mat(Color(0.5, 0.36, 0.22)))
 			for i in 3:
@@ -55,6 +70,10 @@ func _ready() -> void:
 
 func label() -> String:
 	match kind:
+		&"weapon":
+			return "%s\nFREE" % gun_name
+		&"ammo":
+			return "Ammo\nFREE"
 		&"shovel":
 			return "Shovel"
 		&"molotovs":
@@ -62,8 +81,17 @@ func label() -> String:
 	return "Rocks"
 
 
+func _weapon_model() -> StringName:
+	for entry in Weapon.default_loadout():
+		if entry.display_name == gun_name:
+			return entry.model
+	return &""
+
+
 func weapon_name() -> String:
 	match kind:
+		&"weapon":
+			return gun_name
 		&"shovel":
 			return "Shovel"
 		&"molotovs":
@@ -94,6 +122,11 @@ func in_reach(player: Node3D) -> bool:
 
 
 func offer_text(player: Player) -> String:
+	if kind == &"ammo":
+		return "[E] Grab ammo: tops up everything you carry (free)"
+	if kind == &"weapon":
+		var gun := player.weapon_named(gun_name)
+		return ("[E] Take the %s (free)" % gun_name.to_lower()) if gun and not gun.owned else "[E] Top up %s ammo" % gun_name.to_lower()
 	var weapon := player.weapon_named(weapon_name())
 	if kind == &"shovel":
 		return "[E] Pick up the shovel" if not weapon.owned else "[E] You already have a shovel"
@@ -101,6 +134,28 @@ func offer_text(player: Player) -> String:
 
 
 func interact(player: Player) -> void:
+	if kind == &"ammo":
+		player.refill_ammo()
+		Sfx.play(&"hit_wood", global_position, -2.0)
+		Game.notify("Ammo topped up. Duece says: \"Take what you need, give 'em hell.\"", 3.0)
+		available = false
+		_visual.visible = false
+		_left = respawn
+		picked_up.emit(self)
+		return
+	if kind == &"weapon":
+		var gun := player.weapon_named(gun_name)
+		if gun == null:
+			return
+		var had := gun.owned
+		gun.owned = true
+		gun.refill()
+		player.select_weapon(player.weapons.find(gun))
+		player.weapon_changed.emit(player.current_weapon())
+		Sfx.play(&"hit_metal", global_position, -2.0, 0.8)
+		Game.notify(("Took the %s. Duece doesn't charge neighbors." % gun_name.to_lower()) if not had else "%s ammo topped up." % gun_name)
+		Game.tip("hardware", "Everything at DUECE Hardware is free: guns, grenades, molotovs, shovels, and ammo. Come back anytime to top up.")
+		return
 	var weapon := player.weapon_named(weapon_name())
 	if weapon == null:
 		return

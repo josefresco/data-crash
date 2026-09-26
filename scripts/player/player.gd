@@ -698,6 +698,12 @@ func _footsteps(delta: float) -> void:
 		Sfx.play(&"step_grass", global_position, -14.0, 1.0, 0.1)
 
 
+## Restores health (market food), capped at max.
+func heal(amount: float) -> void:
+	health = minf(health + amount, max_health)
+	health_changed.emit(health, max_health)
+
+
 func _respawn() -> void:
 	global_transform = _spawn
 	velocity = Vector3.ZERO

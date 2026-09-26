@@ -19,6 +19,17 @@ extends Node3D
 ## Empty lots (no house within `reserved_radius`): Harry's boardroom site.
 @export var reserved_lots: Array[Vector3] = [Vector3(18.0, 0.0, 97.0)]
 @export var reserved_radius := 13.0
+## Shops on house lots: [lot position, Kenney commercial model letter, sign, sign color].
+@export var store_lots: Array = [
+	[Vector3(-14.0, 0.0, 16.0), "e", "DUECE HARDWARE", Color(0.9, 0.2, 0.15)],
+	[Vector3(14.0, 0.0, 16.0), "h", "MABEL'S DINER", Color(0.2, 0.65, 0.95)],
+	[Vector3(-30.0, 0.0, 16.0), "d", "POLICE", Color(0.25, 0.4, 1.0)],
+	[Vector3(30.0, 0.0, 16.0), "c", "CORNER PHARMACY", Color(0.3, 0.85, 0.45)],
+	[Vector3(-14.0, 0.0, 44.0), "a", "SUDS LAUNDROMAT", Color(0.5, 0.8, 1.0)],
+	[Vector3(14.0, 0.0, 44.0), "d", "SLICE OF LIFE PIZZA", Color(1.0, 0.6, 0.15)],
+]
+## Kenney commercial kit: about 1 unit per floor width.
+const STORE_SCALE := 9.0
 
 const WALL_COLORS: Array[Color] = [
 	Color(0.85, 0.8, 0.7), Color(0.72, 0.78, 0.82), Color(0.82, 0.72, 0.6),
@@ -47,6 +58,8 @@ const CAR_COLORS: Array[Color] = [
 ]
 
 var _doors: Array[Vector3] = []
+## Sign text -> the spot just outside that store's door.
+var _store_doors := {}
 var _rng := RandomNumberGenerator.new()
 
 
@@ -59,10 +72,16 @@ func door_positions() -> Array[Vector3]:
 	return _doors
 
 
+## Just outside a store's door (by its sign text), in this node's space.
+func store_door(sign_text: String) -> Vector3:
+	return _store_doors.get(sign_text, Vector3.ZERO)
+
+
 func build() -> void:
 	for child in get_children():
 		child.queue_free()
 	_doors.clear()
+	_store_doors.clear()
 	_rng.seed = layout_seed
 
 	var asphalt := Models.mat(Color(0.75, 0.75, 0.75), &"asphalt")
@@ -98,7 +117,11 @@ func build() -> void:
 					var at := Vector3(column * mirror, 0.0, z + side * house_setback)
 					if reserved_lots.any(func(lot: Vector3) -> bool: return lot.distance_to(at) < reserved_radius):
 						continue
-					_add_house(at, side)
+					var store := _store_at(at)
+					if store.is_empty():
+						_add_house(at, side)
+					else:
+						_add_store(at, side, store)
 	for lot in reserved_lots:
 		_add_for_sale_sign(lot + Vector3(0.0, 0.0, 8.0))
 
@@ -130,6 +153,46 @@ func build() -> void:
 		for x in range(-70, 71, 16):
 			if absf(x) > 8.0:
 				_add_tree(Vector3(x, 0.0, z), _rng.randf_range(4.5, 6.0))
+
+
+func _store_at(at: Vector3) -> Array:
+	for lot: Array in store_lots:
+		if (lot[0] as Vector3).distance_to(at) < 2.0:
+			return lot
+	return []
+
+
+## A Kenney commercial building with a lit sign board over the storefront.
+func _add_store(at: Vector3, facing_side: float, lot: Array) -> void:
+	var body := StaticBody3D.new()
+	body.position = at
+	body.rotation.y = 0.0 if facing_side < 0.0 else PI
+	add_child(body)
+	var building := Models.model("%scommercial/building-%s.glb" % [KENNEY, lot[1]], STORE_SCALE)
+	body.add_child(building)
+	var bounds := Models.model_bounds(building)
+	var shape := BoxShape3D.new()
+	shape.size = bounds.size
+	var collider := CollisionShape3D.new()
+	collider.shape = shape
+	collider.position = bounds.get_center()
+	body.add_child(collider)
+	var front := bounds.end.z
+	var color: Color = lot[3]
+	var board := Models.box(body, Vector3(minf(bounds.size.x * 0.8, 10.0), 1.3, 0.25), Vector3(0.0, 4.6, front + 0.2),
+		Models.mat(Color(0.1, 0.1, 0.12), &"paint"))
+	Models.box(board, Vector3(minf(bounds.size.x * 0.8, 10.0) + 0.1, 0.08, 0.3), Vector3(0.0, -0.66, 0.0), Models.glow(color, 2.5))
+	var text := Label3D.new()
+	text.text = lot[2]
+	text.font_size = 96
+	text.pixel_size = 0.009
+	text.outline_size = 0
+	text.modulate = color.lerp(Color.WHITE, 0.35)
+	text.position = Vector3(0.0, 0.0, 0.14)
+	board.add_child(text)
+	var door := at + Vector3(0.0, 0.0, front + 3.0).rotated(Vector3.UP, body.rotation.y) + Vector3.UP * 0.2
+	_doors.append(door)
+	_store_doors[lot[2]] = door
 
 
 func _add_house(at: Vector3, facing_side: float) -> void:
