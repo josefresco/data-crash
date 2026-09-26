@@ -50,6 +50,15 @@ var _rig: CharacterModel
 var _reversed_left := 0.0
 var _gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 var _step_left := 0.0
+## Held weapon model and the arm-raising modifier (see _update_held).
+var _held: Node3D
+var _held_model := &"__none"
+var _held_scale := 1.0
+var _aim_pose: AimModifier
+## Seconds the aim pose stays up after the last shot.
+var _aim_hold := 0.0
+## Melee swing animation, 1 -> 0.
+var _swing := 0.0
 
 @onready var _pivot: Node3D = $CameraPivot
 @onready var _spring: SpringArm3D = $CameraPivot/SpringArm3D
@@ -64,6 +73,10 @@ func _ready() -> void:
 		(child as Node3D).visible = false
 	_rig = CharacterModel.create("player", 1.8, 1)
 	_body.add_child(_rig)
+	_aim_pose = AimModifier.new()
+	_aim_pose.influence = 0.0
+	_rig.skeleton().add_child(_aim_pose)
+	weapon_changed.connect(func(_w: Weapon) -> void: _refresh_held())
 	Models.set_gi_mode(_body, GeometryInstance3D.GI_MODE_DYNAMIC)
 	health = max_health
 	_spawn = global_transform
@@ -92,6 +105,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _physics_process(delta: float) -> void:
 	_fire_timer = maxf(_fire_timer - delta, 0.0)
+	_aim_hold = maxf(_aim_hold - delta, 0.0)
 	_move(delta)
 	_footsteps(delta)
 
@@ -184,12 +198,14 @@ func repair_target() -> Destructible:
 	return best
 
 
-## Nearest unfixed Phase 1 fixable (water mains) within its reach, or null.
-func fixable_target() -> WaterMain:
-	for node in get_tree().get_nodes_in_group("fixables"):
-		var main := node as WaterMain
-		if main and not main.is_fixed and global_position.distance_to(main.global_position) <= main.reach:
-			return main
+## Nearest unfixed hold-[F] job (water mains, paint jobs) within its reach, or
+## null. Duck-typed: `is_fixed`, `reach`, `progress`, `label()`, `work(delta)`.
+func fixable_target() -> Node3D:
+	for group in ["fixables", "paint_jobs"]:
+		for node in get_tree().get_nodes_in_group(group):
+			var job := node as Node3D
+			if job and not job.get("is_fixed") and global_position.distance_to(job.global_position) <= float(job.get("reach")):
+				return job
 	return null
 
 
@@ -198,7 +214,7 @@ func _repair(delta: float) -> void:
 	if structure == null:
 		var main := fixable_target()
 		if main:
-			main.work(delta)
+			main.call(&"work", delta)
 		return
 	if Game.cash <= 0:
 		return
@@ -279,7 +295,11 @@ func _move(delta: float) -> void:
 	velocity.x = lerpf(velocity.x, direction.x * speed, weight)
 	velocity.z = lerpf(velocity.z, direction.z * speed, weight)
 
-	if direction.length_squared() > 0.01:
+	if _aim_hold > 0.0:
+		# Aiming: square up to the camera.
+		var aim := _aim_direction()
+		_body.rotation.y = lerp_angle(_body.rotation.y, atan2(-aim.x, -aim.z), 1.0 - exp(-20.0 * delta))
+	elif direction.length_squared() > 0.01:
 		_body.rotation.y = lerp_angle(_body.rotation.y, atan2(-direction.x, -direction.z), weight)
 
 	move_and_slide()
@@ -344,6 +364,14 @@ func weapon_named(weapon_name: String) -> Weapon:
 	return null
 
 
+## Owns and fills every weapon. For tests and debugging.
+func arm_all() -> void:
+	for weapon in weapons:
+		weapon.owned = true
+		weapon.refill()
+	weapon_changed.emit(current_weapon())
+
+
 ## Unlocks a weapon (gun show, security cache) and adds ammo. Returns it.
 func unlock_weapon(weapon_name: String, ammo := 0) -> Weapon:
 	var weapon := weapon_named(weapon_name)
@@ -374,20 +402,130 @@ func fire() -> void:
 		if _fire_timer <= 0.0:
 			_fire_timer = 0.4
 			Sfx.play(&"click", global_position, -6.0)
-			Game.tip("ammo", "Out of ammo for this weapon. Ammo refills when the defense starts and after every wave; Q switches weapons (the pistol never runs dry).")
+			Game.tip("ammo", "Out of ammo for this weapon. Ammo refills when the defense starts and after every wave; Q switches weapons (fists, the shovel, and the pistol never run dry).")
 		return
 	_fire_timer = weapon.cooldown
+	if weapon.kind == Weapon.Kind.MELEE:
+		_melee(weapon)
+		return
 	Game.count("shots")
-	Sfx.play(weapon.sound, global_position + Vector3.UP * 1.4, -2.0)
+	if weapon.aims():
+		_aim_hold = 1.2
+	_place_held(true)
+	Sfx.play(weapon.sound, muzzle_point(), -2.0)
 	if weapon.ammo > 0:
 		weapon.ammo -= 1
 	if weapon.kind == Weapon.Kind.THROWN:
 		_throw(weapon)
 	else:
-		Vfx.muzzle(get_parent(), global_position + Vector3.UP * 1.4 + _aim_direction() * 0.6)
+		Vfx.muzzle(get_parent(), muzzle_point())
 		for i in weapon.pellets:
 			_fire_pellet(weapon)
 	weapon_changed.emit(weapon)
+
+
+## Where shots and throws leave from: the held weapon's muzzle, else the hand.
+func muzzle_point() -> Vector3:
+	if _held:
+		var marker := _held.get_node_or_null("Muzzle") as Node3D
+		if marker:
+			return marker.global_position
+		return _held.global_position
+	return global_position + Vector3.UP * 1.4 + _aim_direction() * 0.5
+
+
+## The model currently in the player's hand (null for fists). Tests read it.
+func held_model() -> Node3D:
+	return _held
+
+
+## Swings fists or a shovel: hits every hostile (and stray-free target) in a
+## short arc in front, plus the first prop along the aim (Grock cameras, fences).
+func _melee(weapon: Weapon) -> void:
+	_swing = 1.0
+	Sfx.play(&"throw", global_position + Vector3.UP * 1.2, -4.0, 0.8)
+	var facing := _aim_direction()
+	facing.y = 0.0
+	facing = facing.normalized()
+	_body.rotation.y = atan2(-facing.x, -facing.z)
+	var chest := global_position + Vector3.UP * 1.2
+	var landed := false
+	for node in get_tree().get_nodes_in_group("hostiles"):
+		var enemy := node as Enemy
+		if enemy == null or not enemy.is_alive():
+			continue
+		var offset := enemy.global_position - global_position
+		offset.y = 0.0
+		if offset.length() > weapon.reach + 0.4 or (offset.length() > 0.3 and offset.normalized().dot(facing) < 0.35):
+			continue
+		enemy.apply_damage(weapon.damage, chest, &"melee")
+		if weapon.knockback > 0.0:
+			enemy.velocity += facing * weapon.knockback
+		landed = true
+	var query := PhysicsRayQueryParameters3D.create(chest, chest + facing * (weapon.reach + 0.3), 1 | 16, [get_rid()])
+	var hit := get_world_3d().direct_space_state.intersect_ray(query)
+	if not hit.is_empty():
+		var prop := hit["collider"] as Node
+		if prop and not prop.is_in_group("structures") and prop.has_method("apply_damage"):
+			prop.call(&"apply_damage", weapon.damage, chest, &"melee")
+			landed = true
+	if landed:
+		Sfx.play(&"hit_metal" if weapon.model == &"shovel" else &"hit_flesh", chest + facing, -2.0)
+
+
+func _refresh_held() -> void:
+	var weapon := current_weapon()
+	if weapon.model == _held_model:
+		return
+	_held_model = weapon.model
+	if _held:
+		_held.queue_free()
+		_held = null
+	_held = WeaponModels.build(weapon.model)
+	if _held:
+		_held_scale = _held.scale.x
+		add_child(_held)
+		_held.top_level = true
+		_place_held(false)
+
+
+## Aiming: the gun sits out in front of the right shoulder along the aim, and
+## the arm modifier straightens the arm onto it. Otherwise it follows the hand,
+## pointing forward and down. Melee swings sweep it through an overhead arc.
+func _place_held(aiming_now: bool) -> void:
+	if _held == null:
+		return
+	var weapon := current_weapon()
+	var aim := _aim_direction()
+	var right := _body.global_basis.x.normalized()
+	var chest := _rig.anchor(&"chest").global_position
+	if (aiming_now or _aim_hold > 0.0) and weapon.aims():
+		var at := chest + Vector3.UP * 0.2 - right * 0.14 + aim * 0.5
+		if weapon.model == &"rocket":
+			at = chest + Vector3.UP * 0.38 - right * 0.18 + aim * 0.1
+		_held.global_transform = Transform3D(Basis.looking_at(aim, Vector3.UP).scaled(Vector3.ONE * _held_scale), at)
+		return
+	var forward := -_body.global_basis.z.normalized()
+	var pitch := -0.7
+	if weapon.kind == Weapon.Kind.MELEE:
+		pitch = lerpf(-0.9, 1.3, _swing) if _swing > 0.0 else -0.35
+	var along := (forward * cos(pitch) + Vector3.UP * sin(pitch)).normalized()
+	var hand := _rig.anchor(&"hand_r").global_position
+	_held.global_transform = Transform3D(Basis.looking_at(along, Vector3.UP).scaled(Vector3.ONE * _held_scale), hand)
+
+
+func _process(delta: float) -> void:
+	if _swing > 0.0:
+		_swing = maxf(_swing - delta / 0.3, 0.0)
+	var weapon := current_weapon()
+	var target := 1.0 if _aim_hold > 0.0 and weapon.aims() and vehicle == null else 0.0
+	_aim_pose.influence = move_toward(_aim_pose.influence, target, delta * 8.0)
+	_aim_pose.aim_direction = _aim_direction()
+	_aim_pose.two_handed = weapon.two_handed
+	_place_held(false)
+	if _held:
+		var grip := _held.get_node_or_null("Grip") as Node3D
+		_aim_pose.grip_point = grip.global_position if grip else _held.global_position
 
 
 func _aim_direction() -> Vector3:
@@ -396,7 +534,7 @@ func _aim_direction() -> Vector3:
 
 
 func _fire_pellet(weapon: Weapon) -> void:
-	var muzzle := global_position + Vector3.UP * 1.4
+	var muzzle := muzzle_point()
 	var center := get_viewport().get_visible_rect().size * 0.5
 	var origin := _camera.project_ray_origin(center)
 	var jitter := Vector3(randf_range(-1.0, 1.0), randf_range(-1.0, 1.0), randf_range(-1.0, 1.0)) * weapon.spread
@@ -430,7 +568,11 @@ func _throw(weapon: Weapon) -> void:
 	thrown.damage = weapon.damage
 	get_parent().add_child(thrown)
 	var direction := _aim_direction()
-	thrown.global_position = global_position + Vector3.UP * 1.6 + direction * 0.6
+	var from := muzzle_point() + direction * 0.3
+	if weapon.throw_kind != &"rocket":
+		_swing = 1.0
+		from = global_position + Vector3.UP * 1.6 + direction * 0.6
+	thrown.global_position = from
 	thrown.add_collision_exception_with(self)
 	var lob := Vector3.ZERO if weapon.throw_kind == &"rocket" else Vector3.UP * 3.0
 	thrown.linear_velocity = direction * weapon.throw_speed + lob
@@ -491,7 +633,8 @@ func _update_prompt() -> void:
 		return
 	var main := fixable_target()
 	if main:
-		_set_prompt("[F] Hold to fix the %s  (%d%%)" % [main.label(), roundi(main.progress * 100.0)])
+		_set_prompt("[F] Hold to %s the %s  (%d%%)" % ["help with" if main is PaintJob else "fix", main.call(&"label"),
+			roundi(float(main.get("progress")) * 100.0)])
 		return
 	var dog := _untamed_dog_in_reach()
 	if dog:

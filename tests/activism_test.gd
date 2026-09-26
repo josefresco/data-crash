@@ -24,6 +24,9 @@ func _run() -> void:
 
 
 func _test_deeds() -> void:
+	var van_start := (level.get_node("SupplyVan") as SupplyVan).global_position
+	await seconds(2.0)
+	check((level.get_node("SupplyVan") as SupplyVan).global_position.distance_to(van_start) > 5.0, "supply van drives its route")
 	var cash := Game.cash
 	var trust := Game.district.trust
 
@@ -66,18 +69,46 @@ func _test_deeds() -> void:
 		await seconds(0.1)
 		check(player.give_treat() and dog.faction == Enemy.Faction.ALLY, "treat for %s" % dog.name)
 
+	# Grandmas: offer an arm, walk to the ring, she follows.
+	for lady: OldLady in get_tree().get_nodes_in_group("neighbors").duplicate():
+		player.global_position = lady.global_position + Vector3(1.0, 0.2, 0)
+		await seconds(0.1)
+		check(player.nearest_interactable() == lady, "[E] reaches the grandma")
+		lady.interact(player)
+		player.global_position = lady.destination + (lady.destination - lady.home).normalized() * 1.0 + Vector3.UP * 0.2
+		for i in 60:
+			if lady.state == OldLady.State.CROSSED:
+				break
+			await seconds(0.25)
+		check(lady.state == OldLady.State.CROSSED, "grandma made it across")
+
+	# Paint job: hold F in the ring.
+	var job := level.get_node("PaintJob") as PaintJob
+	player.global_position = job.global_position + Vector3(0, 0.2, 0)
+	await seconds(0.1)
+	check(player.fixable_target() == job, "paint job is in reach")
+	for i in 70:
+		player.call("_repair", 0.1)
+	check(job.is_fixed, "holding F repaints the house")
+
+	# Litter: walk over every piece.
+	var pieces := get_tree().get_nodes_in_group("litter")
+	check(pieces.size() >= 10, "litter around the block (%d)" % pieces.size())
+	for piece: Litter in pieces:
+		player.global_position = piece.global_position + Vector3.UP * 0.2
+		await seconds(0.05)
+	await seconds(0.1)
+	check(get_tree().get_nodes_in_group("litter").is_empty(), "walking over litter picks it all up")
+
 	# Supply van: take it out.
-	cash = Game.cash
 	var van := level.get_node("SupplyVan") as SupplyVan
-	var start := van.global_position
-	await seconds(2.0)
-	check(van.global_position.distance_to(start) > 5.0, "supply van drives its route")
+	cash = Game.cash
 	player.global_position = Vector3(-40, 0.2, 45)
 	van.apply_damage(9999.0, van.global_position + Vector3.UP, &"explosive")
 	await seconds(0.5)
 	# $150 bounty + $100 all-deeds bonus.
 	check(Game.cash == cash + 150 + 100, "van bounty and the all-deeds bonus ($%d)" % (Game.cash - cash))
-	check(level.get("_deeds").values().all(func(done: bool) -> bool: return done), "all four deeds done")
+	check(level.get("_deeds").values().all(func(done: bool) -> bool: return done), "all seven deeds done")
 
 
 func _test_breach_ends_activism() -> void:

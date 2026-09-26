@@ -34,12 +34,36 @@ func _run() -> void:
 	await seconds(2.5)
 	check(Game.has_seen_tip("move"), "the tutorial's first tip showed")
 
+	await _test_pickups()
 	await _test_grounding()
 	await _test_dogs()
 	await _test_grock_cameras()
 	await _test_parked_cars()
 	await _test_reply_guys()
 	_test_pause_and_end()
+
+
+## Bare hands at the start; a shovel and rocks from the neighborhood.
+func _test_pickups() -> void:
+	check(player.current_weapon().display_name == "Fists", "the player starts with bare hands")
+	var shovel: WeaponPickup = null
+	var rocks: WeaponPickup = null
+	for node in get_tree().get_nodes_in_group("pickups"):
+		var pickup := node as WeaponPickup
+		if pickup.kind == &"shovel" and shovel == null:
+			shovel = pickup
+		elif pickup.kind == &"rocks" and rocks == null:
+			rocks = pickup
+	check(shovel != null and rocks != null, "shovels and rock piles lie around the block")
+	player.global_position = shovel.global_position + Vector3(1.0, 0.2, 0.0)
+	await seconds(0.1)
+	check(player.nearest_interactable() == shovel, "[E] reaches the shovel")
+	shovel.interact(player)
+	check(player.current_weapon().display_name == "Shovel" and player.held_model() != null, "picked up the shovel, and it's in hand")
+	player.global_position = rocks.global_position + Vector3(1.0, 0.2, 0.0)
+	await seconds(0.1)
+	rocks.interact(player)
+	check(player.weapon_named("Rocks").ammo == 6 and not rocks.available, "grabbed 6 rocks; the pile restocks later")
 
 
 ## Cyberdouche and parked-car wheels touch the ground instead of sinking in.

@@ -21,8 +21,29 @@ enum Phase { ACTIVISM, ASSAULT, BOSS, BUILD, WAVE, WON, LOST }
 @export var townspeople_per_trust := 4.0
 ## Grock surveillance cameras on the block (position, yaw). Smash them for cash and trust.
 @export var grock_camera_spots: Array[Vector4] = [
-	Vector4(6.2, 0, 8, PI), Vector4(-6.2, 0, 56, 0), Vector4(6.2, 0, 88, PI), Vector4(-46, 0, 24.6, -PI * 0.5),
+	Vector4(7.6, 0, 8, PI), Vector4(-7.6, 0, 56, 0), Vector4(7.6, 0, 88, PI), Vector4(-46, 0, 24.6, -PI * 0.5),
 	Vector4(18, 0, 35.4, PI * 0.5), Vector4(50, 0, 24.6, -PI * 0.5), Vector4(-30, 0, 75.4, PI * 0.5),
+	Vector4(-30, 0, 115.4, PI * 0.5), Vector4(50, 0, 104.6, -PI * 0.5), Vector4(7.6, 0, 124, PI),
+]
+## Grandmas who need help across the street: [start, destination].
+@export var old_lady_spots: Array = [
+	[Vector3(-6.8, 0.1, 46.0), Vector3(6.8, 0.0, 46.0)],
+	[Vector3(-20.0, 0.1, 64.8), Vector3(-20.0, 0.0, 75.2)],
+]
+## The house getting repainted: the builder door nearest this point.
+@export var paint_job_near := Vector3(30.0, 0.0, 24.0)
+## Litter to clean up (walk over it).
+@export var litter_spots: Array[Vector3] = [
+	Vector3(-12, 0, 33.5), Vector3(8, 0, 24.5), Vector3(-26, 0, 24.8), Vector3(36, 0, 35.2),
+	Vector3(-50, 0, 55), Vector3(-34, 0, 62), Vector3(-18, 0, 58), Vector3(5.5, 0, 52),
+	Vector3(-5.5, 0, 64), Vector3(46, 0, 63), Vector3(18, 0, 75.5), Vector3(-44, 0, 75.4),
+	Vector3(-5.8, 0, 118), Vector3(30, 0, 115.3), Vector3(-52, 0, 104.8), Vector3(5.8, 0, 140),
+]
+## [kind, position] of the weapon pickups (WeaponPickup) around the block.
+@export var pickup_spots: Array = [
+	[&"shovel", Vector3(-8.5, 0.0, 22.5)], [&"shovel", Vector3(24.0, 0.0, 56.0)], [&"shovel", Vector3(-44.0, 0.0, 60.0)],
+	[&"rocks", Vector3(-10.0, 0.0, 26.0)], [&"rocks", Vector3(-30.0, 0.0, 57.0)], [&"rocks", Vector3(40.0, 0.0, 61.0)],
+	[&"rocks", Vector3(22.0, 0.0, 37.5)], [&"molotovs", Vector3(28.0, 0.0, 60.0)],
 ]
 ## Datacenter security posted at the start. Passive until the site alarm.
 @export var site_security_nodes: Array[String] = ["Guard1", "Guard2", "Guard3", "Dog1", "Dog2", "PatrolFelsa", "SentryNE", "SentryNW"]
@@ -42,9 +63,13 @@ var _planned_breach: Array[Destructible] = []
 var _breach_side := ""
 var _breach_flare: Node3D
 var _boss_bar_shown := false
-var _deeds := {"water": false, "van": false, "dogs": false, "scout": false}
+var _deeds := {"water": false, "van": false, "dogs": false, "scout": false, "ladies": false, "paint": false, "litter": false}
 var _dogs_tamed := 0
 var _cameras_total := 0
+var _ladies_total := 0
+var _ladies_helped := 0
+var _litter_total := 0
+var _litter_left := 0
 var _end_screen: EndScreen
 var _waves_cleared := 0
 var _cameras_smashed := 0
@@ -88,6 +113,8 @@ func _ready() -> void:
 		dog.defeated.connect(_on_stray_dog_defeated)
 	($BribeMenu as BribeMenu).bribe_bought.connect(_on_bribe_bought)
 	_spawn_grock_cameras()
+	_spawn_pickups()
+	_spawn_neighborly_deeds()
 	_arm_site_security()
 	var tips := TipDirector.new()
 	tips.level = self
@@ -338,6 +365,76 @@ func raise_alarm(reason := "") -> void:
 	Game.tip("alarm", "The alarm is up. Roof water cannons soak and shove you: take out the gas turbines to cut their power, or break Crapya's control room.")
 
 
+## Old ladies to walk across, a house to repaint, and litter to pick up.
+func _spawn_neighborly_deeds() -> void:
+	for spot: Array in old_lady_spots:
+		var lady := OldLady.new()
+		lady.position = spot[0]
+		lady.destination = spot[1]
+		lady.rotation.y = PI * 0.5
+		add_child(lady)
+		lady.crossed.connect(_on_lady_crossed)
+	_ladies_total = old_lady_spots.size()
+
+	var doors := ($Neighborhood as NeighborhoodBuilder).door_positions()
+	if not doors.is_empty():
+		var door := doors[0]
+		for candidate in doors:
+			if candidate.distance_to(paint_job_near) < door.distance_to(paint_job_near):
+				door = candidate
+		var job := PaintJob.new()
+		job.name = "PaintJob"
+		job.position = Vector3(door.x, 0.0, door.z)
+		# -Z toward the house: doors north of a street face +Z (house behind them at -Z).
+		var street := 0.0
+		for z: float in ($Neighborhood as NeighborhoodBuilder).street_z:
+			if absf(z - door.z) < absf(street - door.z) or street == 0.0:
+				street = z
+		job.rotation.y = 0.0 if door.z < street else PI
+		add_child(job)
+		job.fixed.connect(func(_j: PaintJob) -> void:
+			_complete_deed("paint", 75, 0.06, "House repainted. The Parkers are thrilled. (+$75)"))
+
+	for spot in litter_spots:
+		var piece := Litter.new()
+		piece.position = spot
+		add_child(piece)
+		piece.collected.connect(_on_litter_collected)
+	_litter_total = litter_spots.size()
+	_litter_left = _litter_total
+
+
+func _on_lady_crossed(_lady: OldLady) -> void:
+	_ladies_helped += 1
+	Game.add_cash(25)
+	Game.district.trust += 0.02
+	if _ladies_helped >= _ladies_total:
+		_complete_deed("ladies", 50, 0.05, "Every grandma made it across. (+$50)")
+	else:
+		Game.notify("Helped a grandma across the street. (+$25)")
+		_update_deeds()
+
+
+func _on_litter_collected(_piece: Litter) -> void:
+	_litter_left -= 1
+	if _litter_left == _litter_total - 1:
+		Game.tip("litter", "Walk over litter to pick it up. Clear all of it for a good deed.")
+	if _litter_left <= 0:
+		_complete_deed("litter", 40, 0.05, "The block is spotless. (+$40)")
+	else:
+		_update_deeds()
+
+
+## The player starts with bare hands: shovels, rock piles, and a crate of
+## bottles and gas lie around the block. Guns come from the gun show.
+func _spawn_pickups() -> void:
+	for spot: Array in pickup_spots:
+		var pickup := WeaponPickup.new()
+		pickup.kind = spot[0]
+		pickup.position = spot[1]
+		add_child(pickup)
+
+
 func _spawn_grock_cameras() -> void:
 	for spot in grock_camera_spots:
 		var camera := GrockCamera.new()
@@ -363,8 +460,9 @@ func _update_deeds() -> void:
 	var marks := {}
 	for key: String in _deeds:
 		marks[key] = "x" if _deeds[key] else " "
-	Game.set_info("deeds", "Deeds:  [%s] Fix the water main [F]   [%s] Stop the supply van   [%s] Tame the strays %d/2 [T]   [%s] Scout the datacenter   Grock cams %d/%d"
-		% [marks["water"], marks["van"], marks["dogs"], mini(_dogs_tamed, 2), marks["scout"], _cameras_smashed, _cameras_total])
+	Game.set_info("deeds", "Deeds:  [%s] Water main [F]   [%s] Supply van   [%s] Strays %d/2 [T]   [%s] Scout the datacenter   [%s] Grandmas %d/%d [E]   [%s] Paint a house [F]   [%s] Litter %d/%d   Grock cams %d/%d"
+		% [marks["water"], marks["van"], marks["dogs"], mini(_dogs_tamed, 2), marks["scout"], marks["ladies"], _ladies_helped,
+			_ladies_total, marks["paint"], marks["litter"], _litter_total - _litter_left, _litter_total, _cameras_smashed, _cameras_total])
 
 
 func _on_bribe_bought(key: String) -> void:

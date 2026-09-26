@@ -64,6 +64,33 @@ func _ready() -> void:
 		await _shot("dc_back", Vector3(-20, 0.2, -58), Vector3(-2, 5.0, -38))
 		await _shot("dc_cooling", Vector3(21, 0.2, -18), Vector3(15, 1.5, -28))
 		await _shot("dc_dock", Vector3(-20, 0.2, -22), Vector3(-12, 2.0, -34))
+	if _want("hands"):
+		player.arm_all()
+		var side := Camera3D.new()
+		level.add_child(side)
+		for weapon_name in ["Pistol", "Shotgun", "Machine gun", "Rocket launcher", "Shovel", "Molotov"]:
+			player.global_position = Vector3(-84, 0.1, 60)
+			player.select_weapon(player.weapons.find(player.weapon_named(weapon_name)))
+			player.aim_at(Vector3(-84, 1.4, 40))
+			if weapon_name != "Shovel" and weapon_name != "Molotov":
+				player.fire()
+			await _wait(0.35)
+			side.global_position = player.global_position + Vector3(3.2, 1.5, -1.6)
+			side.look_at(player.global_position + Vector3(0, 1.2, -0.4))
+			side.make_current()
+			await _wait(0.05)
+			await RenderingServer.frame_post_draw
+			get_viewport().get_texture().get_image().save_png("res://tests/output/gallery_hands_%s.png" % weapon_name.to_snake_case())
+			print("saved hands %s" % weapon_name)
+			side.clear_current()
+		side.queue_free()
+	if _want("deeds"):
+		var lady := get_tree().get_nodes_in_group("neighbors")[0] as Node3D
+		await _shot("deed_grandma", lady.global_position + Vector3(3.5, 0.1, 3.0), lady.global_position + Vector3(0, 1.0, 0))
+		var job := level.get_node("PaintJob") as Node3D
+		await _shot("deed_paint", job.global_position + job.global_basis.z * 5.0 + Vector3(2.5, 0.1, 0), job.global_position - job.global_basis.z * 2.0 + Vector3.UP * 2.0)
+		await _shot("south_street", Vector3(-4, 0.2, 100), Vector3(20, 2.0, 112))
+		await _shot("sold_lot", Vector3(8, 0.2, 110), Vector3(18, 1.5, 100))
 	if _want("cannon"):
 		level.call("raise_alarm", "test")
 		player.global_position = Vector3(6, 0.2, -6)

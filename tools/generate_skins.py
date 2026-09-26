@@ -62,10 +62,15 @@ OUTFITS = {
     "foreman": ((1.0, 0.55, 0.1), "skin", (0.25, 0.3, 0.42), (0.35, 0.25, 0.15), (0.95, 0.95, 0.9)),
     # Elmo's Twatter reply guys: faded black fan tee, khakis, white sneakers.
     "reply_guy": ((0.16, 0.16, 0.18), "skin", (0.62, 0.56, 0.42), (0.95, 0.95, 0.95), (0.85, 0.85, 0.9)),
+    # Neighborhood grandmas: lavender cardigan, gray slacks, sensible shoes.
+    "old_lady": ((0.66, 0.55, 0.78), "shirt", (0.48, 0.47, 0.5), (0.72, 0.62, 0.5), None),
 }
 
 # Outfits that ignore TONES: reply guys are all very pale (basement tan).
 TONE_OVERRIDES = {
+    "old_lady": [((s[0], s[1], s[2]), (0.93, 0.93, 0.95)) for s, _hair in [
+        ((0.96, 0.8, 0.7), None), ((0.87, 0.66, 0.52), None), ((0.72, 0.52, 0.38), None),
+        ((0.55, 0.37, 0.26), None), ((0.98, 0.85, 0.78), None)]],
     "reply_guy": [
         ((1.0, 0.9, 0.86), (0.35, 0.25, 0.15)),
         ((0.99, 0.92, 0.9), (0.55, 0.4, 0.22)),

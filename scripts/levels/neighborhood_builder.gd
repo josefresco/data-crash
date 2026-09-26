@@ -7,13 +7,16 @@ extends Node3D
 ## navmesh routes around them. Deterministic via `layout_seed`.
 
 @export var layout_seed := 7
-@export var main_road_end_z := 104.0
-@export var street_z: Array[float] = [30.0, 70.0]
+@export var main_road_end_z := 148.0
+@export var street_z: Array[float] = [30.0, 70.0, 110.0]
 @export var street_half_length := 76.0
 @export var road_width := 8.0
 ## House x positions along each street side (mirrored across the main road).
 @export var house_columns: Array[float] = [14.0, 30.0, 46.0, 62.0]
 @export var house_setback := 14.0
+## Empty lots (no house within `reserved_radius`): Harry's boardroom site.
+@export var reserved_lots: Array[Vector3] = [Vector3(18.0, 0.0, 97.0)]
+@export var reserved_radius := 13.0
 
 const WALL_COLORS: Array[Color] = [
 	Color(0.85, 0.8, 0.7), Color(0.72, 0.78, 0.82), Color(0.82, 0.72, 0.6),
@@ -77,16 +80,22 @@ func build() -> void:
 		for side in [-1.0, 1.0]:
 			Models.box(self, Vector3(street_half_length * 2.0, 0.06, 2.0), Vector3(0.0, 0.03, z + side * (road_width * 0.5 + 1.0)), sidewalk)
 
-	# Houses: both sides of the first street, the south side of the second.
+	# Houses: both sides of every street except the second, whose north side is
+	# the park and the construction site. Reserved lots stay empty.
 	for i in street_z.size():
 		var z: float = street_z[i]
 		var sides: Array[float] = [1.0]
-		if i == 0:
+		if i != 1:
 			sides.append(-1.0)
 		for side: float in sides:
 			for column: float in house_columns:
 				for mirror in [-1.0, 1.0]:
-					_add_house(Vector3(column * mirror, 0.0, z + side * house_setback), side)
+					var at := Vector3(column * mirror, 0.0, z + side * house_setback)
+					if reserved_lots.any(func(lot: Vector3) -> bool: return lot.distance_to(at) < reserved_radius):
+						continue
+					_add_house(at, side)
+	for lot in reserved_lots:
+		_add_for_sale_sign(lot + Vector3(0.0, 0.0, 8.0))
 
 	# Streetlights along the main road and the first street.
 	for z in range(0, int(main_road_end_z), 16):
@@ -98,15 +107,21 @@ func build() -> void:
 			lamp.rotation.y = PI * 0.5 * side
 			add_child(lamp)
 
-	# Parked cars along the curb of the first street.
+	# Parked cars along the curbs of the first and third streets.
 	for x in [-38.0, -22.0, 22.0, 54.0]:
 		_add_parked_car(Vector3(x, 0.0, street_z[0] - road_width * 0.5 + 1.3), PI * 0.5)
+	if street_z.size() > 2:
+		for x in [-46.0, -14.0, 38.0]:
+			_add_parked_car(Vector3(x, 0.0, street_z[2] + road_width * 0.5 - 1.3), -PI * 0.5)
 
 	_build_park(Vector2(-64.0, -10.0), Vector2(street_z[1] - 18.0, street_z[1] - 6.0))
 	_build_construction_site(Vector3(34.0, 0.0, street_z[1] - 12.0))
 
 	# Street trees between houses.
-	for z: float in [street_z[0] - 6.5, street_z[0] + 6.5]:
+	var tree_rows: Array[float] = [street_z[0] - 6.5, street_z[0] + 6.5]
+	if street_z.size() > 2:
+		tree_rows.append_array([street_z[2] - 6.5, street_z[2] + 6.5])
+	for z: float in tree_rows:
 		for x in range(-70, 71, 16):
 			if absf(x) > 8.0:
 				_add_tree(Vector3(x, 0.0, z), _rng.randf_range(4.5, 6.0))
@@ -174,6 +189,25 @@ func _add_parked_car(at: Vector3, yaw: float) -> void:
 	car.position = at + Vector3.UP * 0.3
 	car.rotation.y = yaw
 	add_child(car)
+
+
+## "FOR SALE" sign on an empty lot (Perckerson Capital is buying up the block).
+func _add_for_sale_sign(at: Vector3) -> void:
+	var sign_root := Node3D.new()
+	sign_root.position = at
+	add_child(sign_root)
+	var wood := Models.mat(Color(0.45, 0.32, 0.2))
+	for x in [-0.7, 0.7]:
+		Models.box(sign_root, Vector3(0.1, 1.6, 0.1), Vector3(x, 0.8, 0.0), wood)
+	Models.box(sign_root, Vector3(1.8, 0.9, 0.06), Vector3(0.0, 1.3, 0.0), Models.mat(Color(0.95, 0.95, 0.92)))
+	var text := Label3D.new()
+	text.text = "SOLD\nPerckerson Capital"
+	text.font_size = 48
+	text.pixel_size = 0.006
+	text.outline_size = 0
+	text.modulate = Color(0.7, 0.1, 0.1)
+	text.position = Vector3(0.0, 1.3, 0.04)
+	sign_root.add_child(text)
 
 
 func _add_tree(at: Vector3, height: float) -> void:

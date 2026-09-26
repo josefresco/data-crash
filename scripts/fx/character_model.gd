@@ -56,6 +56,10 @@ func set_motion(speed_ratio: float) -> void:
 		_player.speed_scale = 1.0
 
 
+func skeleton() -> Skeleton3D:
+	return _skeleton
+
+
 func play_jump() -> void:
 	_play(&"jump")
 

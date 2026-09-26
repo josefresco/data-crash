@@ -8,7 +8,7 @@ extends NavigationRegion3D
 ## Emitted after every finished bake, including the first.
 signal navmesh_ready
 
-@export var bake_bounds := AABB(Vector3(-92.0, -2.0, -72.0), Vector3(184.0, 20.0, 180.0))
+@export var bake_bounds := AABB(Vector3(-92.0, -2.0, -72.0), Vector3(184.0, 20.0, 236.0))
 @export var rebake_delay := 0.4
 
 var bake_count := 0

@@ -45,7 +45,7 @@ func _ready() -> void:
 
 	var right := VBoxContainer.new()
 	root.add_child(right)
-	_place(right, Control.PRESET_TOP_RIGHT, Rect2(-240, 20, 220, 0))
+	_place(right, Control.PRESET_TOP_RIGHT, Rect2(-340, 20, 320, 0))
 	_cash = _make_label(right, 28, HORIZONTAL_ALIGNMENT_RIGHT)
 	_status = _make_label(right, 18, HORIZONTAL_ALIGNMENT_RIGHT)
 	_weapon = _make_label(right, 20, HORIZONTAL_ALIGNMENT_RIGHT)
@@ -59,7 +59,7 @@ func _ready() -> void:
 	_objective = _make_label(_info_box, 22, HORIZONTAL_ALIGNMENT_CENTER)
 	_objective.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_objective.custom_minimum_size = Vector2(860, 0)
-	for key: String in ["deeds", "boss", "wave", "core", "build", "bribe", "notice"]:
+	for key: String in ["deeds", "boss", "wave", "core", "build", "bribe", "shop", "notice"]:
 		var line := _make_label(_info_box, 18, HORIZONTAL_ALIGNMENT_CENTER)
 		line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		line.custom_minimum_size = Vector2(860, 0)

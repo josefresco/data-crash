@@ -12,7 +12,7 @@ const SCAN_DELAY := 12.0
 
 ## [seconds into Phase 1, key, text]
 const TUTORIAL := [
-	[2.0, "move", "WASD moves, the mouse aims, Shift sprints, Space jumps. Left click shoots; Q or the mouse wheel switches weapons."],
+	[2.0, "move", "WASD moves, the mouse aims, Shift sprints, Space jumps. You start with bare hands: left click punches. Pick up a shovel or rocks nearby ([E]); Q or the wheel switches weapons."],
 	[16.0, "deeds", "Help the neighborhood first: the good deeds at the top pay cash and raise TRUST. Trust unlocks the bulldozer and brings more neighbors to help later."],
 	[32.0, "cars", "Every car on the block is drivable: walk up to one and press E."],
 	[48.0, "grock", "Grock AI cameras watch the block from poles. Shoot them down for cash and goodwill."],
@@ -77,6 +77,10 @@ func _scan() -> void:
 	var eye: Vector3 = player.vehicle.global_position if player.vehicle else player.global_position
 	_near_group(eye, "strays", 10.0, "stray", "This stray won't bite. Give it a treat [T] and it will follow you and guard the block.")
 	_near_group(eye, "fixables", 10.0, "water_main", "A sabotaged water main. Hold F next to it to fix it.")
+	_near_group(eye, "neighbors", 10.0, "grandma", "A grandma needs help crossing the street. Press E next to her and walk her over, slowly.")
+	_near_group(eye, "paint_jobs", 12.0, "paint", "The neighbors are repainting their house. Stand in the ring and hold F to help.")
+	_near_group(eye, "litter", 8.0, "litter_near", "Litter! Walk over it to pick it up. Clean up the whole block for a good deed.")
+	_near_group(eye, "pickups", 10.0, "pickup", "You start with bare hands. Grab shovels, rocks, and bottles lying around ([E]); buy guns at the gun show in the park.")
 	_near_group(eye, "grock_cameras", 18.0, "grock_near", "A Grock camera. Shoot it down: cash, and the neighbors trust you more.")
 	_near_group(eye, "gas_turbines", 26.0, "turbines", "Gas turbines power the datacenter and pour out smog. Small arms bounce off: use the rifle, explosives, or the bulldozer.")
 	_near_group(eye, "cooling_units", 22.0, "cooling", "Destroy all three cooling units to collapse the datacenter. Crapya's control room shields them until you break it.")

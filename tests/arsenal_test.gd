@@ -40,15 +40,19 @@ func _test_gun_show() -> void:
 	await seconds(0.1)
 	check(player.nearest_interactable() == stall, "gun show in reach")
 	check(not player.weapon_named("Machine gun").owned, "machine gun starts locked")
-	player.select_weapon(6)
+	player.select_weapon(player.weapons.find(player.weapon_named("Machine gun")))
 	check(player.current_weapon().display_name != "Machine gun", "locked weapons are skipped")
 	Game.cash = 100
-	check(not stall.buy(player), "can't afford the machine gun with $100")
+	check(not stall.buy_item(3, player), "can't afford the machine gun with $100")
 	Game.cash = 1000
-	check(stall.buy(player), "bought the machine gun")
+	check(stall.buy_item(3, player), "bought the machine gun")
 	check(player.weapon_named("Machine gun").owned, "machine gun unlocked")
-	check(stall.buy(player) and player.weapon_named("Grenades").ammo == 3, "then grenade packs (3)")
-	check(Game.cash == 1000 - 400 - 150, "gun show took $550 ($%d)" % Game.cash)
+	check(not stall.buy_item(3, player), "guns sell once")
+	check(stall.buy_item(4, player) and player.weapon_named("Grenades").ammo == 3, "then grenade packs (3)")
+	check(Game.cash == 1000 - 450 - 150, "gun show took $600 ($%d)" % Game.cash)
+	stall.interact(player)
+	check(stall.is_open, "[E] opens the gun show table")
+	stall.interact(player)
 
 
 func _test_machine_gun() -> void:

@@ -15,6 +15,9 @@ func _run() -> void:
 	add_child(level)
 	player = level.get_node("Player") as Player
 	await seconds(0.5)
+	check(player.current_weapon().display_name == "Fists" and player.held_model() == null, "the player starts unarmed")
+	check(player.weapons.filter(func(w: Weapon) -> bool: return w.owned).size() == 1, "only fists are owned at the start")
+	player.arm_all()
 	# The open field west of the neighborhood, away from houses and guards.
 	player.global_position = Vector3(-84, 0.2, 70)
 	await seconds(0.3)
@@ -24,6 +27,40 @@ func _run() -> void:
 	await _test_molotov()
 	await _test_rock_lure()
 	await _test_knockback()
+	await _test_shovel()
+	await _test_held_models()
+
+
+func _select(weapon_name: String) -> void:
+	player.select_weapon(player.weapons.find(player.weapon_named(weapon_name)))
+
+
+func _test_shovel() -> void:
+	player.global_position = Vector3(-84, 0.2, 40)
+	var guard := _dummy(SecurityGuard.new(), player.global_position + Vector3(0, 0, -1.6)) as SecurityGuard
+	await seconds(0.1)
+	_select("Shovel")
+	player.aim_at(guard.aim_point())
+	for i in 3:
+		player.fire()
+		await seconds(0.75)
+	check(not guard.is_alive(), "three shovel swings drop a guard (%.0f hp)" % guard.health)
+
+
+func _test_held_models() -> void:
+	player.global_position = Vector3(-84, 0.2, 50)
+	await seconds(0.2)
+	for weapon_name in ["Pistol", "Machine gun", "Shovel", "Rocket launcher"]:
+		_select(weapon_name)
+		await seconds(0.1)
+		check(player.held_model() != null, "%s is visible in the player's hands" % weapon_name)
+	_select("Pistol")
+	player.aim_at(player.global_position + Vector3(0, 1.5, -20))
+	player.fire()
+	await seconds(0.1)
+	var muzzle := player.muzzle_point()
+	check(muzzle.distance_to(player.global_position + Vector3.UP * 1.4) < 1.2 and muzzle != player.global_position + Vector3.UP * 1.4,
+		"shots leave from the pistol's muzzle (%s)" % (muzzle - player.global_position))
 
 
 func _dummy(unit: Enemy, at: Vector3, frozen := true) -> Enemy:
@@ -37,7 +74,7 @@ func _dummy(unit: Enemy, at: Vector3, frozen := true) -> Enemy:
 func _test_shotgun() -> void:
 	var dog := _dummy(Dog.new(), player.global_position + Vector3(0, 0, -6)) as Dog
 	await seconds(0.1)
-	player.select_weapon(1)
+	_select("Shotgun")
 	check(player.current_weapon().display_name == "Shotgun", "switched to shotgun")
 	for blast in 3:  # pellet spread is random: one spare blast
 		if not dog.is_alive():
@@ -51,7 +88,7 @@ func _test_shotgun() -> void:
 func _test_rifle_and_ammo() -> void:
 	var guard := _dummy(SecurityGuard.new(), player.global_position + Vector3(4, 0, -30)) as SecurityGuard
 	await seconds(0.1)
-	player.select_weapon(2)
+	_select("Hunting rifle")
 	var rifle := player.current_weapon()
 	var ammo := rifle.ammo
 	player.aim_at(guard.aim_point())
@@ -72,7 +109,7 @@ func _test_rifle_and_ammo() -> void:
 
 
 func _test_molotov() -> void:
-	player.select_weapon(3)
+	_select("Molotov")
 	check(player.current_weapon().display_name == "Molotov", "switched to molotov")
 	var ground := player.global_position + Vector3(0, 0, -8)
 	player.aim_at(ground)
