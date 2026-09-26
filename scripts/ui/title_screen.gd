@@ -19,6 +19,7 @@ func _ready() -> void:
 
 	var center := CenterContainer.new()
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(center)
 	_menu = VBoxContainer.new()
 	_menu.add_theme_constant_override("separation", 12)
@@ -38,6 +39,8 @@ func _ready() -> void:
 
 	_panel_holder = CenterContainer.new()
 	_panel_holder.set_anchors_preset(Control.PRESET_FULL_RECT)
+	# Empty full-screen holder: let clicks through to the menu underneath.
+	_panel_holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_panel_holder)
 
 	var footer := UiTheme.label("Esc pauses in game  •  Models, sounds, and textures: Kenney and ambientCG (CC0)  •  Godot 4.7",

@@ -17,6 +17,18 @@ func _run() -> void:
 	add_child(title)
 	await seconds(0.3)
 	check(title.find_children("*", "Button", true, false).size() >= 4, "title screen has its menu")
+	# Lay the menu out at a real resolution (the headless window is 64x64).
+	title.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	title.size = Vector2(1600, 900)
+	for c: Control in title.find_children("*", "Container", true, false):
+		c.queue_sort()
+	await seconds(0.1)
+	# Mouse: nothing invisible sits on top of the menu buttons (an empty
+	# full-screen container used to swallow every click).
+	for node in title.find_children("*", "Button", true, false):
+		var button := node as Button
+		var hit := _control_at(title, button.get_global_rect().get_center())
+		check(hit == button, "a mouse click reaches the %s button (%s)" % [button.text, hit.name if hit else "nothing"])
 	title.queue_free()
 	await seconds(0.1)
 
@@ -199,6 +211,14 @@ func _test_pause_and_end() -> void:
 	if menu:
 		menu.open()
 		check(get_tree().paused and menu.is_open, "pause menu pauses the game")
+		var root := menu.get("_root") as Control
+		root.set_anchors_preset(Control.PRESET_TOP_LEFT)
+		root.size = Vector2(1600, 900)
+		await get_tree().process_frame
+		await get_tree().process_frame
+		var buttons := root.find_children("*", "Button", true, false)
+		check(buttons.all(func(b: Node) -> bool: return _control_at(root, (b as Button).get_global_rect().get_center()) == b),
+			"mouse clicks reach every pause menu button")
 		menu.close()
 		check(not get_tree().paused, "and resumes it")
 	var end: EndScreen = null
@@ -209,6 +229,23 @@ func _test_pause_and_end() -> void:
 	if end:
 		end.show_result(true, 5, 5)
 		check(end.is_shown and end.rows.size() >= 10, "end screen lists the run's stats")
+
+
+## The control a mouse click at `point` would land on: topmost first, skipping
+## click-through (IGNORE) and hidden controls, like Godot's GUI picking.
+func _control_at(node: Node, point: Vector2) -> Control:
+	var children := node.get_children()
+	children.reverse()
+	for child in children:
+		if child is CanvasItem and not (child as CanvasItem).visible:
+			continue
+		var hit := _control_at(child, point)
+		if hit:
+			return hit
+	var control := node as Control
+	if control and control.mouse_filter != Control.MOUSE_FILTER_IGNORE and control.get_global_rect().has_point(point):
+		return control
+	return null
 
 
 func _parked_cars() -> Array[Car]:

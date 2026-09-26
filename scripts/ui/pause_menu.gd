@@ -25,6 +25,7 @@ func _ready() -> void:
 	_root.add_child(shade)
 	var center := CenterContainer.new()
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_root.add_child(center)
 	_main = VBoxContainer.new()
 	_main.add_theme_constant_override("separation", 12)
@@ -39,6 +40,8 @@ func _ready() -> void:
 		_main.add_child(node)
 	_panel_holder = CenterContainer.new()
 	_panel_holder.set_anchors_preset(Control.PRESET_FULL_RECT)
+	# Empty full-screen holder: let clicks through to the menu underneath.
+	_panel_holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_root.add_child(_panel_holder)
 	_root.visible = false
 

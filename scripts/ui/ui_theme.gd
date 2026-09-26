@@ -82,6 +82,7 @@ static func overlay(parent: Node, dim := 0.55) -> VBoxContainer:
 	parent.add_child(shade)
 	var center := CenterContainer.new()
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	shade.add_child(center)
 	var column := VBoxContainer.new()
 	column.alignment = BoxContainer.ALIGNMENT_CENTER
