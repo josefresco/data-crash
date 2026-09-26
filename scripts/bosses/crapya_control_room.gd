@@ -41,7 +41,7 @@ func _ready() -> void:
 	if Engine.is_editor_hint():
 		return
 	add_to_group("bosses")
-	var crapya := Models.humanoid(Models.mat(Color(0.12, 0.18, 0.32)), Color(0.1, 0.1, 0.12), Models.random_skin(), 1.75)
+	var crapya := CharacterModel.create("crapya", 1.75)
 	crapya.position = Vector3(0.0, 0.0, 0.6)
 	crapya.rotation.y = PI
 	add_child(crapya)

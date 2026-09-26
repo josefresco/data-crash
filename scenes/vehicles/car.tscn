@@ -33,6 +33,9 @@ mass = 900.0
 center_of_mass_mode = 1
 center_of_mass = Vector3(0, 0.35, 0)
 script = ExtResource("1_car")
+model_path = "res://assets/kenney/cars/suv.glb"
+model_scale = 1.4
+model_offset = Vector3(0, 0.05, 0)
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.75, 0)

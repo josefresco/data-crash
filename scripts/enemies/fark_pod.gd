@@ -164,7 +164,7 @@ func _build_visual() -> Node3D:
 	thruster.emission = Color(0.4, 0.6, 1.0)
 	thruster.emission_energy_multiplier = 2.0
 	Models.cylinder(rig, 0.8, 0.1, Vector3(0.0, 0.25, 0.0), thruster, 12)
-	var fark := Models.humanoid(Models.mat(Color(0.55, 0.55, 0.6)), Color(0.25, 0.3, 0.45), Models.random_skin(), 1.3)
+	var fark := CharacterModel.create("fark", 1.3)
 	fark.position.y = 0.7
 	rig.add_child(fark)
 	Models.ball(rig, 1.25, Vector3(0.0, 1.55, 0.0), Models.glass(Color(0.6, 0.85, 1.0, 0.25)))

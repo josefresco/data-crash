@@ -38,6 +38,8 @@ func _init() -> void:
 	ram_damage_per_mps = 3.5
 	body_size = Vector3(2.6, 2.0, 6.0)
 	body_color = Color(0.62, 0.64, 0.68)
+	model_path = "res://assets/kenney/cars/truck.glb"
+	model_scale = 2.0
 	explosion_radius = 7.0
 	explosion_damage = 60.0
 	bounty = 300

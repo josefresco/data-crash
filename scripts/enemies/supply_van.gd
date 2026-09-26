@@ -15,6 +15,8 @@ func _init() -> void:
 	bounty = 150
 	body_size = Vector3(2.0, 1.8, 4.6)
 	body_color = Color(0.9, 0.9, 0.92)
+	model_path = "res://assets/kenney/cars/delivery.glb"
+	model_scale = 1.45
 	explosion_damage = 50.0
 
 
@@ -34,6 +36,8 @@ func _goal_point() -> Vector3:
 
 
 func _decorate(visual_root: Node3D) -> void:
+	if not model_path.is_empty():
+		return  # the Kenney delivery truck already has its cargo box
 	# Corporate cargo box with a logo stripe.
 	_add_box(visual_root, Vector3(body_size.x * 0.95, 1.2, body_size.z * 0.55),
 		Vector3(0.0, body_size.y + 0.8, body_size.z * 0.18), _solid(Color(0.8, 0.8, 0.82)))

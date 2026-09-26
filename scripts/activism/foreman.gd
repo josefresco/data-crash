@@ -10,9 +10,9 @@ var _refresh_left := 0.0
 
 
 func _ready() -> void:
-	var rig := Models.humanoid(Models.mat(Color(1.0, 0.6, 0.1)), Color(0.25, 0.3, 0.4), Models.random_skin())
+	var rig := CharacterModel.create("foreman")
 	add_child(rig)
-	Models.box(rig, Vector3(0.34, 0.12, 0.36), Vector3(0.0, 1.75, 0.0), Models.mat(Color(0.95, 0.95, 0.9)))
+	Models.box(rig.anchor(&"head"), Vector3(0.62, 0.14, 0.64), Vector3(0.0, 0.54, 0.02), Models.mat(Color(0.95, 0.95, 0.9)))  # white hard hat
 	_label = Label3D.new()
 	_label.pixel_size = 0.01
 	_label.outline_size = 8

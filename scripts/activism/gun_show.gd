@@ -21,7 +21,7 @@ func _ready() -> void:
 		Models.box(self, Vector3(0.08, 2.3, 0.08), Vector3(x, 1.15, 1.0), wood)
 	Models.box(self, Vector3(0.9, 0.12, 0.3), Vector3(-0.6, 0.97, 0.0), Models.mat(Color(0.15, 0.15, 0.15)))
 	Models.box(self, Vector3(0.3, 0.2, 0.3), Vector3(0.7, 1.0, 0.0), Models.mat(Color(0.25, 0.3, 0.2)))
-	var vendor := Models.humanoid(Models.mat(Color(0.35, 0.3, 0.2)), Color(0.25, 0.25, 0.2), Models.random_skin())
+	var vendor := CharacterModel.create("vendor")
 	vendor.position = Vector3(0.0, 0.0, -1.0)
 	vendor.rotation.y = PI
 	add_child(vendor)

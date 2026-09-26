@@ -17,6 +17,7 @@ var carrier: Node3D = null
 
 
 func _init() -> void:
+	outfit = "townsperson"
 	faction = Faction.ALLY
 	max_health = 50.0
 	move_speed = 4.2
@@ -114,8 +115,8 @@ func _on_death() -> void:
 		Game.district.trust -= trust_loss_on_death
 
 
-func _decorate(visual_root: Node3D) -> void:
-	# Hard hat, hi-vis stripe, and tool belt: this is the repair crew.
-	_add_box(visual_root, Vector3(0.34, 0.12, 0.36), Vector3(0.0, body_height * 0.97, 0.0), _solid(Color(0.95, 0.8, 0.1)))
-	_add_box(visual_root, Vector3(0.44, 0.06, 0.27), Vector3(0.0, body_height * 0.7, 0.0), _solid(Color(0.95, 0.9, 0.2)))
-	_add_box(visual_root, Vector3(0.46, 0.1, 0.28), Vector3(0.0, body_height * 0.48, 0.0), _solid(Color(0.35, 0.25, 0.15)))
+func _decorate(_visual_root: Node3D) -> void:
+	# Hard hat and tool belt: this is the repair crew (hi-vis is on the skin).
+	var top := _head_top()
+	_add_box(_anchor(&"head"), Vector3(0.62, 0.14, 0.64), Vector3(0.0, top - 0.02, 0.02), _solid(Color(0.95, 0.8, 0.1)))
+	_add_box(_anchor(&"hips"), Vector3(0.46, 0.1, 0.32), Vector3(0.0, 0.02, 0.0), _solid(Color(0.35, 0.25, 0.15)))

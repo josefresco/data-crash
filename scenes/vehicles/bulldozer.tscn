@@ -53,6 +53,9 @@ ram_min_speed = 1.5
 ram_damage_per_mps = 70.0
 max_speed = 7.0
 required_trust = 0.35
+model_path = "res://assets/kenney/cars/tractor-shovel.glb"
+model_scale = 2.1
+model_offset = Vector3(0, 0.05, 0.3)
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.1, 0)

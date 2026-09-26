@@ -94,6 +94,52 @@ static func surface(material: StandardMaterial3D, kind: StringName) -> void:
 			material.roughness = 0.88
 
 
+static var _scenes := {}
+static var _retextured := {}
+
+
+## Instances an imported model (glb/fbx) scaled by `scale`. Scenes are cached.
+static func model(path: String, scale := 1.0) -> Node3D:
+	if not _scenes.has(path):
+		_scenes[path] = load(path)
+	var node := (_scenes[path] as PackedScene).instantiate() as Node3D
+	node.scale = Vector3.ONE * scale
+	return node
+
+
+## Merged mesh bounds of `root` in `root`'s parent space (includes its scale).
+static func model_bounds(root: Node3D) -> AABB:
+	var box := AABB()
+	var first := true
+	for mesh: MeshInstance3D in root.find_children("*", "MeshInstance3D", true, false):
+		var xform := root.transform
+		var node: Node = mesh
+		var chain := Transform3D()
+		while node != root:
+			chain = (node as Node3D).transform * chain
+			node = node.get_parent()
+		var bounds := (xform * chain) * mesh.get_aabb()
+		box = bounds if first else box.merge(bounds)
+		first = false
+	return box
+
+
+## Swaps the albedo texture on every mesh (palette variants). Materials are
+## cached per (source material, texture) so identical swaps share one.
+static func retexture(root: Node, texture: Texture2D) -> void:
+	for mesh: MeshInstance3D in root.find_children("*", "MeshInstance3D", true, false):
+		for surface_index in mesh.mesh.get_surface_count():
+			var source := mesh.mesh.surface_get_material(surface_index) as StandardMaterial3D
+			if source == null:
+				continue
+			var key := "%d/%s" % [source.get_instance_id(), texture.resource_path]
+			if not _retextured.has(key):
+				var copy := source.duplicate() as StandardMaterial3D
+				copy.albedo_texture = texture
+				_retextured[key] = copy
+			mesh.set_surface_override_material(surface_index, _retextured[key])
+
+
 ## Sets how a subtree takes part in global illumination. Moving things must be
 ## DYNAMIC (or DISABLED for short-lived FX) so SDFGI doesn't voxelize them.
 static func set_gi_mode(node: Node, mode: GeometryInstance3D.GIMode) -> void:

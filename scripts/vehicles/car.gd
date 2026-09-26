@@ -13,6 +13,11 @@ extends VehicleBody3D
 @export var max_speed := 0.0
 ## Neighborhood trust needed before the owner hands over the keys.
 @export var required_trust := 0.0
+## Optional imported model (Kenney Car Kit, faces +Z like this body). When
+## set, the scene's placeholder meshes are hidden and this is shown instead.
+@export_file("*.glb") var model_path := ""
+@export var model_scale := 1.45
+@export var model_offset := Vector3.ZERO
 
 var driver: Player = null
 
@@ -34,8 +39,18 @@ func _ready() -> void:
 	_spring.add_excluded_object(get_rid())
 	_cam_rig.top_level = true
 	_cam_rig.global_position = global_position
+	if not model_path.is_empty():
+		_use_model()
 	_dress_materials()
 	Models.set_gi_mode(self, GeometryInstance3D.GI_MODE_DYNAMIC)
+
+
+func _use_model() -> void:
+	for node in find_children("*", "MeshInstance3D", true, false):
+		(node as MeshInstance3D).visible = false
+	var model := Models.model(model_path, model_scale)
+	model.position = model_offset
+	add_child(model)
 
 
 ## Upgrades the scene's flat materials: glossy paint on the body, glass on the

@@ -31,6 +31,7 @@ var _line_left := 0.0
 
 
 func _init() -> void:
+	outfit = "harry"
 	max_health = 400.0
 	move_speed = 0.0
 	sight_range = 0.0
@@ -113,7 +114,7 @@ func _on_death() -> void:
 	speak("I'm stepping back to spend more time with my yacht.", 4.5)
 
 
-func _decorate(visual_root: Node3D) -> void:
+func _decorate(_visual_root: Node3D) -> void:
 	# Fleece vest over the suit, and a gold watch.
-	Models.box(visual_root, Vector3(0.58, 0.46, 0.35), Vector3(0.0, body_height * 0.64, 0.0), Models.mat(Color(0.35, 0.37, 0.4)))
-	Models.box(visual_root, Vector3(0.14, 0.06, 0.14), Vector3(0.36, body_height * 0.47, 0.0), Models.mat(Color(0.95, 0.8, 0.2)))
+	_add_box(_anchor(&"chest"), Vector3(0.54, 0.46, 0.38), Vector3(0.0, -0.05, 0.0), Models.mat(Color(0.35, 0.37, 0.4), &"cloth"))
+	_add_box(_anchor(&"hand_l"), Vector3(0.12, 0.06, 0.12), Vector3(0.0, 0.1, 0.0), Models.mat(Color(0.95, 0.8, 0.2), &"metal"))

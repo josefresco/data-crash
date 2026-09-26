@@ -12,6 +12,7 @@ var captive: Townsperson = null
 
 
 func _init() -> void:
+	outfit = "frost"
 	max_health = 220.0
 	move_speed = 3.2
 	sight_range = 40.0
@@ -88,10 +89,11 @@ func _on_death() -> void:
 		captive = null
 
 
-func _decorate(visual_root: Node3D) -> void:
+func _decorate(_visual_root: Node3D) -> void:
 	var armor := _solid(Color(0.15, 0.18, 0.25))
-	_add_box(visual_root, Vector3(0.62, 0.55, 0.36), Vector3(0.0, body_height * 0.64, 0.0), armor)  # plate carrier
-	_add_box(visual_root, Vector3(0.36, 0.3, 0.38), Vector3(0.0, body_height * 0.9, 0.0), armor)  # helmet
+	var top := _head_top()
+	_add_box(_anchor(&"chest"), Vector3(0.56, 0.5, 0.4), Vector3(0.0, -0.05, 0.0), armor)  # plate carrier
+	_add_box(_anchor(&"head"), Vector3(0.66, 0.34, 0.66), Vector3(0.0, top - 0.16, 0.02), armor)  # helmet
 	# Visor stripe so they read at a distance.
-	_add_box(visual_root, Vector3(0.3, 0.07, 0.04), Vector3(0.0, body_height * 0.89, -0.2), _solid(Color(0.4, 0.8, 1.0)))
-	_add_box(visual_root, Vector3(0.14, 0.14, 0.6), Vector3(0.3, body_height * 0.55, -0.3), armor)  # capture launcher
+	_add_box(_anchor(&"head"), Vector3(0.52, 0.08, 0.04), Vector3(0.0, top - 0.26, -0.34), _solid(Color(0.4, 0.8, 1.0)))
+	_add_box(_anchor(&"hand_r"), Vector3(0.14, 0.14, 0.6), Vector3(0.0, -0.05, -0.25), armor)  # capture launcher

@@ -46,8 +46,7 @@ var _repair_debt := 0.0
 var _slow_timer := 0.0
 ## While > 0, input steering is suppressed so knockback carries the player.
 var _knockback_left := 0.0
-var _rig: Node3D
-var _walk_phase := 0.0
+var _rig: CharacterModel
 ## Fark's "Algorithm Re-education": movement input is mirrored while > 0.
 var _reversed_left := 0.0
 var _gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
@@ -60,13 +59,11 @@ var _gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 
 func _ready() -> void:
 	add_to_group("player")
-	# Swap the placeholder capsule for a rig: orange hoodie, jeans.
+	# Swap the placeholder capsule for the Kenney character: orange hoodie, jeans.
 	for child in _body.get_children():
 		(child as Node3D).visible = false
-	_rig = Models.humanoid(Models.mat(Color(0.92, 0.5, 0.15), &"cloth"), Color(0.2, 0.3, 0.5), Color(0.8, 0.6, 0.45))
+	_rig = CharacterModel.create("player", 1.8, 1)
 	_body.add_child(_rig)
-	Models.box(_rig.get_node("head") as Node3D, Vector3(0.3, 0.14, 0.3), Vector3(0.0, 0.07, 0.02),
-		Models.mat(Color(0.85, 0.45, 0.12), &"cloth"))  # hood
 	Models.set_gi_mode(_body, GeometryInstance3D.GI_MODE_DYNAMIC)
 	health = max_health
 	_spawn = global_transform
@@ -291,8 +288,10 @@ func _move(delta: float) -> void:
 
 	move_and_slide()
 	var ground_speed := Vector2(velocity.x, velocity.z).length()
-	_walk_phase += ground_speed * delta * 3.0
-	Models.animate_walk(_rig, _walk_phase, clampf(ground_speed / walk_speed, 0.0, 1.2))
+	if is_on_floor():
+		_rig.set_motion(ground_speed / Enemy.RUN_CLIP_SPEED)
+	else:
+		_rig.play_jump()
 
 
 ## Ray from the screen center along the camera view.

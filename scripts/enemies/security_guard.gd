@@ -10,6 +10,7 @@ const SHOT_MASK := 1 | 2 | 16 | 32  # world, player, destructibles, units
 
 
 func _init() -> void:
+	outfit = "guard"
 	max_health = 60.0
 	move_speed = 3.8
 	sight_range = 25.0
@@ -19,11 +20,12 @@ func _init() -> void:
 	body_color = Color(0.16, 0.17, 0.22)
 
 
-func _decorate(visual_root: Node3D) -> void:
-	var dark := _solid(Color(0.05, 0.05, 0.06))
-	_add_box(visual_root, Vector3(0.34, 0.12, 0.36), Vector3(0, body_height * 0.965, 0), dark)  # helmet
-	_add_box(visual_root, Vector3(0.44, 0.34, 0.3), Vector3(0, body_height * 0.66, 0), dark)  # vest
-	_add_box(visual_root, Vector3(0.08, 0.08, 0.75), Vector3(0.25, body_height * 0.56, -0.32), dark)  # rifle
+func _decorate(_visual_root: Node3D) -> void:
+	var dark := _solid(Color(0.06, 0.06, 0.07))
+	var top := _head_top()
+	_add_box(_anchor(&"head"), Vector3(0.6, 0.16, 0.62), Vector3(0.0, top - 0.05, 0.02), dark)  # helmet
+	_add_box(_anchor(&"chest"), Vector3(0.48, 0.42, 0.36), Vector3(0.0, -0.06, 0.0), dark)  # vest
+	_add_box(_anchor(&"hand_r"), Vector3(0.08, 0.1, 0.75), Vector3(0.0, -0.04, -0.28), dark)  # rifle
 
 
 func _attack(victim: Node3D) -> void:

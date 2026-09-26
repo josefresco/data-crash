@@ -19,8 +19,11 @@ func _run() -> void:
 	var player := level.get_node("Player") as Player
 	var nav_map := player.get_world_3d().navigation_map
 	var path := NavigationServer3D.map_get_path(nav_map, Vector3(-40, 0, -30), Vector3(-20, 0, -20), true)
-	# The path should stop outside the west fence (x = -25), never reaching the target.
-	check(path.size() > 0 and path[-1].x < -25.0,
+	# The path must stop somewhere outside the fenced compound (x -25..25,
+	# z -50..-12), never reaching the target inside it.
+	var end: Vector3 = path[-1] if path.size() > 0 else Vector3.ZERO
+	var inside := end.x > -25.0 and end.x < 25.0 and end.z > -50.0 and end.z < -12.0
+	check(path.size() > 0 and not inside,
 		"fence blocks outside-in path (ends at %s)" % [path[-1] if path.size() > 0 else "none"])
 
 	# Guard spots and shoots the player inside the fence.

@@ -14,6 +14,8 @@ enum Faction { HOSTILE, ALLY }
 ## Line-of-sight blockers: world, player, destructibles, other units.
 const LOS_MASK := 1 | 2 | 16 | 32
 const THINK_INTERVAL := 0.25
+## Ground speed (m/s) the Kenney run clip is authored for.
+const RUN_CLIP_SPEED := 4.0
 ## Damage let through while inside a projection drone's force field.
 const FIELD_DAMAGE_FACTOR := 0.35
 const ALLY_TINT := Color(0.3, 0.85, 0.4)
@@ -45,6 +47,9 @@ var waypoint_reach := 0.8
 ## Non-empty for bosses: joins group "bosses" and gets the HUD boss bar.
 var boss_name := ""
 
+## Kenney character skin (see CharacterModel / tools/generate_skins.py).
+## Empty = procedural look (dogs, drones, turrets, pods).
+var outfit := ""
 var body_color := Color(0.2, 0.2, 0.25)
 var skin_color := Models.random_skin()
 var body_bulk := 1.0
@@ -291,6 +296,9 @@ func _animate(delta: float) -> void:
 		return
 	var real := get_real_velocity()
 	var speed := Vector2(real.x, real.z).length()
+	if _rig is CharacterModel:
+		(_rig as CharacterModel).set_motion(speed / RUN_CLIP_SPEED)
+		return
 	_walk_phase += speed * delta * 3.2
 	Models.animate_walk(_rig, _walk_phase, clampf(speed / maxf(move_speed, 0.1), 0.0, 1.0))
 
@@ -431,6 +439,8 @@ func _is_valid(node: Variant) -> bool:
 
 
 func _base_color() -> Color:
+	if not outfit.is_empty():
+		return Color.WHITE  # the skin texture carries the colors
 	return body_color if faction == Faction.HOSTILE else body_color.lerp(ALLY_TINT, 0.6)
 
 
@@ -451,6 +461,10 @@ func _build_body() -> void:
 	_rig = _build_visual()
 	if _rig:
 		_visual.add_child(_rig)
+	if _rig is CharacterModel:
+		# The skinned model's own material takes over hit flashes and tints.
+		_material = (_rig as CharacterModel).material
+		_material.albedo_color = _base_color()
 	_decorate(_visual)
 	# Moving: lit by GI but not baked into it.
 	Models.set_gi_mode(_visual, GeometryInstance3D.GI_MODE_DYNAMIC)
@@ -459,7 +473,22 @@ func _build_body() -> void:
 ## Override: the model under _visual. `_material` is this unit's own shirt /
 ## fur material (tinted for allies, flashed on hits).
 func _build_visual() -> Node3D:
+	if not outfit.is_empty():
+		return CharacterModel.create(outfit, body_height)
 	return Models.humanoid(_material, body_color.darkened(0.55), skin_color, body_height, body_bulk)
+
+
+## Where to hang gear: a bone-following anchor on character models
+## (head, chest, hips, hand_r, hand_l), else the visual root.
+func _anchor(anchor_name: StringName) -> Node3D:
+	if _rig is CharacterModel:
+		return (_rig as CharacterModel).anchor(anchor_name)
+	return _visual
+
+
+## Height of the top of the head above the head anchor (Kenney proportions).
+func _head_top() -> float:
+	return body_height * 0.27
 
 
 func _add_box(parent: Node3D, box_size: Vector3, at: Vector3, mat: Material) -> MeshInstance3D:

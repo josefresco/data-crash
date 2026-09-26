@@ -5,6 +5,7 @@ extends SecurityGuard
 
 
 func _init() -> void:
+	outfit = ""  # procedural turret, not a person
 	max_health = 120.0
 	move_speed = 0.0
 	sight_range = 35.0

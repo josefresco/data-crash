@@ -22,6 +22,20 @@ const WALL_COLORS: Array[Color] = [
 const ROOF_COLORS: Array[Color] = [
 	Color(0.35, 0.2, 0.18), Color(0.25, 0.27, 0.3), Color(0.4, 0.3, 0.22), Color(0.3, 0.35, 0.28),
 ]
+const KENNEY := "res://assets/kenney/"
+## City Kit (Suburban) houses: 1 kit unit is about 8 m of street frontage.
+const HOUSE_SCALE := 8.0
+const HOUSE_TYPES := "abcdefghijklmnopqrstu"
+const ROOF_VARIANTS := 5
+## Kenney houses face +Z (door side); flip here if a kit update changes that.
+const HOUSE_YAW := 0.0
+const TREE_MODELS: Array[String] = ["tree_oak", "tree_default", "tree_detailed", "tree_fat", "tree_oak_dark", "tree_default_dark"]
+const BUSH_MODELS: Array[String] = ["plant_bush", "plant_bushLarge", "plant_bushDetailed", "plant_bushSmall"]
+const FLOWER_MODELS: Array[String] = ["flower_redA", "flower_yellowA", "flower_purpleA"]
+const PARKED_CARS: Array[String] = ["sedan", "suv", "hatchback-sports", "taxi", "van", "suv-luxury"]
+## Kenney Car Kit is about 1/1.45 real size.
+const CAR_SCALE := 1.45
+
 const CAR_COLORS: Array[Color] = [
 	Color(0.7, 0.15, 0.15), Color(0.2, 0.3, 0.6), Color(0.85, 0.85, 0.8), Color(0.2, 0.2, 0.22),
 ]
@@ -98,29 +112,47 @@ func build() -> void:
 
 
 func _add_house(at: Vector3, facing_side: float) -> void:
-	var size := Vector3(_rng.randf_range(9.0, 11.0), _rng.randf_range(4.2, 5.4), _rng.randf_range(7.5, 8.5))
 	var body := StaticBody3D.new()
 	body.position = at
 	# Front door faces the street: +Z for houses north of it (side -1), -Z south.
-	body.rotation.y = 0.0 if facing_side < 0.0 else PI
+	body.rotation.y = (0.0 if facing_side < 0.0 else PI) + HOUSE_YAW
 	add_child(body)
+
+	var kind := HOUSE_TYPES[_rng.randi() % HOUSE_TYPES.length()]
+	var house := Models.model("%ssuburban/building-type-%s.glb" % [KENNEY, kind], HOUSE_SCALE)
+	body.add_child(house)
+	var roof := _rng.randi() % (ROOF_VARIANTS + 1)
+	if roof < ROOF_VARIANTS:  # the last pick keeps the kit's green roofs
+		Models.retexture(house, load("%ssuburban/Textures/colormap_roof_%d.png" % [KENNEY, roof]))
+
+	var bounds := Models.model_bounds(house)
 	var shape := BoxShape3D.new()
-	shape.size = size
+	shape.size = bounds.size
 	var collider := CollisionShape3D.new()
 	collider.shape = shape
-	collider.position.y = size.y * 0.5
+	collider.position = bounds.get_center()
 	body.add_child(collider)
-	var wall: Color = WALL_COLORS[_rng.randi() % WALL_COLORS.size()]
-	var roof: Color = ROOF_COLORS[_rng.randi() % ROOF_COLORS.size()]
-	body.add_child(Models.house(size, wall, roof, Color(0.95, 0.95, 0.92)))
-	# Lawn and a mailbox out front.
-	var front := Vector3(0.0, 0.0, size.z * 0.5 + 2.2).rotated(Vector3.UP, body.rotation.y)
+
+	# Path to the door, a couple of bushes, and a mailbox out front.
+	var front_depth := bounds.end.z
+	var front := Vector3(0.0, 0.0, front_depth + 2.2).rotated(Vector3.UP, body.rotation.y)
 	_doors.append(at + front + Vector3.UP * 0.2)
+	var path := Models.model(KENNEY + "suburban/path-long.glb", HOUSE_SCALE * 0.5)
+	path.position = Vector3(0.0, 0.02, front_depth + 1.6)
+	body.add_child(path)
+	for side in [-1.0, 1.0]:
+		var bush := Models.model("%snature/%s.glb" % [KENNEY, BUSH_MODELS[_rng.randi() % BUSH_MODELS.size()]], _rng.randf_range(2.5, 3.5))
+		bush.position = Vector3(side * bounds.size.x * 0.32, 0.0, front_depth + 0.8)
+		body.add_child(bush)
+		if _rng.randf() < 0.5:
+			var flower := Models.model("%snature/%s.glb" % [KENNEY, FLOWER_MODELS[_rng.randi() % FLOWER_MODELS.size()]], 3.0)
+			flower.position = Vector3(side * bounds.size.x * 0.18, 0.0, front_depth + 1.2)
+			body.add_child(flower)
 	var mailbox := Node3D.new()
-	mailbox.position = at + Vector3(2.5, 0.0, 0.0).rotated(Vector3.UP, body.rotation.y) + front * 1.6
+	mailbox.position = at + Vector3(2.5, 0.0, 0.0).rotated(Vector3.UP, body.rotation.y) + front * 1.35
 	add_child(mailbox)
 	Models.box(mailbox, Vector3(0.08, 1.0, 0.08), Vector3(0.0, 0.5, 0.0), Models.mat(Color(0.3, 0.25, 0.2)))
-	Models.box(mailbox, Vector3(0.25, 0.25, 0.45), Vector3(0.0, 1.05, 0.0), Models.mat(Color(0.2, 0.25, 0.5)))
+	Models.box(mailbox, Vector3(0.25, 0.25, 0.45), Vector3(0.0, 1.05, 0.0), Models.mat(Color(0.2, 0.25, 0.5), &"metal"))
 
 
 func _add_parked_car(at: Vector3, yaw: float) -> void:
@@ -128,27 +160,32 @@ func _add_parked_car(at: Vector3, yaw: float) -> void:
 	body.position = at
 	body.rotation.y = yaw
 	add_child(body)
+	var car := Models.model("%scars/%s.glb" % [KENNEY, PARKED_CARS[_rng.randi() % PARKED_CARS.size()]], CAR_SCALE)
+	body.add_child(car)
+	var bounds := Models.model_bounds(car)
 	var shape := BoxShape3D.new()
-	shape.size = Vector3(1.8, 1.4, 4.0)
+	shape.size = bounds.size
 	var collider := CollisionShape3D.new()
 	collider.shape = shape
-	collider.position.y = 0.8
+	collider.position = bounds.get_center()
 	body.add_child(collider)
-	body.add_child(Models.parked_car(CAR_COLORS[_rng.randi() % CAR_COLORS.size()]))
 
 
 func _add_tree(at: Vector3, height: float) -> void:
 	var body := StaticBody3D.new()
 	body.position = at
+	body.rotation.y = _rng.randf() * TAU
 	add_child(body)
 	var shape := CylinderShape3D.new()
-	shape.radius = 0.25
+	shape.radius = 0.3
 	shape.height = height * 0.5
 	var collider := CollisionShape3D.new()
 	collider.shape = shape
 	collider.position.y = height * 0.25
 	body.add_child(collider)
-	body.add_child(Models.tree(height))
+	# Nature Kit trees are about 1.2 units tall.
+	var tree := Models.model("%snature/%s.glb" % [KENNEY, TREE_MODELS[_rng.randi() % TREE_MODELS.size()]], height / 1.2)
+	body.add_child(tree)
 
 
 func _build_park(x_range: Vector2, z_range: Vector2) -> void:

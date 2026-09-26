@@ -15,6 +15,10 @@ extends Enemy
 @export var explosion_radius := 5.0
 @export var explosion_damage := 90.0
 @export var battery_fire_dps := 25.0
+## Kenney Car Kit model shown instead of the box shell (faces +Z; this body
+## drives toward -Z, so it's turned around).
+@export_file("*.glb") var model_path := "res://assets/kenney/cars/sedan-sports.glb"
+@export var model_scale := 1.5
 
 var speed := 0.0
 var is_burning := false
@@ -38,6 +42,7 @@ func _init() -> void:
 	waypoint_reach = 3.0  # a 4 m car can't thread 0.8 m waypoints
 	bounty = 30
 	body_color = Color(0.85, 0.86, 0.9)
+	outfit = ""
 
 
 ## An EMP "hacks" the car: it stalls for good and its battery catches fire.
@@ -211,6 +216,9 @@ func _build_body() -> void:
 
 	_visual = Node3D.new()
 	add_child(_visual)
+	if not model_path.is_empty():
+		_build_model()
+		return
 	# Its own glossy paint: flashes and burn-out darkening recolor it.
 	_material = StandardMaterial3D.new()
 	_material.albedo_color = _base_color()
@@ -234,3 +242,33 @@ func _build_body() -> void:
 				Vector3(x * body_size.x * 0.5, 0.3, z * body_size.z * 0.32), tire)
 	_decorate(_visual)
 	Models.set_gi_mode(_visual, GeometryInstance3D.GI_MODE_DYNAMIC)
+
+
+## Kenney car body with its own copy of the palette material, so flashes and
+## burn-out darkening only affect this car. Keeps the red sensor bar.
+func _build_model() -> void:
+	var car := Models.model(model_path, model_scale)
+	car.rotation.y = PI
+	_visual.add_child(car)
+	for mesh: MeshInstance3D in car.find_children("*", "MeshInstance3D", true, false):
+		if _material == null:
+			_material = (mesh.mesh.surface_get_material(0) as StandardMaterial3D).duplicate() as StandardMaterial3D
+			_material.metallic = 0.3
+			_material.roughness = 0.35
+		mesh.material_override = _material
+	_material.albedo_color = _base_color()
+	var bounds := Models.model_bounds(car)
+	var glow := StandardMaterial3D.new()
+	glow.albedo_color = Color(1.0, 0.1, 0.1)
+	glow.emission_enabled = true
+	glow.emission = Color(1.0, 0.1, 0.05)
+	glow.emission_energy_multiplier = 2.5
+	_add_box(_visual, Vector3(bounds.size.x * 0.7, 0.08, 0.05),
+		Vector3(0.0, bounds.size.y * 0.55, bounds.position.z - 0.03), glow)
+	_decorate(_visual)
+	Models.set_gi_mode(_visual, GeometryInstance3D.GI_MODE_DYNAMIC)
+
+
+func _base_color() -> Color:
+	# Models carry their own paint in the palette texture.
+	return Color.WHITE if not model_path.is_empty() else super()

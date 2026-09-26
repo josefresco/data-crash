@@ -32,6 +32,7 @@ var _phone: MeshInstance3D
 
 
 func _init() -> void:
+	outfit = "elmo"
 	max_health = 600.0
 	move_speed = 4.8
 	sight_range = 40.0
@@ -110,13 +111,13 @@ func _attack(victim: Node3D) -> void:
 			node.call(&"apply_damage", flame_dps * attack_interval, global_position, &"fire")
 
 
-func _decorate(visual_root: Node3D) -> void:
-	# Fuel tank on the back, nozzle forward (-Z), phone for posting.
-	_add_box(visual_root, Vector3(0.36, 0.6, 0.24), Vector3(0.0, body_height * 0.62, 0.26), _solid(Color(0.6, 0.15, 0.1)))
-	_add_box(visual_root, Vector3(0.08, 0.08, 0.8), Vector3(0.25, body_height * 0.52, -0.4), _solid(Color(0.2, 0.2, 0.2)))
+func _decorate(_visual_root: Node3D) -> void:
+	# Fuel tank on the back, nozzle in hand (-Z), phone for posting.
+	_add_box(_anchor(&"chest"), Vector3(0.36, 0.6, 0.24), Vector3(0.0, -0.08, 0.32), _solid(Color(0.6, 0.15, 0.1)))
+	_add_box(_anchor(&"hand_r"), Vector3(0.08, 0.08, 0.8), Vector3(0.0, -0.02, -0.35), _solid(Color(0.2, 0.2, 0.2)))
 	var screen := StandardMaterial3D.new()
 	screen.albedo_color = Color(0.6, 0.8, 1.0)
 	screen.emission_enabled = true
 	screen.emission = Color(0.5, 0.7, 1.0)
-	_phone = _add_box(visual_root, Vector3(0.1, 0.18, 0.03), Vector3(-0.18, body_height * 0.72, -0.3), screen)
+	_phone = _add_box(_anchor(&"hand_l"), Vector3(0.1, 0.18, 0.03), Vector3(0.0, 0.08, -0.1), screen)
 	_phone.visible = false

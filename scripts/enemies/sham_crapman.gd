@@ -27,6 +27,7 @@ var _line_left := 0.0
 
 
 func _init() -> void:
+	outfit = "sham"
 	max_health = 750.0
 	move_speed = 3.2
 	sight_range = 30.0
@@ -103,11 +104,5 @@ func _on_death() -> void:
 			pylon.shatter(pylon.global_position + Vector3.UP * 2.0, 80.0)
 
 
-func _decorate(visual_root: Node3D) -> void:
-	# Black turtleneck under the white suit, and a glowing lanyard badge.
-	Models.box(visual_root, Vector3(0.2, 0.12, 0.2), Vector3(0.0, body_height * 0.81, -0.03), Models.mat(Color(0.08, 0.08, 0.1)))
-	var badge := StandardMaterial3D.new()
-	badge.albedo_color = Color(0.4, 0.9, 1.0)
-	badge.emission_enabled = true
-	badge.emission = Color(0.4, 0.9, 1.0)
-	Models.box(visual_root, Vector3(0.1, 0.14, 0.03), Vector3(0.0, body_height * 0.66, -0.14), badge)
+func _decorate(_visual_root: Node3D) -> void:
+	pass  # the white suit and glowing badge are on the skin

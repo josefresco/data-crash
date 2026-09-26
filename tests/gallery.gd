@@ -20,6 +20,21 @@ func _ready() -> void:
 		if not node is SentryTurret:
 			(node as Enemy).apply_damage(9999.0, Vector3.ZERO)
 
+	# Car kit lineup (labels above), each turned to show its +Z side to the camera.
+	var names := ["sedan", "sedan-sports", "suv", "van", "delivery", "police", "truck", "tractor-shovel", "garbage-truck", "hatchback-sports"]
+	for i in names.size():
+		var car := Models.model("res://assets/kenney/cars/%s.glb" % names[i], 1.45)
+		car.position = Vector3(-88.0 + i * 4.5, 0.0, 30.0)
+		car.rotation.y = PI * 0.5  # +Z (model front?) faces +X, toward the camera's right
+		level.add_child(car)
+		var tag := Label3D.new()
+		tag.text = names[i]
+		tag.pixel_size = 0.006
+		tag.position = car.position + Vector3(0, 3.2, 0)
+		tag.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		level.add_child(tag)
+	await _shot("cars", Vector3(-68, 0.2, 44), Vector3(-68, 1.0, 30))
+
 	await _shot("crapya", Vector3(-10, 0.2, -18), Vector3(-18, 1.5, -30))
 	await _shot("dozer", Vector3(18, 0.2, 48), Vector3(25, 1.0, 57))
 	await _shot("gunshow", Vector3(-4, 0.2, 52), Vector3(-12, 1.2, 57))
