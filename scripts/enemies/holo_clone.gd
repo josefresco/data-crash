@@ -19,6 +19,9 @@ func _ready() -> void:
 	_material.albedo_color = Color(0.4, 0.8, 1.0, 0.45)
 	_material.emission_enabled = true
 	_material.emission = Color(0.3, 0.7, 1.0)
+	# The whole figure is a hologram, not just the shirt.
+	for node in _visual.find_children("*", "MeshInstance3D", true, false):
+		(node as MeshInstance3D).material_override = _material
 	get_tree().create_timer(lifetime).timeout.connect(_expire)
 
 

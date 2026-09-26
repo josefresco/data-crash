@@ -211,11 +211,14 @@ func _build_body() -> void:
 
 	_visual = Node3D.new()
 	add_child(_visual)
-	_material = _solid(_base_color())
+	# Its own glossy paint: flashes and burn-out darkening recolor it.
+	_material = StandardMaterial3D.new()
+	_material.albedo_color = _base_color()
+	Models.surface(_material, &"paint")
 	var shell := _add_box(_visual, body_size, Vector3(0.0, body_size.y * 0.5 + clearance, 0.0), _material)
 	shell.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 	_add_box(_visual, Vector3(body_size.x * 0.85, body_size.y * 0.45, body_size.z * 0.45),
-		Vector3(0.0, body_size.y + clearance + body_size.y * 0.2, body_size.z * 0.05), _solid(Color(0.05, 0.06, 0.08)))
+		Vector3(0.0, body_size.y + clearance + body_size.y * 0.2, body_size.z * 0.05), Models.window())
 	# Red "sensor" light bar across the nose (forward is -Z).
 	var glow := StandardMaterial3D.new()
 	glow.albedo_color = Color(1.0, 0.1, 0.1)
@@ -230,3 +233,4 @@ func _build_body() -> void:
 			_add_box(_visual, Vector3(0.3, 0.6, 0.6),
 				Vector3(x * body_size.x * 0.5, 0.3, z * body_size.z * 0.32), tire)
 	_decorate(_visual)
+	Models.set_gi_mode(_visual, GeometryInstance3D.GI_MODE_DYNAMIC)

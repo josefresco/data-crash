@@ -18,6 +18,7 @@ static func tracer(parent: Node, from: Vector3, to: Vector3, color: Color,
 	line.mesh = mesh
 	line.material_override = mat
 	line.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	line.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
 	parent.add_child(line)
 	line.global_position = (from + to) * 0.5
 	var direction := (to - from) / length
@@ -42,6 +43,7 @@ static func flame_puff(parent: Node, at: Vector3, size := 0.6, lifetime := 0.45)
 	puff.mesh = box
 	puff.material_override = mat
 	puff.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	puff.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
 	parent.add_child(puff)
 	puff.global_position = at
 	puff.rotation = Vector3(randf() * TAU, randf() * TAU, 0.0)

@@ -34,6 +34,27 @@ func _ready() -> void:
 	_spring.add_excluded_object(get_rid())
 	_cam_rig.top_level = true
 	_cam_rig.global_position = global_position
+	_dress_materials()
+	Models.set_gi_mode(self, GeometryInstance3D.GI_MODE_DYNAMIC)
+
+
+## Upgrades the scene's flat materials: glossy paint on the body, glass on the
+## cabin, grain on everything else.
+func _dress_materials() -> void:
+	for node in find_children("*", "MeshInstance3D", true, false):
+		var mesh := node as MeshInstance3D
+		var material := mesh.get_surface_override_material(0) as StandardMaterial3D
+		if material == null:
+			continue
+		match String(mesh.name):
+			"Chassis", "Body", "ArmL", "ArmR":
+				Models.surface(material, &"paint")
+			"Cabin":
+				Models.surface(material, &"window")
+			"Blade":
+				Models.surface(material, &"metal")
+			_:
+				Models.surface(material, &"rough")
 
 
 func can_enter() -> bool:

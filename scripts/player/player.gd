@@ -63,10 +63,11 @@ func _ready() -> void:
 	# Swap the placeholder capsule for a rig: orange hoodie, jeans.
 	for child in _body.get_children():
 		(child as Node3D).visible = false
-	_rig = Models.humanoid(Models.mat(Color(0.92, 0.5, 0.15)), Color(0.2, 0.3, 0.5), Color(0.8, 0.6, 0.45))
+	_rig = Models.humanoid(Models.mat(Color(0.92, 0.5, 0.15), &"cloth"), Color(0.2, 0.3, 0.5), Color(0.8, 0.6, 0.45))
 	_body.add_child(_rig)
 	Models.box(_rig.get_node("head") as Node3D, Vector3(0.3, 0.14, 0.3), Vector3(0.0, 0.07, 0.02),
-		Models.mat(Color(0.85, 0.45, 0.12)))  # hood
+		Models.mat(Color(0.85, 0.45, 0.12), &"cloth"))  # hood
+	Models.set_gi_mode(_body, GeometryInstance3D.GI_MODE_DYNAMIC)
 	health = max_health
 	_spawn = global_transform
 	_spring.rotation.x = _pitch

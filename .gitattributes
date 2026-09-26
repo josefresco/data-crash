@@ -2,3 +2,4 @@
 *.exe binary
 *.png binary
 *.glb binary
+*.bat text eol=crlf

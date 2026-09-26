@@ -45,7 +45,7 @@ func build() -> void:
 	_doors.clear()
 	_rng.seed = layout_seed
 
-	var asphalt := Models.mat(Color(0.17, 0.17, 0.18))
+	var asphalt := Models.mat(Color(0.17, 0.17, 0.18), &"asphalt")
 	var sidewalk := Models.mat(Color(0.55, 0.55, 0.52))
 	var line := Models.mat(Color(0.85, 0.75, 0.3))
 

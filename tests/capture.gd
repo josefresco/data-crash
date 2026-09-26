@@ -90,4 +90,4 @@ func _save(label: String) -> void:
 	await RenderingServer.frame_post_draw
 	var path := "res://tests/output/%s.png" % label
 	var err := get_viewport().get_texture().get_image().save_png(path)
-	print("saved %s (err=%d)" % [path, err])
+	print("saved %s (err=%d, %d fps)" % [path, err, Engine.get_frames_per_second()])

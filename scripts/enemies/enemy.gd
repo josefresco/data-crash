@@ -447,10 +447,13 @@ func _build_body() -> void:
 	add_child(_visual)
 	_material = StandardMaterial3D.new()
 	_material.albedo_color = _base_color()
+	Models.surface(_material, &"cloth")
 	_rig = _build_visual()
 	if _rig:
 		_visual.add_child(_rig)
 	_decorate(_visual)
+	# Moving: lit by GI but not baked into it.
+	Models.set_gi_mode(_visual, GeometryInstance3D.GI_MODE_DYNAMIC)
 
 
 ## Override: the model under _visual. `_material` is this unit's own shirt /
@@ -471,9 +474,7 @@ func _add_box(parent: Node3D, box_size: Vector3, at: Vector3, mat: Material) -> 
 
 
 func _solid(color: Color) -> StandardMaterial3D:
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = color
-	return mat
+	return Models.mat(color, &"cloth")
 
 
 func _flash(color: Color) -> void:

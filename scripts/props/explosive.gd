@@ -110,6 +110,8 @@ static func spawn_flash(parent: Node, at: Vector3, size: float,
 	var flash := MeshInstance3D.new()
 	flash.mesh = sphere
 	flash.material_override = mat
+	flash.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	flash.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
 	parent.add_child(flash)
 	flash.global_position = at
 	flash.scale = Vector3.ONE * 0.3

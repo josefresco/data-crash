@@ -18,11 +18,13 @@ static func random_skin() -> Color:
 
 
 ## Shared opaque material per color (cheap: meshes batch well).
-static func mat(color: Color) -> StandardMaterial3D:
-	var key := color.to_html()
+## Shared cached material per color and surface kind (see surface()).
+static func mat(color: Color, kind: StringName = &"rough") -> StandardMaterial3D:
+	var key := "%s/%s" % [color.to_html(), kind]
 	if not _materials.has(key):
 		var material := StandardMaterial3D.new()
 		material.albedo_color = color
+		surface(material, kind)
 		_materials[key] = material
 	return _materials[key]
 
@@ -34,6 +36,109 @@ static func glass(color: Color) -> StandardMaterial3D:
 	material.metallic = 0.3
 	material.roughness = 0.1
 	return material
+
+
+## Glossy dark window pane: reflects the sky with screen-space reflections.
+static func window() -> StandardMaterial3D:
+	return mat(Color(0.32, 0.42, 0.52), &"window")
+
+
+## Gives a flat-color material surface detail: procedural grain (albedo) and
+## bumps (normal map), plus roughness/metallic per kind. Textures are grayscale
+## so albedo_color still sets the color (and can be tinted at runtime).
+## Kinds: rough (walls, props), asphalt, grass, metal, paint (cars), cloth
+## (clothes, fur, gear), skin, window. Mapping is object-space triplanar, so
+## grain never swims across moving units.
+static func surface(material: StandardMaterial3D, kind: StringName) -> void:
+	material.uv1_triplanar = true
+	material.uv1_world_triplanar = false
+	material.normal_enabled = true
+	match kind:
+		&"asphalt":
+			material.albedo_texture = _grain(&"asphalt", 0.09, Color(0.72, 0.72, 0.72))
+			material.normal_texture = _bumps(&"asphalt_n", 0.12, 3.0)
+			material.uv1_scale = Vector3.ONE * 0.4
+			material.roughness = 0.95
+		&"grass":
+			material.albedo_texture = _grain(&"grass", 0.012, Color(0.68, 0.7, 0.62))
+			material.normal_texture = _bumps(&"grass_n", 0.2, 2.0)
+			material.uv1_scale = Vector3.ONE * 0.08
+			material.roughness = 1.0
+		&"metal":
+			material.albedo_texture = _grain(&"grain", 0.03, Color(0.85, 0.85, 0.85))
+			material.normal_texture = _bumps(&"grain_n", 0.06, 1.0)
+			material.uv1_scale = Vector3.ONE * 0.5
+			material.metallic = 0.6
+			material.roughness = 0.45
+		&"paint":
+			material.normal_enabled = false
+			material.metallic = 0.35
+			material.roughness = 0.28
+		&"cloth":
+			material.albedo_texture = _grain(&"cloth", 0.08, Color(0.82, 0.82, 0.82))
+			material.normal_texture = _bumps(&"cloth_n", 0.2, 1.5)
+			material.uv1_scale = Vector3.ONE * 2.0
+			material.roughness = 0.95
+		&"skin":
+			material.normal_enabled = false
+			material.roughness = 0.65
+		&"window":
+			material.normal_enabled = false
+			material.metallic = 0.25
+			material.roughness = 0.08
+			material.metallic_specular = 0.8
+		_:  # rough
+			material.albedo_texture = _grain(&"grain_soft", 0.02, Color(0.9, 0.9, 0.9))
+			material.normal_texture = _bumps(&"grain_soft_n", 0.04, 0.7)
+			material.uv1_scale = Vector3.ONE * 0.25
+			material.roughness = 0.88
+
+
+## Sets how a subtree takes part in global illumination. Moving things must be
+## DYNAMIC (or DISABLED for short-lived FX) so SDFGI doesn't voxelize them.
+static func set_gi_mode(node: Node, mode: GeometryInstance3D.GIMode) -> void:
+	if node is GeometryInstance3D:
+		(node as GeometryInstance3D).gi_mode = mode
+	for child in node.get_children():
+		set_gi_mode(child, mode)
+
+
+static var _textures := {}
+
+
+## Seamless grayscale grain: `dark` at the low end, white at the high end.
+static func _grain(key: StringName, frequency: float, dark: Color) -> NoiseTexture2D:
+	if not _textures.has(key):
+		var ramp := Gradient.new()
+		ramp.set_color(0, dark)
+		ramp.set_color(1, Color.WHITE)
+		var texture := _noise(frequency)
+		texture.color_ramp = ramp
+		_textures[key] = texture
+	return _textures[key]
+
+
+static func _bumps(key: StringName, frequency: float, strength: float) -> NoiseTexture2D:
+	if not _textures.has(key):
+		var texture := _noise(frequency)
+		texture.as_normal_map = true
+		texture.bump_strength = strength
+		_textures[key] = texture
+	return _textures[key]
+
+
+static func _noise(frequency: float) -> NoiseTexture2D:
+	var noise := FastNoiseLite.new()
+	noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
+	noise.frequency = frequency
+	noise.fractal_octaves = 4
+	var texture := NoiseTexture2D.new()
+	texture.width = 512
+	texture.height = 512
+	texture.seamless = true
+	texture.generate_mipmaps = true
+	texture.noise = noise
+	return texture
 
 
 static func box(parent: Node3D, size: Vector3, at: Vector3, material: Material) -> MeshInstance3D:
@@ -102,8 +207,8 @@ static func humanoid(shirt: Material, pants: Color, skin: Color, height := 1.8, 
 	var torso_h := height * 0.33
 	var head_r := height * 0.075
 	var torso_w := 0.42 * bulk
-	var pants_mat := mat(pants)
-	var skin_mat := mat(skin)
+	var pants_mat := mat(pants, &"cloth")
+	var skin_mat := mat(skin, &"skin")
 
 	for side in [-1.0, 1.0]:
 		var hip := Node3D.new()
@@ -111,7 +216,7 @@ static func humanoid(shirt: Material, pants: Color, skin: Color, height := 1.8, 
 		hip.position = Vector3(side * torso_w * 0.25, leg_len, 0.0)
 		rig.add_child(hip)
 		box(hip, Vector3(0.17 * bulk, leg_len, 0.2 * bulk), Vector3(0.0, -leg_len * 0.5, 0.0), pants_mat)
-		box(hip, Vector3(0.18 * bulk, 0.1, 0.28), Vector3(0.0, -leg_len + 0.05, -0.04), mat(pants.darkened(0.5)))
+		box(hip, Vector3(0.18 * bulk, 0.1, 0.28), Vector3(0.0, -leg_len + 0.05, -0.04), mat(pants.darkened(0.5), &"cloth"))
 
 	box(rig, Vector3(torso_w, torso_h, 0.25 * bulk), Vector3(0.0, leg_len + torso_h * 0.5, 0.0), shirt)
 
@@ -195,7 +300,7 @@ static func house(size: Vector3, wall: Color, roof: Color, trim: Color) -> Node3
 	var front := size.z * 0.5 + 0.03
 	box(root, Vector3(1.0, 2.1, 0.08), Vector3(0.0, 1.05, front), mat(trim.darkened(0.35)))
 	box(root, Vector3(1.8, 0.2, 1.0), Vector3(0.0, 0.1, front + 0.5), mat(Color(0.6, 0.6, 0.58)))
-	var pane := mat(Color(0.25, 0.35, 0.45))
+	var pane := window()
 	for x in [-size.x * 0.3, size.x * 0.3]:
 		box(root, Vector3(1.3, 1.1, 0.08), Vector3(x, size.y * 0.55, front), pane)
 		box(root, Vector3(1.5, 0.12, 0.12), Vector3(x, size.y * 0.55 - 0.62, front + 0.04), mat(trim))
@@ -215,7 +320,7 @@ static func tree(height := 5.0, leaves := Color(0.25, 0.45, 0.2)) -> Node3D:
 
 static func streetlight(height := 5.0) -> Node3D:
 	var root := Node3D.new()
-	var metal := mat(Color(0.3, 0.32, 0.35))
+	var metal := mat(Color(0.3, 0.32, 0.35), &"metal")
 	cylinder(root, 0.08, height, Vector3(0.0, height * 0.5, 0.0), metal, 6)
 	box(root, Vector3(0.12, 0.12, 1.2), Vector3(0.0, height, -0.55), metal)
 	var lamp := StandardMaterial3D.new()
@@ -230,8 +335,8 @@ static func streetlight(height := 5.0) -> Node3D:
 ## Parked car shell (visual only), facing -Z.
 static func parked_car(paint: Color) -> Node3D:
 	var root := Node3D.new()
-	box(root, Vector3(1.8, 0.7, 4.0), Vector3(0.0, 0.7, 0.0), mat(paint))
-	box(root, Vector3(1.6, 0.55, 2.0), Vector3(0.0, 1.32, 0.2), mat(Color(0.15, 0.18, 0.22)))
+	box(root, Vector3(1.8, 0.7, 4.0), Vector3(0.0, 0.7, 0.0), mat(paint, &"paint"))
+	box(root, Vector3(1.6, 0.55, 2.0), Vector3(0.0, 1.32, 0.2), window())
 	for x in [-0.9, 0.9]:
 		for z in [-1.3, 1.3]:
 			var wheel := cylinder(root, 0.36, 0.25, Vector3(x, 0.36, z), mat(Color(0.06, 0.06, 0.06)), 10)

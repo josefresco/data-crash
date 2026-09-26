@@ -3,7 +3,7 @@ extends Node
 
 signal cash_changed(cash: int)
 signal objective_changed(text: String)
-## Keyed HUD lines ("deeds", "boss", "wave", "core", "build", "bribe"). Empty text hides the line.
+## Keyed HUD lines ("deeds", "boss", "wave", "core", "build", "bribe", "notice"). Empty text hides the line.
 signal info_changed(key: String, text: String)
 
 ## Physics layer bits. Keep in sync with [layer_names] in project.godot.
@@ -31,7 +31,7 @@ func reset() -> void:
 	bribes.clear()
 	district = DistrictState.new()
 	cash_changed.emit(cash)
-	for key in ["deeds", "boss", "wave", "core", "build", "bribe"]:
+	for key in ["deeds", "boss", "wave", "core", "build", "bribe", "notice"]:
 		set_info(key, "")
 
 
@@ -76,6 +76,7 @@ func _register_input_actions() -> void:
 		"repair": KEY_F,
 		"next_weapon": KEY_Q,
 		"bribe_menu": KEY_V,
+		"graphics_quality": KEY_F10,
 		"build_mode": KEY_B,
 		"start_wave": KEY_N,
 		"rotate": KEY_R,

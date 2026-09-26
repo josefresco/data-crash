@@ -115,6 +115,8 @@ func _build() -> void:
 	_material.albedo_color = Color(color, opacity)
 	if opacity < 1.0:
 		_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	else:
+		Models.surface(_material, &"rough")
 	_mesh.material_override = _material
 
 	var box_shape := BoxShape3D.new()
@@ -225,6 +227,7 @@ func _make_debris_body(mesh: Mesh, shape: Shape3D, mesh_scale: Vector3, mass: fl
 	visual.mesh = mesh
 	visual.scale = mesh_scale
 	visual.material_override = _material
+	visual.gi_mode = GeometryInstance3D.GI_MODE_DYNAMIC  # flying debris
 	body.add_child(visual)
 
 	# Shrink away and free after the lifetime. The tween belongs to the body,
