@@ -42,7 +42,7 @@ enum Phase { ACTIVISM, ASSAULT, BOSS, BUILD, WAVE, WON, LOST }
 ]
 ## Neighbors strolling the block at the start, and how many more come out
 ## once trust reaches 50%.
-@export var resident_count := 30
+@export var resident_count := 24
 @export var resident_bonus := 12
 ## The farmer's market stalls in the park (where the gun show used to be).
 @export var market_position := Vector3(-24.0, 0.0, 58.0)
@@ -96,6 +96,7 @@ func _ready() -> void:
 	_env_driver.ground = $Ground/Mesh
 
 	add_to_group("site_alarm")
+	add_to_group("level")
 	for node in get_tree().get_nodes_in_group("datacenter_sites"):
 		var site := node as DatacenterSite
 		sites.append(site)
@@ -195,6 +196,53 @@ func start_defense() -> void:
 	_auto_wave_left = auto_wave_delay
 	Game.set_objective("Defend the green datacenter. Build defenses, then hold off %d waves."
 		% _spawner.total_waves())
+
+
+## Where the player should head next (world space), or null. Drives the
+## yellow objective marker on the minimap: grab a weapon at DUECE Hardware,
+## then the nearest good deed, then the nearest standing datacenter (or its
+## loose boss), then the green core.
+func guidance_point() -> Variant:
+	var player := get_tree().get_first_node_in_group("player") as Player
+	if player == null:
+		return null
+	var here := player.global_position
+	match phase:
+		Phase.BUILD, Phase.WAVE:
+			return core.global_position if is_instance_valid(core) else null
+		Phase.WON, Phase.LOST:
+			return null
+	if phase == Phase.ACTIVISM:
+		var armed := player.weapons.any(func(w: Weapon) -> bool: return w.owned and w.display_name != "Fists")
+		if not armed and Game.has_meta(&"hardware_door"):
+			return Game.get_meta(&"hardware_door")
+		var targets: Array[Vector3] = []
+		var main := get_node_or_null("WaterMain") as WaterMain
+		if main and not main.is_fixed:
+			targets.append(main.global_position)
+		for node in get_tree().get_nodes_in_group("neighbors"):
+			if node is OldLady and (node as OldLady).state == OldLady.State.WAITING:
+				targets.append((node as Node3D).global_position)
+		var job := get_node_or_null("PaintJob") as PaintJob
+		if job and not job.is_fixed:
+			targets.append(job.global_position)
+		for node in get_tree().get_nodes_in_group("strays"):
+			targets.append((node as Node3D).global_position)
+		if not targets.is_empty():
+			targets.sort_custom(func(a: Vector3, b: Vector3) -> bool: return a.distance_to(here) < b.distance_to(here))
+			return targets[0]
+	var best: Variant = null
+	for site_node in sites:
+		if site_node.is_cleared:
+			continue
+		var point := site_node.at(Vector3(0.0, 0.0, site_node.compound.y * 0.5))
+		if site_node.is_neutralized:
+			for boss_node: Variant in [site_node.elmo, site_node.sham]:
+				if is_instance_valid(boss_node):
+					point = (boss_node as Node3D).global_position
+		if best == null or point.distance_to(here) < (best as Vector3).distance_to(here):
+			best = point
+	return best
 
 
 ## Debug and tests: sets off the Felsa alarm (Elmo runs for his truck).

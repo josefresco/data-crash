@@ -60,6 +60,8 @@ const CAR_COLORS: Array[Color] = [
 var _doors: Array[Vector3] = []
 ## Sign text -> the spot just outside that store's door.
 var _store_doors := {}
+## Footprints on the ground plane (x, z) for the minimap: [Rect2, is_store].
+var _footprints: Array = []
 var _rng := RandomNumberGenerator.new()
 
 
@@ -72,6 +74,17 @@ func door_positions() -> Array[Vector3]:
 	return _doors
 
 
+## Building footprints for the minimap: [Rect2 (x, z), is_store] pairs.
+func footprints() -> Array:
+	return _footprints
+
+
+func _record_footprint(body: Node3D, bounds: AABB, is_store: bool) -> void:
+	var center := body.position + bounds.get_center().rotated(Vector3.UP, body.rotation.y)
+	var extent := Vector2(bounds.size.x, bounds.size.z)
+	_footprints.append([Rect2(Vector2(center.x, center.z) - extent * 0.5, extent), is_store])
+
+
 ## Just outside a store's door (by its sign text), in this node's space.
 func store_door(sign_text: String) -> Vector3:
 	return _store_doors.get(sign_text, Vector3.ZERO)
@@ -82,6 +95,7 @@ func build() -> void:
 		child.queue_free()
 	_doors.clear()
 	_store_doors.clear()
+	_footprints.clear()
 	_rng.seed = layout_seed
 
 	var asphalt := Models.mat(Color(0.75, 0.75, 0.75), &"asphalt")
@@ -177,6 +191,7 @@ func _add_store(at: Vector3, facing_side: float, lot: Array) -> void:
 	collider.shape = shape
 	collider.position = bounds.get_center()
 	body.add_child(collider)
+	_record_footprint(body, bounds, true)
 	var front := bounds.end.z
 	var color: Color = lot[3]
 	var board := Models.box(body, Vector3(minf(bounds.size.x * 0.8, 10.0), 1.3, 0.25), Vector3(0.0, 4.6, front + 0.2),
@@ -210,6 +225,7 @@ func _add_house(at: Vector3, facing_side: float) -> void:
 		Models.retexture(house, load("%ssuburban/Textures/colormap_roof_%d.png" % [KENNEY, roof]))
 
 	var bounds := Models.model_bounds(house)
+	_record_footprint(body, bounds, false)
 	var shape := BoxShape3D.new()
 	shape.size = bounds.size
 	var collider := CollisionShape3D.new()

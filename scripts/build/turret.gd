@@ -66,8 +66,8 @@ func _find_target() -> Enemy:
 	var best_distance := fire_range
 	for node in get_tree().get_nodes_in_group("hostiles"):
 		var enemy := node as Enemy
-		if not _is_target_valid(enemy):
-			continue
+		if not _is_target_valid(enemy) or enemy.is_dormant():
+			continue  # quiet site security and neighborhood police aren't fights
 		var distance := _head.global_position.distance_to(enemy.aim_point())
 		if distance < best_distance and _can_see(enemy):
 			best = enemy

@@ -56,6 +56,12 @@ func set_motion(speed_ratio: float) -> void:
 		_player.speed_scale = 1.0
 
 
+## Pause the animation (far-away crowds); the pose freezes where it is.
+func set_animation_active(active: bool) -> void:
+	if _player and _player.active != active:
+		_player.active = active
+
+
 func skeleton() -> Skeleton3D:
 	return _skeleton
 

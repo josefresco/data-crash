@@ -1,12 +1,26 @@
 class_name Hud
 extends CanvasLayer
-## Prototype HUD: district meters, cash, health, C4, objective, prompt, crosshair.
-## Built in code so layout tweaks stay in one readable place.
+## In-game HUD, built in code:
+## - top-left: circular minimap ([M] toggles a full map), district meters
+## - top-center: objective and keyed info lines (sites, deeds, boss, wave, ...)
+## - top-right: cash, then feedback toasts
+## - bottom-left: health bar (flashes on damage), turbo bar while driving,
+##   C4 and treat counts; the tip panel sits above it
+## - bottom-right: weapon and ammo
+## - a red vignette when hurt, pulsing at low health
 
-var _bars := {}
+const TIP_SECONDS := 9.0
+const INFO_KEYS: Array[String] = ["sites", "deeds", "boss", "wave", "core", "build", "bribe", "shop", "notice"]
+## [district key, label, icon, fill color, high-is-bad]
+const METERS := [
+	["smog", "SMOG", &"smog", Color(0.6, 0.5, 0.4), true],
+	["noise", "NOISE", &"noise", Color(0.95, 0.55, 0.2), true],
+	["water_table", "WATER", &"water", Color(0.3, 0.6, 1.0), false],
+	["trust", "TRUST", &"trust", Color(0.35, 0.85, 0.45), false],
+]
+
+var _meters := {}
 var _cash: Label
-var _status: Label
-var _weapon: Label
 var _objective: Label
 var _prompt: Label
 var _info_box: VBoxContainer
@@ -17,8 +31,16 @@ var _tip_panel: PanelContainer
 var _tip_label: Label
 var _tip_queue: Array[String] = []
 var _tip_left := 0.0
-
-const TIP_SECONDS := 9.0
+var _health: HudBar
+var _turbo: HudBar
+var _kit: Label
+var _weapon_name: Label
+var _ammo: Label
+var _vignette: TextureRect
+var _hurt := 0.0
+var _last_health := -1.0
+var _map_frame: Panel
+var _minimap: Minimap
 
 
 func _ready() -> void:
@@ -27,55 +49,116 @@ func _ready() -> void:
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
 
+	_vignette = _build_vignette()
+	root.add_child(_vignette)
+
+	# Minimap in a circular frame; children clip to the circle.
+	_map_frame = Panel.new()
+	var circle := StyleBoxFlat.new()
+	circle.bg_color = Color(0.05, 0.06, 0.05, 0.9)
+	circle.set_corner_radius_all(200)
+	circle.border_color = Color(0.85, 0.9, 0.85, 0.8)
+	circle.set_border_width_all(3)
+	_map_frame.add_theme_stylebox_override("panel", circle)
+	_map_frame.clip_children = CanvasItem.CLIP_CHILDREN_AND_DRAW
+	_map_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(_map_frame)
+	_minimap = Minimap.new()
+	_minimap.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_map_frame.add_child(_minimap)
+	_set_map_expanded(false)
+
+	# District meters under the minimap.
 	var meters := VBoxContainer.new()
-	meters.position = Vector2(20, 20)
-	meters.custom_minimum_size = Vector2(260, 0)
+	meters.add_theme_constant_override("separation", 5)
+	meters.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(meters)
-	for key: String in ["smog", "noise", "water_table", "trust"]:
-		var label := Label.new()
-		label.text = key.replace("_", " ").to_upper()
-		meters.add_child(label)
-		var bar := ProgressBar.new()
-		bar.max_value = 1.0
-		bar.step = 0.01
-		bar.custom_minimum_size = Vector2(260, 14)
-		bar.show_percentage = false
+	_place(meters, Control.PRESET_TOP_LEFT, Rect2(18, 248, 236, 0))
+	for spec: Array in METERS:
+		var bar := HudBar.new()
+		bar.icon = spec[2]
+		bar.icon_color = (spec[3] as Color).lerp(Color.WHITE, 0.3)
+		bar.fill_color = spec[3]
+		bar.text_size = 12
+		bar.custom_minimum_size = Vector2(236, 20)
 		meters.add_child(bar)
-		_bars[key] = bar
+		_meters[spec[0]] = [bar, spec[1], spec[4]]
 
-	var right := VBoxContainer.new()
-	root.add_child(right)
-	_place(right, Control.PRESET_TOP_RIGHT, Rect2(-340, 20, 320, 0))
-	_cash = _make_label(right, 28, HORIZONTAL_ALIGNMENT_RIGHT)
-	_status = _make_label(right, 18, HORIZONTAL_ALIGNMENT_RIGHT)
-	_weapon = _make_label(right, 20, HORIZONTAL_ALIGNMENT_RIGHT)
+	# Cash top-right with a coin, toasts under it.
+	var cash_box := HBoxContainer.new()
+	cash_box.alignment = BoxContainer.ALIGNMENT_END
+	cash_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(cash_box)
+	_place(cash_box, Control.PRESET_TOP_RIGHT, Rect2(-300, 16, 280, 44))
+	var coin := _IconControl.new(&"coin", Color(1.0, 0.82, 0.25), 30.0)
+	cash_box.add_child(coin)
+	_cash = _make_label(cash_box, 32, HORIZONTAL_ALIGNMENT_RIGHT)
+	_cash.add_theme_color_override("font_color", Color(1.0, 0.92, 0.6))
 
-	# Objective plus keyed lines (boss, wave, core health, build menu), stacked
-	# so a wrapped objective pushes the rest down instead of overlapping.
+	_toasts = VBoxContainer.new()
+	_toasts.alignment = BoxContainer.ALIGNMENT_BEGIN
+	_toasts.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(_toasts)
+	_place(_toasts, Control.PRESET_TOP_RIGHT, Rect2(-460, 70, 440, 0))
+
+	# Objective plus keyed lines, stacked so wrapping pushes the rest down.
 	_info_box = VBoxContainer.new()
+	_info_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(_info_box)
-	# 860 px keeps clear of the meters (left) and the status block (right).
-	_place(_info_box, Control.PRESET_CENTER_TOP, Rect2(-430, 20, 860, 0))
+	_place(_info_box, Control.PRESET_CENTER_TOP, Rect2(-430, 16, 860, 0))
 	_objective = _make_label(_info_box, 22, HORIZONTAL_ALIGNMENT_CENTER)
 	_objective.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_objective.custom_minimum_size = Vector2(860, 0)
-	for key: String in ["sites", "deeds", "boss", "wave", "core", "build", "bribe", "shop", "notice"]:
-		var line := _make_label(_info_box, 18, HORIZONTAL_ALIGNMENT_CENTER)
+	for key in INFO_KEYS:
+		var line := _make_label(_info_box, 17, HORIZONTAL_ALIGNMENT_CENTER)
 		line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		line.custom_minimum_size = Vector2(860, 0)
 		line.visible = false
 		_info[key] = line
 
-	_prompt = _make_label(root, 22, HORIZONTAL_ALIGNMENT_CENTER)
-	_place(_prompt, Control.PRESET_CENTER_BOTTOM, Rect2(-300, -80, 600, 40))
+	# Health, turbo, and kit, bottom-left.
+	var vitals := VBoxContainer.new()
+	vitals.add_theme_constant_override("separation", 6)
+	vitals.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(vitals)
+	_place(vitals, Control.PRESET_BOTTOM_LEFT, Rect2(20, -118, 380, 100))
+	vitals.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	vitals.alignment = BoxContainer.ALIGNMENT_END
+	_health = HudBar.new()
+	_health.custom_minimum_size = Vector2(380, 36)
+	_health.fill_color = Color(0.85, 0.15, 0.15)
+	_health.icon_color = Color(1.0, 0.3, 0.3)
+	_health.text_size = 20
+	vitals.add_child(_health)
+	_turbo = HudBar.new()
+	_turbo.icon = &"turbo"
+	_turbo.icon_color = Color(1.0, 0.7, 0.2)
+	_turbo.fill_color = Color(1.0, 0.55, 0.1)
+	_turbo.custom_minimum_size = Vector2(380, 18)
+	_turbo.text_size = 12
+	_turbo.visible = false
+	vitals.add_child(_turbo)
+	var kit := HBoxContainer.new()
+	kit.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	kit.add_theme_constant_override("separation", 8)
+	vitals.add_child(kit)
+	kit.add_child(_IconControl.new(&"c4", Color(0.75, 0.7, 0.55), 22.0))
+	_kit = _make_label(kit, 18, HORIZONTAL_ALIGNMENT_LEFT)
 
-	# Feedback toasts stack on the right under the status block.
-	_toasts = VBoxContainer.new()
-	_toasts.alignment = BoxContainer.ALIGNMENT_BEGIN
-	root.add_child(_toasts)
-	_place(_toasts, Control.PRESET_TOP_RIGHT, Rect2(-460, 150, 440, 0))
+	# Weapon and ammo, bottom-right.
+	var arms := VBoxContainer.new()
+	arms.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(arms)
+	_place(arms, Control.PRESET_BOTTOM_RIGHT, Rect2(-330, -110, 310, 96))
+	var ammo_row := HBoxContainer.new()
+	ammo_row.alignment = BoxContainer.ALIGNMENT_END
+	ammo_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	arms.add_child(ammo_row)
+	ammo_row.add_child(_IconControl.new(&"ammo", Color(1.0, 0.85, 0.45), 30.0))
+	_ammo = _make_label(ammo_row, 40, HORIZONTAL_ALIGNMENT_RIGHT)
+	_weapon_name = _make_label(arms, 20, HORIZONTAL_ALIGNMENT_RIGHT)
 
-	# One contextual tip at a time, bottom-left, queued.
+	# One contextual tip at a time, above the health bar.
 	_tip_panel = PanelContainer.new()
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color(0.05, 0.12, 0.08, 0.82)
@@ -90,12 +173,15 @@ func _ready() -> void:
 	_tip_panel.add_theme_stylebox_override("panel", style)
 	_tip_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(_tip_panel)
-	_place(_tip_panel, Control.PRESET_BOTTOM_LEFT, Rect2(20, -190, 470, 0))
+	_place(_tip_panel, Control.PRESET_BOTTOM_LEFT, Rect2(20, -140, 470, 0))
 	_tip_panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	_tip_label = _make_label(_tip_panel, 17, HORIZONTAL_ALIGNMENT_LEFT)
 	_tip_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_tip_label.custom_minimum_size = Vector2(440, 0)
 	_tip_panel.visible = false
+
+	_prompt = _make_label(root, 22, HORIZONTAL_ALIGNMENT_CENTER)
+	_place(_prompt, Control.PRESET_CENTER_BOTTOM, Rect2(-320, -150, 640, 40))
 
 	var crosshair := _make_label(root, 24, HORIZONTAL_ALIGNMENT_CENTER)
 	crosshair.text = "+"
@@ -110,13 +196,48 @@ func _ready() -> void:
 	_connect_player.call_deferred()
 
 
+func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed("map"):
+		_set_map_expanded(not _minimap.expanded)
+
+
+func _set_map_expanded(expanded: bool) -> void:
+	_minimap.expanded = expanded
+	if expanded:
+		_place(_map_frame, Control.PRESET_CENTER, Rect2(-340, -340, 680, 680))
+		(_map_frame.get_theme_stylebox("panel") as StyleBoxFlat).set_corner_radius_all(12)
+	else:
+		_place(_map_frame, Control.PRESET_TOP_LEFT, Rect2(18, 16, 220, 220))
+		(_map_frame.get_theme_stylebox("panel") as StyleBoxFlat).set_corner_radius_all(200)
+
+
+func is_map_expanded() -> bool:
+	return _minimap.expanded
+
+
 func _process(delta: float) -> void:
 	_update_tip(delta)
 	var district := Game.district
-	if district == null:
-		return
-	for key: String in _bars:
-		(_bars[key] as ProgressBar).value = district.get(key)
+	if district:
+		for key: String in _meters:
+			var entry: Array = _meters[key]
+			var bar := entry[0] as HudBar
+			var value: float = district.get(key)
+			bar.value = value
+			var word := "%s %d%%" % [entry[1], roundi(value * 100.0)]
+			bar.text = word
+	if _player and is_instance_valid(_player):
+		var driving := _player.vehicle != null
+		_turbo.visible = driving
+		if driving:
+			_turbo.value = _player.vehicle.turbo_ratio()
+			_turbo.text = "TURBO  [Shift]" if _turbo.value > 0.05 else "TURBO recharging"
+		# Red vignette: flash on damage, pulse when low.
+		_hurt = maxf(_hurt - delta * 1.2, 0.0)
+		var ratio := _player.health / maxf(_player.max_health, 1.0)
+		var low := clampf((0.5 - ratio) / 0.5, 0.0, 1.0)
+		var pulse := low * (0.65 + 0.3 * sin(Time.get_ticks_msec() * 0.008))
+		_vignette.modulate.a = clampf(maxf(_hurt, pulse), 0.0, 0.9)
 
 
 func _connect_player() -> void:
@@ -124,16 +245,22 @@ func _connect_player() -> void:
 	if _player == null:
 		push_warning("HUD: no node in group 'player'")
 		return
-	_player.health_changed.connect(func(_h: float, _m: float) -> void: _refresh_status())
+	_player.health_changed.connect(func(health: float, _m: float) -> void:
+		if _last_health >= 0.0 and health < _last_health - 0.5:
+			_hurt = minf(_hurt + 0.6, 0.9)
+			_health.flash()
+		_last_health = health
+		_refresh_status())
 	_player.charges_changed.connect(func(_c: int) -> void: _refresh_status())
 	_player.prompt_changed.connect(func(text: String) -> void: _prompt.text = text)
 	_player.weapon_changed.connect(func(_w: Weapon) -> void: _refresh_status())
+	_last_health = _player.health
 	_refresh_status()
 
 
 ## Pops a feedback line on the right that fades after `seconds`.
 func show_toast(text: String, seconds := 5.0) -> void:
-	var label := _make_label(_toasts, 19, HORIZONTAL_ALIGNMENT_RIGHT)
+	var label := _make_label(_toasts, 18, HORIZONTAL_ALIGNMENT_RIGHT)
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	label.custom_minimum_size = Vector2(440, 0)
 	label.text = text
@@ -169,10 +296,16 @@ func _update_tip(delta: float) -> void:
 
 func _refresh_status() -> void:
 	_cash.text = "$%d" % Game.cash
-	if _player:
-		_status.text = "HP %d   C4 x%d   Treats x%d" % [
-			ceili(maxf(_player.health, 0.0)), _player.c4_charges, _player.treats]
-		_weapon.text = "[Q] %s" % _player.current_weapon().hud_label()
+	if _player == null:
+		return
+	var health := maxf(_player.health, 0.0)
+	_health.value = health / maxf(_player.max_health, 1.0)
+	_health.text = "%d / %d" % [ceili(health), int(_player.max_health)]
+	_kit.text = "C4 x%d      Treats x%d" % [_player.c4_charges, _player.treats]
+	var weapon := _player.current_weapon()
+	_weapon_name.text = "[Q] %s" % weapon.display_name
+	_ammo.text = "--" if weapon.ammo < 0 else "%d / %d" % [weapon.ammo, weapon.max_ammo]
+	_ammo.add_theme_color_override("font_color", Color(1.0, 0.4, 0.35) if weapon.ammo == 0 else Color.WHITE)
 
 
 func _on_info_changed(key: String, text: String) -> void:
@@ -180,6 +313,28 @@ func _on_info_changed(key: String, text: String) -> void:
 	if line:
 		line.text = text
 		line.visible = not text.is_empty()
+
+
+## Full-screen red edge glow (transparent middle); alpha is driven by damage.
+func _build_vignette() -> TextureRect:
+	var gradient := Gradient.new()
+	gradient.set_color(0, Color(0.7, 0.0, 0.0, 0.0))
+	gradient.set_color(1, Color(0.75, 0.0, 0.0, 0.85))
+	gradient.set_offset(0, 0.4)
+	var texture := GradientTexture2D.new()
+	texture.gradient = gradient
+	texture.fill = GradientTexture2D.FILL_RADIAL
+	texture.fill_from = Vector2(0.5, 0.5)
+	texture.fill_to = Vector2(1.0, 1.0)
+	texture.width = 256
+	texture.height = 256
+	var rect := TextureRect.new()
+	rect.texture = texture
+	rect.stretch_mode = TextureRect.STRETCH_SCALE
+	rect.set_anchors_preset(Control.PRESET_FULL_RECT)
+	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	rect.modulate.a = 0.0
+	return rect
 
 
 ## Anchors `control` to `preset`, then offsets it by `rect` (relative to that anchor).
@@ -200,3 +355,18 @@ func _make_label(parent: Control, font_size: int, align: HorizontalAlignment) ->
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	parent.add_child(label)
 	return label
+
+
+## A fixed-size control that draws one HudIcons icon.
+class _IconControl extends Control:
+	var kind: StringName
+	var color: Color
+
+	func _init(icon_kind: StringName, icon_color: Color, px: float) -> void:
+		kind = icon_kind
+		color = icon_color
+		custom_minimum_size = Vector2(px, px)
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	func _draw() -> void:
+		HudIcons.draw(self, kind, size * 0.5, minf(size.x, size.y) * 0.9, color)

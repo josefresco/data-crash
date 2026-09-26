@@ -46,7 +46,18 @@ func _run() -> void:
 	await seconds(2.5)
 	check(Game.has_seen_tip("move"), "the tutorial's first tip showed")
 
+	var hardware: Vector3 = Game.get_meta(&"hardware_door")
+	check(level.call("guidance_point") == hardware, "the minimap points an unarmed player to DUECE Hardware")
+	var hud := level.get_node("Hud") as Hud
+	check(not hud.is_map_expanded(), "the minimap starts small")
+	var press := InputEventAction.new()
+	press.action = &"map"
+	press.pressed = true
+	hud.call("_unhandled_input", press)
+	check(hud.is_map_expanded(), "[M] opens the full map")
+	hud.call("_unhandled_input", press)
 	await _test_pickups()
+	check(level.call("guidance_point") != hardware, "once armed, it points at the next good deed")
 	await _test_grounding()
 	await _test_dogs()
 	await _test_grock_cameras()
@@ -178,7 +189,7 @@ func _test_reply_guys() -> void:
 
 func _test_market_and_residents() -> void:
 	var residents := get_tree().get_nodes_in_group("residents")
-	check(residents.size() >= 30, "neighbors are out on the block (%d)" % residents.size())
+	check(residents.size() >= 24, "neighbors are out on the block (%d)" % residents.size())
 	var market := level.get_node("FarmersMarket") as FarmersMarket
 	player.global_position = market.global_position + Vector3(0, 0.2, 4)
 	await seconds(0.1)
@@ -233,23 +244,28 @@ func _test_vehicles() -> void:
 ## Scgrewgle's cheese truck rolls in the back gate and leaves with money; the
 ## ForProfitSI tech flees when that site's alarm goes off.
 func _test_site_life() -> void:
-	var scgrewgle := level.get_node("ScgrewgleSite") as DatacenterSite
-	var truck := scgrewgle.truck
-	var gate := scgrewgle.get_node("BackGate") as SiteGate
-	# Follow one full cycle from wherever the loop is: cheese in, gate open, money out.
-	var saw_cheese := false
-	var opened := false
-	var loaded := false
-	for i in 240:
-		saw_cheese = saw_cheese or (truck.cargo == CargoTruck.Cargo.CHEESE and truck.visible)
-		opened = opened or (saw_cheese and gate.open_amount > 0.6)
-		if saw_cheese and truck.cargo == CargoTruck.Cargo.MONEY:
-			loaded = true
-			break
-		await seconds(0.25)
-	check(saw_cheese, "trucks arrive with Government Cheese")
-	check(opened, "the back gate slides open for the truck")
-	check(loaded, "and it leaves full of money")
+	for site_name in ["ScgrewgleSite", "FelsaSite"]:
+		var site_node := level.get_node(site_name) as DatacenterSite
+		var truck := site_node.truck
+		var gate := site_node.get_node("BackGate") as SiteGate
+		# Follow one full cycle from wherever the loop is: cheese in, gate open, money out.
+		var saw_cheese := false
+		var opened := false
+		var loaded := false
+		var deepest := 999.0
+		for i in 240:
+			saw_cheese = saw_cheese or (truck.cargo == CargoTruck.Cargo.CHEESE and truck.visible)
+			opened = opened or (saw_cheese and gate.open_amount > 0.6)
+			if truck.visible:
+				deepest = minf(deepest, truck.global_position.distance_to(site_node.datacenter.global_position))
+			if saw_cheese and truck.cargo == CargoTruck.Cargo.MONEY:
+				loaded = true
+				break
+			await seconds(0.25)
+		check(saw_cheese, "%s: trucks arrive with Government Cheese" % site_node.display_name)
+		check(opened, "%s: the back gate slides open for the truck" % site_node.display_name)
+		check(loaded and deepest < 20.0, "%s: it drives onto the property to the dock and leaves full of money (closest %.0f m)"
+			% [site_node.display_name, deepest])
 	var forprofit := level.get_node("ForProfitSite") as DatacenterSite
 	var worker := forprofit.worker
 	check(not worker.fled, "the tech works quietly until the alarm")

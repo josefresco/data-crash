@@ -20,6 +20,14 @@ func _ready() -> void:
 	add_child(level)
 	await _wait(3.0)
 	await _shot("hud_tip")
+	var hud := level.get_node("Hud") as Hud
+	hud.call("_set_map_expanded", true)
+	await _shot("map")
+	hud.call("_set_map_expanded", false)
+	var player := level.get_node("Player") as Player
+	player.apply_damage(75.0, player.global_position, &"bullet")
+	await _wait(0.2)
+	await _shot("hud_hurt")
 	var menu: PauseMenu = null
 	var end: EndScreen = null
 	for node in level.get_children():

@@ -11,14 +11,14 @@ const SECTIONS := [
 		["G", "Plant C4"], ["T", "Give a dog a treat"], ["F (hold)", "Repair / fix"],
 	]],
 	["Driving", [
-		["W / S", "Throttle / reverse"], ["A / D", "Steer"], ["Space", "Brake"], ["E", "Get out"],
+		["W / S", "Throttle / reverse"], ["A / D", "Steer"], ["Shift", "Turbo (limited)"], ["Space", "Brake"], ["E", "Get out"],
 	]],
 	["Defense", [
 		["B", "Build mode"], ["1-4", "Pick structure"], ["R", "Rotate"], ["Left click", "Place"],
 		["Right click", "Leave build mode"], ["N", "Start the next wave now"],
 	]],
 	["Anytime", [
-		["V", "Bribe officials"], ["F10", "Graphics quality"], ["Esc / P", "Pause"],
+		["V", "Bribe officials"], ["M", "Full map"], ["F10", "Graphics quality"], ["Esc / P", "Pause"],
 	]],
 ]
 

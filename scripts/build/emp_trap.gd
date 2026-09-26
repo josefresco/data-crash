@@ -49,7 +49,7 @@ func _physics_process(delta: float) -> void:
 	var triggered := false
 	for node in get_tree().get_nodes_in_group("hostiles"):
 		var enemy := node as Enemy
-		if enemy == null or not enemy.is_alive():
+		if enemy == null or not enemy.is_alive() or enemy.is_dormant():
 			continue
 		var distance := enemy.global_position.distance_to(global_position)
 		if distance <= radius:

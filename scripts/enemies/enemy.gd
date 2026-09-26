@@ -396,8 +396,10 @@ func _candidates() -> Array[Node3D]:
 		for node in get_tree().get_nodes_in_group("structures"):
 			list.append(node as Node3D)
 	else:
+		# Allies leave quiet site security and neighborhood police alone.
 		for node in get_tree().get_nodes_in_group("hostiles"):
-			list.append(node as Node3D)
+			if not (node as Enemy).is_dormant():
+				list.append(node as Node3D)
 	return list
 
 

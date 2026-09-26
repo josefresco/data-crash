@@ -24,6 +24,8 @@ var destinations: Array[Vector3] = []
 
 var _pause_left := 0.0
 var _line_left := 0.0
+## Animation LOD: re-checked twice a second.
+var _lod_left := randf() * 0.5
 
 
 func _init() -> void:
@@ -54,6 +56,12 @@ func _process(delta: float) -> void:
 	super(delta)
 	if _is_dead:
 		return
+	_lod_left -= delta
+	if _lod_left <= 0.0 and _rig is CharacterModel:
+		_lod_left = 0.5
+		var camera := get_viewport().get_camera_3d()
+		var near := camera == null or camera.global_position.distance_to(global_position) < 55.0
+		(_rig as CharacterModel).set_animation_active(near)
 	_line_left -= delta
 	if _line_left <= 0.0:
 		_line_left = randf_range(14.0, 30.0)

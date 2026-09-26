@@ -38,7 +38,14 @@ enum Boss { NONE, ELMO, CRAPYA, SHAM }
 @export var cash_reward := 300
 @export var patrol_cyberdouche := false
 
+const CAR_SCENE := preload("res://scenes/vehicles/car.tscn")
+const CAR_MODELS: Array[String] = ["sedan", "suv", "hatchback-sports", "taxi", "van", "suv-luxury"]
+
 var datacenter: Datacenter
+## Gallons shown on the water board by the gate (it keeps climbing).
+var water_used := 48203117.0
+var _water_board: Label3D
+var _board_left := 0.0
 var worker: DatacenterWorker
 var truck: CargoTruck
 ## Boss pieces (null when absent or bosses are off).
@@ -75,6 +82,7 @@ func _ready() -> void:
 	add_child(datacenter)
 	datacenter.neutralized.connect(_on_neutralized)
 	_post_security()
+	_build_extras()
 	_spawn_worker()
 	_spawn_truck()
 	var level := get_parent()
@@ -178,8 +186,141 @@ func _post_security() -> void:
 		var car := FelsaCar.new()
 		car.name = "PatrolFelsa"
 		car.site = site_id
-		car.position = Vector3(-20.0, 0.2, half.y - 12.0)
+		car.position = Vector3(-10.0, 0.2, half.y - 10.0)
 		add_child(car)
+
+
+func _process(delta: float) -> void:
+	if _water_board and not is_neutralized:
+		water_used += delta * 57.0  # about 5 million gallons a day
+		_board_left -= delta
+		if _board_left <= 0.0:
+			_board_left = 0.5  # re-rendering the text every frame is costly
+			_water_board.text = "WATER USED THIS MONTH\n%s GAL" % _thousands(int(water_used))
+
+
+static func _thousands(value: int) -> String:
+	var digits := str(value)
+	var out := ""
+	for i in digits.length():
+		if i > 0 and (digits.length() - i) % 3 == 0:
+			out += ","
+		out += digits[i]
+	return out
+
+
+## Employee parking (drivable cars), an evaporative cooling tower and diesel
+## tanks you can wreck, a power substation, flagpoles, floodlights, and the
+## water board by the gate.
+func _build_extras() -> void:
+	var half := compound * 0.5
+	var steel := Models.mat(Color(0.35, 0.37, 0.4), &"metal")
+	var paint := Models.mat(Color(0.92, 0.92, 0.9))
+	# Parking lot, front-east.
+	var lot := Vector3(22.0, 0.0, half.y - 13.0)
+	Models.box(self, Vector3(15.0, 0.04, 11.0), lot + Vector3.UP * 0.02, Models.mat(Color(0.7, 0.7, 0.7), &"asphalt"))
+	for k in 5:
+		Models.box(self, Vector3(0.12, 0.05, 4.5), lot + Vector3(-6.0 + k * 3.0, 0.04, -2.5), paint)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash(site_id)
+	for k in 3:
+		var car := CAR_SCENE.instantiate() as Node3D
+		car.set(&"model_path", "res://assets/kenney/cars/%s.glb" % CAR_MODELS[rng.randi() % CAR_MODELS.size()])
+		car.set(&"model_scale", 1.45)
+		car.set(&"model_offset", Vector3(0.0, 0.05, 0.0))
+		car.set(&"fit_to_model", true)
+		car.position = lot + Vector3(-4.5 + k * 3.0 + (1.5 if k == 2 else 0.0), 0.4, -2.5)
+		car.rotation.y = PI
+		add_child(car)
+	# Evaporative cooling tower, front-west: wreck it and the aquifer recovers a bit.
+	var tower := Destructible.new()
+	tower.name = "CoolingTower"
+	tower.size = Vector3(6.0, 7.0, 6.0)
+	tower.color = Color(0.75, 0.78, 0.8)
+	tower.surface_kind = &"plates"
+	tower.max_health = 300.0
+	tower.damage_threshold = 20.0
+	tower.chunks = Vector3i(3, 3, 3)
+	tower.label = "Evaporative cooling tower"
+	tower.site_id = site_id
+	tower.position = Vector3(-26.0, 0.0, half.y - 16.0)
+	add_child(tower)
+	for side in [Vector3.RIGHT, Vector3.LEFT, Vector3.FORWARD, Vector3.BACK]:
+		for k in 5:
+			var louver_size := Vector3(5.6, 0.12, 0.08) if absf(side.z) > 0.0 else Vector3(0.08, 0.12, 5.6)
+			Models.box(tower, louver_size, side * 3.03 + Vector3.UP * (0.8 + k * 0.45), steel)
+	Models.cylinder(tower, 2.4, 1.4, Vector3(0.0, 7.7, 0.0), steel, 20)
+	Vfx.steam_jet(tower, Vector3(0.0, 8.6, 0.0), 6.0).emitting = true
+	var tower_sign := Label3D.new()
+	tower_sign.text = "EVAPORATIVE COOLING\n5,000,000 GAL/DAY"
+	tower_sign.font_size = 56
+	tower_sign.pixel_size = 0.01
+	tower_sign.outline_size = 8
+	tower_sign.position = Vector3(0.0, 5.0, 3.1)
+	tower.add_child(tower_sign)
+	tower.destroyed.connect(func(_t: Destructible) -> void:
+		if Game.district:
+			Game.district.water_table += 0.08
+		Game.add_cash(60)
+		Game.notify("%s's cooling tower is down: the aquifer gets a break. (+$60, water up)" % display_name))
+	# Diesel tanks, back-west: a big bang, and they take the neighbors with them.
+	for k in 2:
+		var tank := Destructible.new()
+		tank.name = "DieselTank%d" % (k + 1)
+		tank.size = Vector3(5.0, 2.4, 2.4)
+		tank.color = Color(0.85, 0.82, 0.3)
+		tank.surface_kind = &"paint"
+		tank.max_health = 120.0
+		tank.damage_threshold = 15.0
+		tank.chunks = Vector3i(3, 1, 1)
+		tank.label = "Diesel tank"
+		tank.site_id = site_id
+		tank.position = Vector3(-22.0, 0.0, -half.y + 7.0 + k * 3.4)
+		add_child(tank)
+		var tank_sign := Label3D.new()
+		tank_sign.text = "DIESEL  //  BACKUP POWER"
+		tank_sign.font_size = 48
+		tank_sign.pixel_size = 0.008
+		tank_sign.outline_size = 6
+		tank_sign.position = Vector3(0.0, 1.3, 1.25)
+		tank.add_child(tank_sign)
+		tank.destroyed.connect(func(t: Destructible) -> void:
+			var blast := Explosive.new()
+			blast.radius = 7.0
+			blast.damage = 110.0
+			get_parent().add_child(blast)
+			blast.global_position = t.global_position + Vector3.UP * 1.2
+			blast.detonate.call_deferred())
+	# Power substation, west side: transformers behind a little fence.
+	var sub := Vector3(-27.0, 0.0, -4.0)
+	for k in 3:
+		var transformer := Models.box(self, Vector3(1.6, 2.0, 1.4), sub + Vector3(0.0, 1.0, -3.0 + k * 3.0), Models.mat(Color(0.45, 0.5, 0.45), &"plates"))
+		for x in [-0.4, 0.0, 0.4]:
+			Models.cylinder(transformer, 0.08, 0.7, Vector3(x, 1.35, 0.0), Models.mat(Color(0.6, 0.4, 0.3), &"paint"), 8)
+	for z in [-5.0, 5.0]:
+		Models.box(self, Vector3(4.0, 1.8, 0.06), sub + Vector3(0.0, 0.9, z), Models.mat(Color(0.8, 0.82, 0.85), &"chainlink"))
+	# Flagpoles by the front gate, floodlight masts at the corners.
+	var flag := Models.mat(brand_color, &"cloth")
+	for x in [-10.0, -12.5, 10.0, 12.5]:
+		Models.cylinder(self, 0.07, 9.0, Vector3(x, 4.5, half.y - 2.5), steel, 8)
+		var cloth := Models.box(self, Vector3(1.8, 1.1, 0.04), Vector3(x + 0.95, 8.3, half.y - 2.5), flag)
+		cloth.rotation.y = 0.1
+	for corner in [Vector3(-half.x + 1.5, 0, half.y - 1.5), Vector3(half.x - 1.5, 0, half.y - 1.5),
+			Vector3(-half.x + 1.5, 0, -half.y + 1.5), Vector3(half.x - 1.5, 0, -half.y + 1.5)]:
+		Models.cylinder(self, 0.15, 12.0, corner + Vector3.UP * 6.0, steel, 8)
+		var head := Models.box(self, Vector3(1.4, 0.5, 0.6), corner + Vector3(0.0, 12.1, 0.0), steel)
+		Models.box(head, Vector3(1.2, 0.3, 0.05), Vector3(0.0, -0.1, 0.31), Models.glow(Color(1.0, 0.97, 0.85), 3.0))
+	# The water board by the gate.
+	var board := Models.box(self, Vector3(5.0, 2.2, 0.3), Vector3(-9.0, 2.6, half.y + 1.5), Models.mat(Color(0.08, 0.08, 0.1), &"paint"))
+	for x in [-2.0, 2.0]:
+		Models.box(self, Vector3(0.15, 1.5, 0.15), Vector3(-9.0 + x, 0.75, half.y + 1.5), steel)
+	_water_board = Label3D.new()
+	_water_board.font_size = 72
+	_water_board.pixel_size = 0.008
+	_water_board.outline_size = 0
+	_water_board.modulate = Color(1.0, 0.45, 0.2)
+	_water_board.position = Vector3(0.0, 0.0, 0.17)
+	board.add_child(_water_board)
 
 
 func _spawn_worker() -> void:
