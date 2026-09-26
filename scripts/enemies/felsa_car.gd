@@ -146,6 +146,18 @@ func _drive(delta: float) -> void:
 		_begin_reverse()
 
 
+## The bumper touched a unit: shove it; ram it for real when hunting.
+func _bump(unit: Enemy) -> void:
+	if absf(speed) < 1.5:
+		return
+	var away := unit.global_position - global_position
+	away.y = 0.0
+	unit.apply_knockback(away.normalized() * minf(absf(speed), 10.0) + Vector3.UP * 2.0)
+	if is_dormant() or _is_friend(unit) or absf(speed) < ram_min_speed:
+		return
+	unit.apply_damage(absf(speed) * ram_damage_per_mps, global_position, &"impact")
+
+
 func _goal_point() -> Vector3:
 	if _is_valid(target) and _has_los:
 		return target.global_position  # ram straight at it
@@ -250,6 +262,10 @@ func _build_body() -> void:
 	_decorate(_visual)
 	Models.set_gi_mode(_visual, GeometryInstance3D.GI_MODE_DYNAMIC)
 	_motor = Sfx.loop(self, &"ev_loop", -10.0)
+	# A crowd can't wedge it: no physical contact with units, a bumper instead.
+	collision_layer = Game.LAYER_VEHICLES
+	collision_mask = Game.LAYER_WORLD | Game.LAYER_PLAYER | Game.LAYER_VEHICLES | Game.LAYER_DESTRUCTIBLE
+	Bumper.attach(self, body_size + Vector3(0.6, 0.4, 0.8), Vector3(0.0, body_size.y * 0.5 + CLEARANCE, 0.0))
 
 
 func _process(delta: float) -> void:

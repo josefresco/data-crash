@@ -45,8 +45,7 @@ func release() -> void:
 		return
 	carrier = null
 	collision_layer = Game.LAYER_ENEMIES
-	collision_mask = Game.LAYER_WORLD | Game.LAYER_PLAYER | Game.LAYER_VEHICLES \
-		| Game.LAYER_DESTRUCTIBLE | Game.LAYER_ENEMIES
+	collision_mask = Game.LAYER_WORLD | Game.LAYER_PLAYER | Game.LAYER_DESTRUCTIBLE | Game.LAYER_ENEMIES
 	global_position.y = 0.2
 	if is_alive():
 		add_to_group("townspeople")

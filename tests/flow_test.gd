@@ -51,9 +51,10 @@ func _run() -> void:
 	await _test_dogs()
 	await _test_grock_cameras()
 	await _test_parked_cars()
+	await _test_vehicles()
 	await _test_reply_guys()
 	await _test_site_life()
-	_test_pause_and_end()
+	await _test_pause_and_end()
 
 
 ## Bare hands at the start; a shovel and rocks from the neighborhood.
@@ -172,6 +173,43 @@ func _test_reply_guys() -> void:
 	get_tree().call_group(&"reply_guys", &"log_off")
 	await seconds(3.0)
 	check(get_tree().get_nodes_in_group("reply_guys").is_empty(), "reply guys log off when Elmo goes down")
+
+
+## Cars right themselves, turbo boosts and drains, and a dog in the road
+## gets shoved aside instead of stopping the car dead.
+func _test_vehicles() -> void:
+	var car := level.get_node("Car") as Car
+	car.global_transform = Transform3D(Basis(Vector3.FORWARD, PI), Vector3(-84, 1.5, 10))
+	car.linear_velocity = Vector3.ZERO
+	for i in 20:
+		if car.global_basis.y.dot(Vector3.UP) > 0.9:
+			break
+		await seconds(0.25)
+	check(car.global_basis.y.dot(Vector3.UP) > 0.9, "a flipped car rights itself")
+
+	car.global_transform = Transform3D(Basis.IDENTITY, Vector3(-84, 0.8, -6))  # facing +Z
+	await seconds(0.5)
+	player.global_position = car.global_position + Vector3(2, 0.2, 0)
+	await seconds(0.1)
+	car.enter(player)
+	var dog := Dog.new()
+	dog.stray = true
+	dog.position = Vector3(-84, 0.1, 5)
+	level.add_child(dog)
+	dog.set_physics_process(false)
+	Input.action_press("move_forward")
+	Input.action_press("sprint")
+	await seconds(1.0)
+	check(car.boosting or car.turbo_left < car.turbo_seconds, "Shift fires the turbo (%.1fs left)" % car.turbo_left)
+	Input.action_release("sprint")
+	await seconds(3.5)
+	Input.action_release("move_forward")
+	check(car.global_position.z > 7.0 and is_instance_valid(dog) and dog.is_alive(),
+		"the car drives on through a dog in the road instead of getting stuck (car z %.1f)" % car.global_position.z)
+	car.exit()
+	await seconds(0.3)
+	if is_instance_valid(dog):
+		dog.queue_free()
 
 
 ## Scgrewgle's cheese truck rolls in the back gate and leaves with money; the

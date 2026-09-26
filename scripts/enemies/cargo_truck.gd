@@ -83,7 +83,7 @@ func _physics_process(delta: float) -> void:
 			var inbound := dock_point - spawn_point
 			global_rotation.y = atan2(-inbound.x, -inbound.z)
 			visible = true
-			collision_layer = Game.LAYER_ENEMIES
+			collision_layer = Game.LAYER_VEHICLES
 		return
 	if _unload_left > 0.0:
 		_unload_left -= delta

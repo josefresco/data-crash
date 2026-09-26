@@ -78,6 +78,8 @@ var _field_left := 0.0
 var _field_bubble: MeshInstance3D
 var _walk_phase := randf() * TAU
 var _stuck_time := 0.0
+## While > 0 a shove (vehicle bump, blast) carries the unit instead of its legs.
+var _knock_left := 0.0
 var _investigate_left := 0.0
 var _sidestep_left := 0.0
 var _sidestep := Vector3.ZERO
@@ -86,8 +88,9 @@ var _gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 
 func _ready() -> void:
 	collision_layer = Game.LAYER_ENEMIES
-	collision_mask = Game.LAYER_WORLD | Game.LAYER_PLAYER | Game.LAYER_VEHICLES \
-		| Game.LAYER_DESTRUCTIBLE | Game.LAYER_ENEMIES
+	# Not vehicles: bodies collide if either side's mask matches, and a crowd
+	# must never wedge a car. Vehicles shove units with a Bumper instead.
+	collision_mask = Game.LAYER_WORLD | Game.LAYER_PLAYER | Game.LAYER_DESTRUCTIBLE | Game.LAYER_ENEMIES
 	health = max_health
 	home = global_position
 	_build_body()
@@ -209,6 +212,14 @@ func investigate(point: Vector3) -> void:
 	_nav.target_position = point
 
 
+## Shoved by a vehicle or a blast: slides with `impulse` for a moment.
+func apply_knockback(impulse: Vector3) -> void:
+	if _is_dead:
+		return
+	velocity += impulse
+	_knock_left = 0.35
+
+
 func stun(duration: float) -> void:
 	_stun_timer = maxf(_stun_timer, duration)
 	_flash(Color(0.4, 0.7, 1.0))
@@ -239,6 +250,9 @@ func _physics_process(delta: float) -> void:
 			move_dir = _unstick(_nav_direction(), delta)
 
 	var weight := 1.0 - exp(-10.0 * delta)
+	if _knock_left > 0.0:
+		_knock_left -= delta
+		weight *= 0.08
 	velocity.x = lerpf(velocity.x, move_dir.x * move_speed, weight)
 	velocity.z = lerpf(velocity.z, move_dir.z * move_speed, weight)
 	if move_dir != Vector3.ZERO:
