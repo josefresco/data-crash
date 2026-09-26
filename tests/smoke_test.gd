@@ -37,6 +37,28 @@ func _run() -> void:
 	await seconds(1.5)
 	check(breached[0], "car ram breached the front fence")
 
+	# 1b. Gas turbines: shrug off pistols, blow up under heavy fire, cut power.
+	var turbines := get_tree().get_nodes_in_group("gas_turbines")
+	check(turbines.size() == 3, "datacenter runs 3 gas turbines")
+	var first_turbine := turbines[0] as GasTurbine
+	first_turbine.apply_damage(15.0, first_turbine.global_position + Vector3(0, 1, 5), &"bullet")
+	check(is_equal_approx(first_turbine.health, first_turbine.max_health), "pistol rounds bounce off a turbine")
+	var smog_before := game.district.smog
+	var cash_before := game.cash
+	first_turbine.apply_damage(9999.0, first_turbine.global_position + Vector3(0, 1, 5), &"explosive")
+	await seconds(0.5)
+	check(game.district.smog < smog_before, "a downed turbine clears some smog")
+	check(game.cash >= cash_before + 75, "turbine pays $75")
+	var power := [false]
+	datacenter.power_cut.connect(func() -> void: power[0] = true)
+	for node in get_tree().get_nodes_in_group("gas_turbines"):
+		if not (node as Destructible).is_destroyed:
+			(node as Destructible).apply_damage(9999.0, (node as Node3D).global_position, &"explosive")
+	await seconds(0.8)
+	check(power[0], "all turbines down cuts the power")
+	var vent := level.get_node("SteamVent1") as SteamVent
+	check(vent.state == SteamVent.State.OFF, "powered defenses shut down")
+
 	# 2. Pistol shots must not hurt cooling units (below damage threshold).
 	var units := get_tree().get_nodes_in_group("cooling_units")
 	var first := units[0] as Destructible

@@ -44,6 +44,12 @@ func _ready() -> void:
 			Models.box(_rack, Vector3(0.9, 0.05, 0.02), Vector3(0.0, -0.9 + i * 0.4, -0.46), led)
 
 
+## Cleared away with the rest of the site after the datacenter falls.
+func dismantle() -> void:
+	Vfx.dust(get_parent(), global_position + Vector3.UP, 2.0)
+	queue_free()
+
+
 func shut_down() -> void:
 	state = State.OFF
 	if _jet:

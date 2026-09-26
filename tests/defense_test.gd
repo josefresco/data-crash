@@ -58,7 +58,12 @@ func _run() -> void:
 	check(level.phase == level.Phase.BUILD, "defense phase began after collapse")
 	var core := level.core as GreenCore
 	check(core != null and core.is_in_group("structures"), "green core spawned")
+	var arrays := get_tree().get_nodes_in_group("structures").filter(func(n: Node) -> bool: return n is SolarArray)
+	check(arrays.size() == 18, "green datacenter comes with a solar field (%d arrays)" % arrays.size())
 	await seconds(12.0)  # debris clears, navmesh rebakes
+	check(get_tree().get_nodes_in_group("gas_turbines").all(func(n: Node) -> bool: return (n as Destructible).is_destroyed),
+		"old gas turbines are hauled off")
+	check(get_tree().get_nodes_in_group("crapya_defenses").is_empty(), "Crapya's vents and crushers are cleared")
 
 	var build := level.get_node("BuildController") as BuildController
 	Game.cash = 2000

@@ -53,12 +53,10 @@ static func surface(material: StandardMaterial3D, kind: StringName) -> void:
 	material.uv1_triplanar = true
 	material.uv1_world_triplanar = false
 	material.normal_enabled = true
+	if PBR_KINDS.has(kind):
+		_pbr(material, kind)
+		return
 	match kind:
-		&"asphalt":
-			material.albedo_texture = _grain(&"asphalt", 0.09, Color(0.72, 0.72, 0.72))
-			material.normal_texture = _bumps(&"asphalt_n", 0.12, 3.0)
-			material.uv1_scale = Vector3.ONE * 0.4
-			material.roughness = 0.95
 		&"grass":
 			material.albedo_texture = _grain(&"grass", 0.012, Color(0.68, 0.7, 0.62))
 			material.normal_texture = _bumps(&"grass_n", 0.2, 2.0)
@@ -138,6 +136,43 @@ static func retexture(root: Node, texture: Texture2D) -> void:
 				copy.albedo_texture = texture
 				_retextured[key] = copy
 			mesh.set_surface_override_material(surface_index, _retextured[key])
+
+
+const PBR_DIR := "res://assets/ambientcg/"
+## Photo-scanned CC0 texture sets (tools/import_textures.py):
+## kind -> [folder, meters covered by one texture tile, metallic].
+const PBR_KINDS := {
+	&"asphalt": ["Asphalt031", 4.0, 0.0],
+	&"concrete": ["Concrete034", 3.0, 0.0],
+	&"dirt": ["Ground054", 4.0, 0.0],
+	&"corrugated": ["CorrugatedSteel005", 2.5, 0.5],
+	&"plates": ["MetalPlates006", 2.0, 0.6],
+	&"solar": ["SolarPanel003", 1.6, 0.3],
+	&"chainlink": ["Fence006", 3.5, 0.6],
+}
+
+
+## Real texture sets: albedo (tinted by albedo_color), normal, roughness.
+static func _pbr(material: StandardMaterial3D, kind: StringName) -> void:
+	var spec: Array = PBR_KINDS[kind]
+	var folder := PBR_DIR + String(spec[0]) + "/"
+	var color_path := folder + "color.png"
+	if not ResourceLoader.exists(color_path):
+		color_path = folder + "color.jpg"
+	material.albedo_texture = load(color_path)
+	material.normal_texture = load(folder + "normal.jpg")
+	material.roughness_texture = load(folder + "roughness.jpg")
+	material.roughness_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_RED
+	material.roughness = 1.0
+	material.metallic = spec[2]
+	material.uv1_scale = Vector3.ONE / float(spec[1])
+	material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	if kind == &"chainlink":
+		material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+		material.alpha_scissor_threshold = 0.3
+		# Keeps thin wires visible at a distance instead of mipping away.
+		material.alpha_antialiasing_mode = BaseMaterial3D.ALPHA_ANTIALIASING_ALPHA_TO_COVERAGE
+		material.cull_mode = BaseMaterial3D.CULL_DISABLED
 
 
 ## Sets how a subtree takes part in global illumination. Moving things must be

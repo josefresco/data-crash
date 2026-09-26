@@ -34,7 +34,10 @@ const MAX_LIVE_DEBRIS := 400
 @export var debris_lifetime := 8.0
 ## Optional pre-fractured model: every MeshInstance3D inside becomes a debris piece.
 @export var fractured_scene: PackedScene
-## Below 1 renders see-through (chain-link fences, glass).
+## Surface look (Models.surface kind): rough, concrete, corrugated, plates,
+## solar, chainlink, ... PBR kinds use real textures tinted by `color`.
+@export var surface_kind: StringName = &"rough"
+## Below 1 renders see-through (glass).
 @export_range(0.05, 1.0) var opacity := 1.0
 ## Name shown in HUD prompts, e.g. "Cooling unit".
 @export var label := ""
@@ -116,7 +119,7 @@ func _build() -> void:
 	if opacity < 1.0:
 		_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	else:
-		Models.surface(_material, &"rough")
+		Models.surface(_material, surface_kind)
 	_mesh.material_override = _material
 
 	var box_shape := BoxShape3D.new()

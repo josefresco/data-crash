@@ -59,8 +59,8 @@ func build() -> void:
 	_doors.clear()
 	_rng.seed = layout_seed
 
-	var asphalt := Models.mat(Color(0.17, 0.17, 0.18), &"asphalt")
-	var sidewalk := Models.mat(Color(0.55, 0.55, 0.52))
+	var asphalt := Models.mat(Color(0.75, 0.75, 0.75), &"asphalt")
+	var sidewalk := Models.mat(Color(0.92, 0.92, 0.9), &"concrete")
 	var line := Models.mat(Color(0.85, 0.75, 0.3))
 
 	# Main road (north-south, x = 0) from just south of the fence.
@@ -189,9 +189,7 @@ func _add_tree(at: Vector3, height: float) -> void:
 
 
 func _build_park(x_range: Vector2, z_range: Vector2) -> void:
-	var center := Vector3((x_range.x + x_range.y) * 0.5, 0.0, (z_range.x + z_range.y) * 0.5)
-	var size := Vector2(x_range.y - x_range.x, z_range.y - z_range.x)
-	Models.box(self, Vector3(size.x, 0.03, size.y), center + Vector3.UP * 0.015, Models.mat(Color(0.3, 0.5, 0.25)))
+	# The lawn itself is the regrowing ground shader; the park adds trees and benches.
 	for i in 14:
 		var spot := Vector3(_rng.randf_range(x_range.x + 2.0, x_range.y - 8.0), 0.0,
 			_rng.randf_range(z_range.x + 1.5, z_range.y - 1.5))
@@ -206,7 +204,7 @@ func _build_park(x_range: Vector2, z_range: Vector2) -> void:
 
 
 func _build_construction_site(center: Vector3) -> void:
-	Models.box(self, Vector3(34.0, 0.03, 12.0), center + Vector3.UP * 0.015, Models.mat(Color(0.5, 0.42, 0.3)))
+	Models.box(self, Vector3(34.0, 0.03, 12.0), center + Vector3.UP * 0.015, Models.mat(Color(0.95, 0.9, 0.85), &"dirt"))
 	var orange := Models.mat(Color(1.0, 0.5, 0.1))
 	for x in range(-16, 17, 4):
 		Models.cone(self, 0.25, 0.7, center + Vector3(x, 0.35, -6.2), orange)  # traffic cones

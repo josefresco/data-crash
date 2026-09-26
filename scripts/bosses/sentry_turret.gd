@@ -24,6 +24,10 @@ func _ready() -> void:
 	add_to_group("crapya_defenses")
 
 
+func dismantle() -> void:
+	shut_down()
+
+
 func shut_down() -> void:
 	if is_alive():
 		apply_damage(9999.0, global_position, &"emp")

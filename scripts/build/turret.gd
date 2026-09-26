@@ -17,7 +17,8 @@ var _scan_timer := 0.0
 
 func _init() -> void:
 	size = Vector3(1.2, 1.0, 1.2)
-	color = Color(0.3, 0.5, 0.36)
+	color = Color(0.85, 1.0, 0.88)
+	surface_kind = &"plates"
 	max_health = 200.0
 	chunks = Vector3i(2, 2, 2)
 	cost = 175
@@ -29,7 +30,7 @@ func _ready() -> void:
 	_head = Node3D.new()
 	_head.position.y = size.y + 0.3
 	add_child(_head)
-	_add_box(Vector3(0.8, 0.5, 0.8), Vector3.ZERO, Color(0.2, 0.35, 0.25), _head)
+	_add_box(Vector3(0.8, 0.5, 0.8), Vector3.ZERO, Color(0.75, 0.95, 0.8), _head, &"plates")
 	_add_box(Vector3(0.15, 0.15, 1.1), Vector3(0.0, 0.05, -0.6), Color(0.1, 0.1, 0.1), _head)
 
 

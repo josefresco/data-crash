@@ -16,7 +16,7 @@ signal breached
 @export var height := 2.2
 @export var panel_health := 60.0
 @export var damage_threshold := 20.0
-@export var color := Color(0.55, 0.57, 0.6)
+@export var color := Color(0.85, 0.87, 0.9)
 
 var _breached := false
 
@@ -43,7 +43,7 @@ func _rebuild() -> void:
 		panel.damage_threshold = damage_threshold
 		panel.chunks = Vector3i(3, 2, 1)
 		panel.label = "Fence"
-		panel.opacity = 0.45  # chain link
+		panel.surface_kind = &"chainlink"  # alpha-cutout wire mesh
 		panel.position = Vector3((i + 0.5) * width, 0.0, 0.0)
 		add_child(panel)
 		# Posts stay standing when the mesh is torn out.

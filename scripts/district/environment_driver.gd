@@ -30,7 +30,8 @@ const SETTINGS_PATH := "user://settings.cfg"
 @export var polluted_sky_top := Color(0.38, 0.32, 0.25)
 @export var polluted_sky_horizon := Color(0.55, 0.45, 0.32)
 @export var polluted_clouds := Color(0.55, 0.45, 0.32, 0.95)
-@export var polluted_ground := Color(0.32, 0.3, 0.26)
+## Multiplies the dry-dirt texture while polluted.
+@export var polluted_ground_tint := Color(0.78, 0.68, 0.55)
 @export var polluted_sun_color := Color(1.0, 0.72, 0.45)
 @export var polluted_sun_energy := 1.25
 @export var polluted_saturation := 0.72
@@ -43,7 +44,6 @@ const SETTINGS_PATH := "user://settings.cfg"
 @export var restored_sky_top := Color(0.22, 0.45, 0.85)
 @export var restored_sky_horizon := Color(0.68, 0.8, 0.95)
 @export var restored_clouds := Color(1.0, 1.0, 1.0, 0.8)
-@export var restored_ground := Color(0.3, 0.62, 0.25)
 @export var restored_sun_color := Color(1.0, 0.96, 0.88)
 @export var restored_sun_energy := 1.35
 @export var restored_saturation := 1.12
@@ -178,8 +178,8 @@ func _configure() -> void:
 		sun.shadow_blur = 1.5
 		sun.light_volumetric_fog_energy = 1.6  # sun shafts through the smog
 
-	if ground and ground.material_override is StandardMaterial3D:
-		Models.surface(ground.material_override as StandardMaterial3D, &"grass")
+	if ground:
+		ground.material_override = _ground_material()
 
 
 func _apply() -> void:
@@ -217,9 +217,34 @@ func _apply() -> void:
 		sun.light_color = restored_sun_color.lerp(polluted_sun_color, smog)
 		sun.light_energy = lerpf(polluted_sun_energy, restored_sun_energy, 1.0 - smog)
 
-	if ground and ground.material_override is StandardMaterial3D:
-		var ground_mat := ground.material_override as StandardMaterial3D
-		ground_mat.albedo_color = polluted_ground.lerp(restored_ground, _restore_shown)
+	if ground and ground.material_override is ShaderMaterial:
+		var ground_mat := ground.material_override as ShaderMaterial
+		ground_mat.set_shader_parameter(&"restoration", _restore_shown)
+		ground_mat.set_shader_parameter(&"dead_tint", polluted_ground_tint.lerp(Color.WHITE, _restore_shown))
+
+
+## Ground that regrows: dry dirt blends to lawn through a noise mask as the
+## district heals (shaders/ground.gdshader, ambientCG textures).
+func _ground_material() -> ShaderMaterial:
+	var material := ShaderMaterial.new()
+	material.shader = load("res://shaders/ground.gdshader")
+	for pair in [["dead", "Ground037"], ["green", "Grass004"]]:
+		var folder := "res://assets/ambientcg/%s/" % pair[1]
+		material.set_shader_parameter(pair[0] + "_albedo", load(folder + "color.jpg"))
+		material.set_shader_parameter(pair[0] + "_normal", load(folder + "normal.jpg"))
+		material.set_shader_parameter(pair[0] + "_roughness", load(folder + "roughness.jpg"))
+	var noise := FastNoiseLite.new()
+	noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
+	noise.frequency = 0.006
+	noise.fractal_octaves = 3
+	var mask := NoiseTexture2D.new()
+	mask.width = 512
+	mask.height = 512
+	mask.seamless = true
+	mask.normalize = true
+	mask.noise = noise
+	material.set_shader_parameter(&"mask_noise", mask)
+	return material
 
 
 ## Seamless noise panorama for ProceduralSkyMaterial.sky_cover: mostly clear

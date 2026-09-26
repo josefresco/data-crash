@@ -52,6 +52,8 @@ func _ready() -> void:
 	await _wait(1.2)
 	await _shot("vfx_smoke", Vector3(-76, 0.2, 72), Vector3(-83, 2.5, 86))
 
+	await _shot("datacenter", Vector3(22, 0.2, -12), Vector3(8, 4.0, -28))
+	await _shot("turbines", Vector3(-4, 0.2, -57), Vector3(0, 5.0, -45))
 	await _shot("crapya", Vector3(-10, 0.2, -18), Vector3(-18, 1.5, -30))
 	await _shot("dozer", Vector3(18, 0.2, 48), Vector3(25, 1.0, 57))
 	await _shot("gunshow", Vector3(-4, 0.2, 52), Vector3(-12, 1.2, 57))

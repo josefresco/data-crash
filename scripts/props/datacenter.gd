@@ -6,15 +6,23 @@ extends Node3D
 
 signal cooling_unit_destroyed(remaining: int)
 signal neutralized
+signal turbine_destroyed(remaining: int)
+## Every gas turbine is down: powered defenses (sentries, vents, crushers) are off.
+signal power_cut
 
 @export var footprint := Vector2(24.0, 16.0)
 @export var height := 8.0
 ## Width of each destructible wall / roof segment.
 @export var segment_size := 4.0
 @export var cooling_unit_count := 3
-@export var wall_color := Color(0.28, 0.29, 0.31)
-@export var roof_color := Color(0.2, 0.2, 0.22)
-@export var cooling_color := Color(0.62, 0.68, 0.72)
+## Gas turbine generators behind the building (north side).
+@export var turbine_count := 3
+@export var turbine_smog := 0.06
+@export var turbine_noise := 0.08
+@export var turbine_cash := 75
+@export var wall_color := Color(0.72, 0.74, 0.76)
+@export var roof_color := Color(0.55, 0.56, 0.58)
+@export var cooling_color := Color(0.85, 0.9, 0.95)
 
 @export_group("District impact")
 @export var smog_contribution := 0.85
@@ -24,6 +32,7 @@ signal neutralized
 @export var cash_reward := 500
 
 var cooling_remaining := 0
+var turbines_remaining := 0
 var is_neutralized := false
 
 var _structure: Array[Destructible] = []
@@ -35,6 +44,7 @@ func _ready() -> void:
 	_build_shell()
 	_decorate_shell()
 	_build_cooling_units()
+	_build_turbines()
 
 
 func _process(delta: float) -> void:
@@ -57,7 +67,7 @@ func _build_shell() -> void:
 	var roof_size := Vector3(footprint.x / nx, 0.4, footprint.y / nz)
 	for ix in nx:
 		for iz in nz:
-			var piece := _make_segment(roof_size, roof_color, Vector3i(2, 1, 2))
+			var piece := _make_segment(roof_size, roof_color, Vector3i(2, 1, 2), &"plates")
 			piece.position = Vector3(
 				-half.x + (ix + 0.5) * roof_size.x, height, -half.y + (iz + 0.5) * roof_size.z)
 			_roof.append(piece)
@@ -78,9 +88,11 @@ func _add_wall_run(start: Vector3, direction: Vector3, run_length: float, thickn
 		_structure.append(piece)
 
 
-func _make_segment(seg_size: Vector3, seg_color: Color, seg_chunks: Vector3i) -> Destructible:
+func _make_segment(seg_size: Vector3, seg_color: Color, seg_chunks: Vector3i,
+		kind: StringName = &"corrugated") -> Destructible:
 	var piece := Destructible.new()
 	piece.set_meta(&"generated", true)
+	piece.surface_kind = kind
 	piece.size = seg_size
 	piece.color = seg_color
 	piece.chunks = seg_chunks
@@ -132,6 +144,7 @@ func _build_cooling_units() -> void:
 		unit.name = "CoolingUnit%d" % i
 		unit.size = unit_size
 		unit.color = cooling_color
+		unit.surface_kind = &"plates"
 		unit.chunks = Vector3i(3, 3, 3)
 		unit.max_health = 150.0
 		unit.damage_threshold = 50.0
@@ -174,10 +187,43 @@ func _on_cooling_unit_destroyed(unit: Destructible) -> void:
 		_collapse(unit.global_position)
 
 
+func _build_turbines() -> void:
+	var spacing := 7.5
+	for i in turbine_count:
+		var turbine := GasTurbine.new()
+		turbine.set_meta(&"generated", true)
+		turbine.name = "Turbine%d" % i
+		turbine.position = Vector3((i - (turbine_count - 1) * 0.5) * spacing, 0.0, -footprint.y * 0.5 - 5.0)
+		add_child(turbine)
+		if not Engine.is_editor_hint():
+			turbine.destroyed.connect(_on_turbine_destroyed)
+	turbines_remaining = turbine_count
+
+
+func _on_turbine_destroyed(_turbine: Destructible) -> void:
+	turbines_remaining -= 1
+	var district := Game.district
+	if district and not is_neutralized:
+		district.smog -= turbine_smog
+		district.noise -= turbine_noise
+	Game.add_cash(turbine_cash)
+	turbine_destroyed.emit(turbines_remaining)
+	if turbines_remaining <= 0 and not is_neutralized:
+		get_tree().call_group(&"crapya_defenses", &"shut_down")
+		power_cut.emit()
+
+
 func _collapse(origin: Vector3) -> void:
 	if is_neutralized:
 		return
 	is_neutralized = true
+	# Crapya's automated defenses and the generators go too, clearing the lot.
+	get_tree().call_group(&"crapya_defenses", &"dismantle")
+	for node in get_tree().get_nodes_in_group("gas_turbines"):
+		var turbine := node as GasTurbine
+		if turbine and is_ancestor_of(turbine) and not turbine.is_destroyed:
+			turbine.shut_down()
+			get_tree().create_timer(2.5).timeout.connect(_dismantle.bind(turbine))
 
 	# Roof drops first, then the walls fold in from the side that was hit.
 	var delay := 0.3
@@ -200,6 +246,15 @@ func _shatter_piece(piece: Variant, origin: Vector3, force: float) -> void:
 		# Pull debris inward so the building caves in rather than exploding outward.
 		var center := global_position + Vector3.UP * height
 		(piece as Destructible).shatter(center.lerp(origin, 0.3), force)
+
+
+## `turbine` is untyped: it may have been blown up in the meantime.
+func _dismantle(turbine: Variant) -> void:
+	if is_instance_valid(turbine) and not (turbine as Destructible).is_destroyed:
+		var quiet := turbine as GasTurbine
+		quiet.destroyed.disconnect(_on_turbine_destroyed)
+		quiet.dismantled = true
+		quiet.shatter(quiet.global_position + Vector3.UP * 4.0, 30.0)
 
 
 func _heal_district() -> void:

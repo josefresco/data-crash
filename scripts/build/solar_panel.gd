@@ -10,7 +10,8 @@ var _income_timer := 0.0
 
 func _init() -> void:
 	size = Vector3(3.0, 0.5, 2.0)
-	color = Color(0.5, 0.5, 0.52)
+	color = Color(0.8, 0.8, 0.82)
+	surface_kind = &"plates"
 	max_health = 120.0
 	chunks = Vector3i(3, 1, 2)
 	cost = 100
@@ -19,8 +20,13 @@ func _init() -> void:
 
 func _ready() -> void:
 	super()
-	var panel := _add_box(Vector3(2.9, 0.08, 1.9), Vector3(0.0, size.y + 0.35, 0.0), Color(0.12, 0.2, 0.45))
+	# Tilted photovoltaic panel sized to the base, on two legs.
+	var panel := _add_box(Vector3(size.x - 0.1, 0.08, size.z - 0.1), Vector3(0.0, size.y + 0.45, 0.0),
+		Color.WHITE, null, &"solar")
 	panel.rotation.x = deg_to_rad(-25.0)
+	for side in [-1.0, 1.0]:
+		_add_box(Vector3(0.1, 0.6, 0.1), Vector3(side * (size.x * 0.5 - 0.3), size.y + 0.2, 0.0),
+			Color(0.6, 0.62, 0.64), null, &"plates")
 
 
 func _process(delta: float) -> void:

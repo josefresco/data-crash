@@ -55,6 +55,12 @@ func _ready() -> void:
 			(child as FenceLine).breached.connect(_on_fence_breached)
 	_datacenter.cooling_unit_destroyed.connect(_on_cooling_unit_destroyed)
 	_datacenter.neutralized.connect(_on_neutralized)
+	_datacenter.turbine_destroyed.connect(func(remaining: int) -> void:
+		if phase == Phase.ACTIVISM or phase == Phase.ASSAULT:
+			Game.set_objective(("Gas turbine down: less smog, less noise. (+$%d)  %d left; take them all out to cut power to the defenses."
+				% [_datacenter.turbine_cash, remaining]) if remaining > 0 else "All gas turbines down."))
+	_datacenter.power_cut.connect(func() -> void:
+		Game.set_objective("Power cut! Crapya's sentries, vents, and crushers are dead. Her control room still shields the cooling units."))
 	_spawner.wave_started.connect(_on_wave_started)
 	_spawner.wave_cleared.connect(_on_wave_cleared)
 	_spawner.all_waves_cleared.connect(_on_all_waves_cleared)
@@ -116,6 +122,7 @@ func start_defense() -> void:
 	_build.set_active(false)
 	get_tree().call_group(&"nav_baker", &"request_rebake")
 
+	_spawn_solar_field()
 	_spawn_townspeople(townspeople_base + int(Game.district.trust * townspeople_per_trust))
 	_refill_player()
 	_update_deeds()
@@ -404,6 +411,18 @@ func _make_flare() -> Node3D:
 	tween.tween_property(light, "light_energy", 4.0, 0.4)
 	tween.tween_property(light, "light_energy", 0.5, 0.4)
 	return flare
+
+
+## The green datacenter's solar field: rows of arrays behind the core, on the
+## lot the turbines used to occupy.
+func _spawn_solar_field() -> void:
+	var center := core.global_position
+	for dz in [-9.0, -12.5, -16.0]:
+		for dx in [-12.0, -7.5, -3.0, 1.5, 6.0, 10.5]:
+			var array := SolarArray.new()
+			array.position = Vector3(center.x + dx, 0.0, center.z + dz)
+			add_child(array)
+	get_tree().call_group(&"nav_baker", &"request_rebake")
 
 
 func _spawn_townspeople(count: int) -> void:

@@ -42,6 +42,10 @@ func _ready() -> void:
 		await get_tree().create_timer(0.25).timeout
 	await get_tree().create_timer(8.0).timeout
 	await _save("restored")
+	player.global_position = Vector3(16, 0.2, -30)
+	await get_tree().create_timer(0.3).timeout
+	player.aim_at(Vector3(0, 1.0, -44))
+	await _save("solar_field")
 
 	# Phase 3: a few defenses, then a wave, seen from behind the turrets.
 	var core := level.get("core") as GreenCore
