@@ -18,12 +18,18 @@ extends VehicleBody3D
 @export_file("*.glb") var model_path := ""
 @export var model_scale := 1.45
 @export var model_offset := Vector3.ZERO
+## Resize the collider and move the wheels to match the model (parked cars
+## pick random Kenney models of different sizes).
+@export var fit_to_model := false
+## Looping engine sound cue (see Sfx) while someone is driving.
+@export var engine_cue := &"engine_loop"
 
 var driver: Player = null
 
 ## Speed from before this physics step, so contacts see pre-impact speed.
 var _last_speed := 0.0
 var _driver_change_frame := -1
+var _engine: AudioStreamPlayer3D
 
 @onready var _cam_rig: Node3D = $CameraRig
 @onready var _camera: Camera3D = $CameraRig/SpringArm3D/Camera3D
@@ -51,6 +57,23 @@ func _use_model() -> void:
 	var model := Models.model(model_path, model_scale)
 	model.position = model_offset
 	add_child(model)
+	if fit_to_model:
+		_fit_to(Models.model_bounds(model))
+
+
+## Sizes the chassis box and places the wheels for a model's bounds
+## (local AABB, origin at the ground under the model's center).
+func _fit_to(bounds: AABB) -> void:
+	var collider := get_node("CollisionShape3D") as CollisionShape3D
+	var shape := (collider.shape as BoxShape3D).duplicate() as BoxShape3D
+	shape.size = Vector3(bounds.size.x * 0.95, shape.size.y, bounds.size.z * 0.92)
+	collider.shape = shape
+	collider.position.z = bounds.get_center().z
+	var half_track := bounds.size.x * 0.5 - 0.2
+	var axle := bounds.size.z * 0.31
+	for wheel: VehicleWheel3D in find_children("*", "VehicleWheel3D", false, false):
+		wheel.position.x = signf(wheel.position.x) * half_track
+		wheel.position.z = bounds.get_center().z + signf(wheel.position.z) * axle
 
 
 ## Upgrades the scene's flat materials: glossy paint on the body, glass on the
@@ -84,6 +107,11 @@ func enter(player: Player) -> bool:
 	brake = 0.0
 	player.set_driving(self)
 	_camera.make_current()
+	if _engine == null:
+		_engine = Sfx.loop(self, engine_cue, -4.0)
+	elif not _engine.playing:
+		_engine.play()
+	Game.tip("driving", "Driving: W/S throttle and reverse, A/D steer, Space brakes, E gets out. Ram guards, dogs, and fences at speed: damage scales with how fast you hit.")
 	return true
 
 
@@ -95,12 +123,16 @@ func exit() -> void:
 	_driver_change_frame = Engine.get_physics_frames()
 	engine_force = 0.0
 	brake = max_brake
+	if _engine:
+		_engine.stop()
 	player.set_driving(null, _exit_point.global_position)
 
 
 func _physics_process(delta: float) -> void:
 	_update_camera(delta)
 	var speed := linear_velocity.length()
+	if _engine and _engine.playing:
+		_engine.pitch_scale = lerpf(_engine.pitch_scale, 0.8 + minf(speed / 14.0, 1.6) + absf(engine_force) / max_engine_force * 0.2, 1.0 - exp(-5.0 * delta))
 
 	if driver == null:
 		engine_force = 0.0
@@ -144,5 +176,6 @@ func _update_camera(delta: float) -> void:
 func _on_body_entered(body: Node) -> void:
 	if _last_speed < ram_min_speed or body == driver:
 		return
+	Sfx.play(&"car_crash", global_position, minf(-8.0 + _last_speed, 4.0))
 	if body.has_method("apply_damage"):
 		body.call(&"apply_damage", _last_speed * ram_damage_per_mps, global_position, &"impact")

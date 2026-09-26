@@ -14,7 +14,6 @@ const AIM_MASK := 1 | 4 | 16 | 32
 @export var sprint_speed := 8.5
 @export var jump_velocity := 5.5
 @export var acceleration := 12.0
-@export var mouse_sensitivity := 0.0025
 @export var max_health := 100.0
 
 @export_group("Equipment")
@@ -50,6 +49,7 @@ var _rig: CharacterModel
 ## Fark's "Algorithm Re-education": movement input is mirrored while > 0.
 var _reversed_left := 0.0
 var _gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
+var _step_left := 0.0
 
 @onready var _pivot: Node3D = $CameraPivot
 @onready var _spring: SpringArm3D = $CameraPivot/SpringArm3D
@@ -73,17 +73,15 @@ func _ready() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed("toggle_mouse"):
-		var captured := Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
-		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if captured else Input.MOUSE_MODE_CAPTURED
-	elif event is InputEventMouseButton and event.pressed \
+	# Esc / P belong to the pause menu, which frees the mouse.
+	if event is InputEventMouseButton and event.pressed \
 			and Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 		get_viewport().set_input_as_handled()
 	elif event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		var motion := event as InputEventMouseMotion
-		_pivot.rotate_y(-motion.relative.x * mouse_sensitivity)
-		_pitch = clampf(_pitch - motion.relative.y * mouse_sensitivity, -1.2, 0.6)
+		_pivot.rotate_y(-motion.relative.x * Game.mouse_sensitivity)
+		_pitch = clampf(_pitch - motion.relative.y * Game.mouse_sensitivity, -1.2, 0.6)
 		_spring.rotation.x = _pitch
 	if not build_mode:
 		if event.is_action_pressed("next_weapon"):
@@ -95,6 +93,7 @@ func _unhandled_input(event: InputEvent) -> void:
 func _physics_process(delta: float) -> void:
 	_fire_timer = maxf(_fire_timer - delta, 0.0)
 	_move(delta)
+	_footsteps(delta)
 
 	if global_position.y < -30.0:
 		_respawn()
@@ -108,9 +107,9 @@ func _physics_process(delta: float) -> void:
 		give_treat()
 	if Input.is_action_just_pressed("interact") and Engine.get_physics_frames() != _vehicle_change_frame:
 		if not talk_down():
-			var stall := _nearest_vendor()
-			if stall:
-				stall.buy(self)
+			var thing := nearest_interactable()
+			if thing:
+				thing.call(&"interact", self)
 			else:
 				_try_enter_vehicle()
 	if Input.is_action_pressed("repair"):
@@ -119,6 +118,8 @@ func _physics_process(delta: float) -> void:
 
 
 func apply_damage(amount: float, _from: Vector3, _kind: StringName = &"generic") -> void:
+	if amount >= 3.0:
+		Sfx.play(&"hit_soft", global_position + Vector3.UP, -6.0)
 	health -= amount
 	health_changed.emit(health, max_health)
 	if health <= 0.0:
@@ -148,23 +149,16 @@ func apply_slow(factor: float, duration: float) -> void:
 	_slow_timer = maxf(_slow_timer, duration)
 
 
-## Befriends the nearest hostile dog within reach. Returns true on success.
+## Befriends the nearest untamed dog (stray or guard dog) within reach.
+## Returns true on success.
 func give_treat() -> bool:
 	if treats <= 0:
 		return false
-	var best: Dog = null
-	var best_distance := treat_range
-	for node in get_tree().get_nodes_in_group("hostiles"):
-		var dog := node as Dog
-		if dog == null:
-			continue
-		var distance := global_position.distance_to(dog.global_position)
-		if distance < best_distance:
-			best = dog
-			best_distance = distance
+	var best := _untamed_dog_in_reach()
 	if best == null or not best.befriend():
 		return false
 	treats -= 1
+	Game.count("dogs")
 	charges_changed.emit(c4_charges)
 	return true
 
@@ -217,11 +211,13 @@ func _repair(delta: float) -> void:
 		Game.add_cash(-dollars)
 
 
-func _nearest_vendor() -> GunShow:
-	for node in get_tree().get_nodes_in_group("vendors"):
-		var stall := node as GunShow
-		if stall and stall.in_reach(self):
-			return stall
+## Nearest [E] interactable (gun show, security cache) in reach, or null.
+## Members of group "interactables" implement in_reach(player),
+## offer_text(player), and interact(player).
+func nearest_interactable() -> Node3D:
+	for node in get_tree().get_nodes_in_group("interactables"):
+		if node.call(&"in_reach", self):
+			return node as Node3D
 	return null
 
 
@@ -375,8 +371,14 @@ func refill_ammo() -> void:
 func fire() -> void:
 	var weapon := current_weapon()
 	if not weapon.has_ammo():
+		if _fire_timer <= 0.0:
+			_fire_timer = 0.4
+			Sfx.play(&"click", global_position, -6.0)
+			Game.tip("ammo", "Out of ammo for this weapon. Ammo refills when the defense starts and after every wave; Q switches weapons (the pistol never runs dry).")
 		return
 	_fire_timer = weapon.cooldown
+	Game.count("shots")
+	Sfx.play(weapon.sound, global_position + Vector3.UP * 1.4, -2.0)
 	if weapon.ammo > 0:
 		weapon.ammo -= 1
 	if weapon.kind == Weapon.Kind.THROWN:
@@ -408,6 +410,10 @@ func _fire_pellet(weapon: Weapon) -> void:
 	var target := hit["collider"] as Node
 	if not target is Enemy:
 		Vfx.impact(get_parent(), hit["position"], hit["normal"])
+		if randf() < 0.35:
+			Sfx.play(&"hit_metal", hit["position"], -10.0)
+	elif randf() < 0.5:
+		Sfx.play(&"hit_flesh", hit["position"], -8.0)
 	var friendly := target != null and (target.is_in_group("structures") \
 		or (target is Enemy and (target as Enemy).faction == Enemy.Faction.ALLY))
 	if target and not friendly and target.has_method("apply_damage"):
@@ -445,6 +451,8 @@ func _plant() -> void:
 	if absf(normal.dot(Vector3.UP)) < 0.99:
 		c4.look_at(c4.global_position + normal, Vector3.UP)
 	c4.arm()
+	Sfx.play(&"beep", c4.global_position, -2.0)
+	Game.tip("c4", "C4 is armed: get clear before it blows. Explosives break walls, turbines, cooling units, and bosses' glass.")
 
 	c4_charges -= 1
 	charges_changed.emit(c4_charges)
@@ -485,8 +493,12 @@ func _update_prompt() -> void:
 	if main:
 		_set_prompt("[F] Hold to fix the %s  (%d%%)" % [main.label(), roundi(main.progress * 100.0)])
 		return
-	if treats > 0 and _hostile_dog_in_reach():
-		_set_prompt("[T] Give treat")
+	var dog := _untamed_dog_in_reach()
+	if dog:
+		if treats > 0:
+			_set_prompt("[T] Give a treat: %s" % ("this stray will follow you and guard the block" if dog.stray else "turn this guard dog"))
+		else:
+			_set_prompt("Out of treats")
 		return
 	var nearby := _nearest_vehicle()
 	if nearby:
@@ -496,9 +508,9 @@ func _update_prompt() -> void:
 			_set_prompt("Locked: the foreman wants more neighborhood trust (%d%% / %d%%)" % [
 				roundi(Game.district.trust * 100.0), roundi(nearby.required_trust * 100.0)])
 		return
-	var stall := _nearest_vendor()
-	if stall:
-		_set_prompt(stall.offer_text(self))
+	var thing := nearest_interactable()
+	if thing:
+		_set_prompt(thing.call(&"offer_text", self))
 		return
 	var hit := _aim_in_reach()
 	if not hit.is_empty() and hit["collider"] is Destructible:
@@ -511,17 +523,36 @@ func _update_prompt() -> void:
 	_set_prompt("")
 
 
-func _hostile_dog_in_reach() -> bool:
-	for node in get_tree().get_nodes_in_group("hostiles"):
-		if node is Dog and global_position.distance_to((node as Dog).global_position) < treat_range:
-			return true
-	return false
+func _untamed_dog_in_reach() -> Dog:
+	var best: Dog = null
+	var best_distance := treat_range
+	for group in ["hostiles", "strays"]:
+		for node in get_tree().get_nodes_in_group(group):
+			var dog := node as Dog
+			if dog == null:
+				continue
+			var distance := global_position.distance_to(dog.global_position)
+			if distance < best_distance:
+				best = dog
+				best_distance = distance
+	return best
 
 
 func _set_prompt(text: String) -> void:
 	if text != _prompt:
 		_prompt = text
 		prompt_changed.emit(text)
+
+
+func _footsteps(delta: float) -> void:
+	var speed := Vector2(velocity.x, velocity.z).length()
+	if not is_on_floor() or speed < 1.0:
+		_step_left = 0.1
+		return
+	_step_left -= delta
+	if _step_left <= 0.0:
+		_step_left = 1.7 / maxf(speed, 1.0)
+		Sfx.play(&"step_grass", global_position, -14.0, 1.0, 0.1)
 
 
 func _respawn() -> void:

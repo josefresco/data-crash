@@ -2,7 +2,8 @@ extends Node3D
 ## Vertical-slice test level.
 ## Phase 1 (ACTIVISM): optional good deeds for cash and trust; breaching the fence ends it.
 ## Phase 2 (ASSAULT): ram the fence, blow the cooling units, watch the sky clear.
-## Boss (BOSS): Elmo Mushbrains arrives in his Felsa Truck, then fights on foot.
+## Boss (BOSS): Elmo Mushbrains arrives in his Cyberdouche, then fights on foot
+## (and on Twatter: his Twats summon Reply Guys).
 ## Phase 3 (BUILD / WAVE): defend the new green datacenter against waves.
 
 enum Phase { ACTIVISM, ASSAULT, BOSS, BUILD, WAVE, WON, LOST }
@@ -18,6 +19,11 @@ enum Phase { ACTIVISM, ASSAULT, BOSS, BUILD, WAVE, WON, LOST }
 ## Neighbors who join the repair crew: base + trust * per_trust.
 @export var townspeople_base := 2
 @export var townspeople_per_trust := 4.0
+## Grock surveillance cameras on the block (position, yaw). Smash them for cash and trust.
+@export var grock_camera_spots: Array[Vector4] = [
+	Vector4(6.2, 0, 8, PI), Vector4(-6.2, 0, 56, 0), Vector4(6.2, 0, 88, PI), Vector4(-46, 0, 24.6, -PI * 0.5),
+	Vector4(18, 0, 35.4, PI * 0.5), Vector4(50, 0, 24.6, -PI * 0.5), Vector4(-30, 0, 75.4, PI * 0.5),
+]
 ## Fence lines corporate crews cut through at the start of waves 2+.
 @export var breach_fences: Array[String] = ["FenceLeft", "FenceRight", "FenceBack"]
 ## Panels cut per breach.
@@ -36,6 +42,10 @@ var _breach_flare: Node3D
 var _boss_bar_shown := false
 var _deeds := {"water": false, "van": false, "dogs": false, "scout": false}
 var _dogs_tamed := 0
+var _cameras_total := 0
+var _end_screen: EndScreen
+var _waves_cleared := 0
+var _cameras_smashed := 0
 
 @onready var _datacenter: Datacenter = $Datacenter
 @onready var _env_driver: EnvironmentDriver = $EnvironmentDriver
@@ -75,6 +85,13 @@ func _ready() -> void:
 		var dog := get_node(dog_name) as Dog
 		dog.defeated.connect(_on_stray_dog_defeated)
 	($BribeMenu as BribeMenu).bribe_bought.connect(_on_bribe_bought)
+	_spawn_grock_cameras()
+	var tips := TipDirector.new()
+	tips.level = self
+	add_child(tips)
+	add_child(PauseMenu.new())
+	_end_screen = EndScreen.new()
+	add_child(_end_screen)
 	($CrapyaControlRoom as CrapyaControlRoom).defenses_offline.connect(func() -> void:
 		Game.set_objective("Crapya's control room is down: defenses offline, cooling units exposed. (+$300)"))
 	_update_deeds()
@@ -83,6 +100,8 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	if phase != Phase.WON and phase != Phase.LOST:
+		Game.count("time", delta)
 	_update_boss_bar()
 	if phase != Phase.BUILD or _auto_wave_left < 0.0:
 		return
@@ -108,6 +127,7 @@ func start_defense() -> void:
 	if phase not in [Phase.ACTIVISM, Phase.ASSAULT, Phase.BOSS]:
 		return
 	phase = Phase.BUILD
+	_update_deeds()
 	core = GreenCore.new()
 	core.position = Vector3(_datacenter.global_position.x, 0.0, _datacenter.global_position.z)
 	add_child(core)
@@ -138,13 +158,16 @@ func start_boss() -> void:
 	if phase != Phase.ACTIVISM and phase != Phase.ASSAULT:
 		return
 	phase = Phase.BOSS
+	_update_deeds()
+	Sfx.ui(&"jingle_boss", -2.0, "Music")
 	var truck := ElmoTruck.new()
 	truck.position = ($WaveSpawner/SouthRoad as Node3D).global_position
 	truck.objective = get_tree().get_first_node_in_group("player") as Node3D
 	truck.wrecked.connect(_on_truck_wrecked)
 	add_child(truck)
 	truck.rotation.y = PI  # face north, up the road
-	Game.set_objective("ELMO MUSHBRAINS rolls in with his Felsa Truck. Wreck it! (EMP won't hack this one.)")
+	Game.set_objective("ELMO MUSHBRAINS rolls in with his Cyberdouche. Wreck it! (EMP won't hack this one.)")
+	Game.tip("elmo_truck", "Elmo's Cyberdouche rams and charges a blue 'Beta Feature' shockwave. When the ring grows, get clear, then hit it while it's parked. Rockets, C4, and the rifle work best.")
 
 
 func has_planned_breach() -> bool:
@@ -199,7 +222,7 @@ func _on_neutralized() -> void:
 
 func _on_truck_wrecked(truck: ElmoTruck) -> void:
 	var wreck := truck.global_position
-	Game.set_objective("The truck is scrap. Elmo climbs out with a flamethrower. Hit him while he posts!")
+	Game.set_objective("The Cyberdouche is scrap. Elmo climbs out, flamethrower in one hand, phone in the other. Hit him while he Twats!")
 	# Give the wreck's explosion a moment before he climbs out beside it.
 	await get_tree().create_timer(1.2).timeout
 	var elmo := ElmoOnFoot.new()
@@ -210,6 +233,7 @@ func _on_truck_wrecked(truck: ElmoTruck) -> void:
 
 
 func _on_boss_defeated(_elmo: Enemy) -> void:
+	get_tree().call_group(&"reply_guys", &"log_off")
 	Game.district.trust += 0.15
 	Game.set_objective("Elmo is out, logged off for good. The neighbors are coming to build.")
 	get_tree().create_timer(core_delay).timeout.connect(start_defense)
@@ -235,7 +259,7 @@ func _update_boss_bar() -> void:
 	var bar := "#".repeat(filled) + "-".repeat(30 - filled)
 	var extra := ""
 	if boss is ElmoOnFoot and (boss as ElmoOnFoot).is_posting:
-		extra = "   POSTING: x2.5 damage!"
+		extra = "   TWATTING: x2.5 damage!"
 	elif boss is ShamCrapman and (boss as ShamCrapman).is_field_shielded():
 		extra = "   FORCE FIELD: shoot the drones!"
 	elif boss is FarkPod and (boss as FarkPod).is_tracking():
@@ -252,6 +276,8 @@ func _complete_deed(key: String, cash: int, trust: float, text: String) -> void:
 	if _deeds.get(key, true):
 		return
 	_deeds[key] = true
+	Game.count("deeds")
+	Sfx.ui(&"jingle_deed", -6.0, "Music")
 	var morale := 1.0 - 0.5 * Game.district.noise
 	Game.add_cash(cash)
 	Game.district.trust += trust * morale
@@ -275,6 +301,24 @@ func _on_stray_dog_defeated(dog: Enemy) -> void:
 		_update_deeds()
 
 
+func _spawn_grock_cameras() -> void:
+	for spot in grock_camera_spots:
+		var camera := GrockCamera.new()
+		camera.position = Vector3(spot.x, spot.y, spot.z)
+		camera.rotation.y = spot.w
+		add_child(camera)
+		camera.smashed.connect(_on_grock_camera_smashed)
+	_cameras_total = grock_camera_spots.size()
+
+
+func _on_grock_camera_smashed(camera: GrockCamera) -> void:
+	_cameras_smashed += 1
+	var left := _cameras_total - _cameras_smashed
+	Game.notify("Grock camera smashed: +$%d, the neighbors approve. %s" % [camera.reward,
+		("%d left on the block." % left) if left > 0 else "The block is Grock-free!"])
+	_update_deeds()
+
+
 func _update_deeds() -> void:
 	if phase != Phase.ACTIVISM:
 		Game.set_info("deeds", "")
@@ -282,8 +326,8 @@ func _update_deeds() -> void:
 	var marks := {}
 	for key: String in _deeds:
 		marks[key] = "x" if _deeds[key] else " "
-	Game.set_info("deeds", "Good deeds:  [%s] Fix the water main [F]   [%s] Intercept the supply van   [%s] Tame the strays %d/2 [T]   [%s] Scout the datacenter"
-		% [marks["water"], marks["van"], marks["dogs"], mini(_dogs_tamed, 2), marks["scout"]])
+	Game.set_info("deeds", "Deeds:  [%s] Fix the water main [F]   [%s] Stop the supply van   [%s] Tame the strays %d/2 [T]   [%s] Scout the datacenter   Grock cams %d/%d"
+		% [marks["water"], marks["van"], marks["dogs"], mini(_dogs_tamed, 2), marks["scout"], _cameras_smashed, _cameras_total])
 
 
 func _on_bribe_bought(key: String) -> void:
@@ -312,6 +356,7 @@ func _refill_player() -> void:
 
 func _on_wave_started(number: int, total: int) -> void:
 	phase = Phase.WAVE
+	Sfx.ui(&"jingle_wave", -4.0, "Music")
 	_auto_wave_left = -1.0
 	Game.set_info("wave", "Wave %d/%d" % [number, total])
 	if has_planned_breach():
@@ -323,8 +368,10 @@ func _on_wave_started(number: int, total: int) -> void:
 func _on_wave_cleared(number: int, total: int) -> void:
 	if phase == Phase.LOST:
 		return
+	_waves_cleared = number
 	if number >= total:
 		return  # _on_all_waves_cleared handles the finale
+	Sfx.ui(&"jingle_clear", -4.0, "Music")
 	phase = Phase.BUILD
 	_auto_wave_left = auto_wave_delay
 	Game.district.trust += 0.05
@@ -348,6 +395,8 @@ func _on_all_waves_cleared() -> void:
 	Game.district.water_table = 1.0
 	Game.set_info("wave", "")
 	Game.set_objective("Zone held! Water is flowing and the neighborhood is yours.")
+	_waves_cleared = _spawner.total_waves()
+	get_tree().create_timer(3.0).timeout.connect(_show_end.bind(true))
 
 
 ## Picks `breach_width` adjacent intact panels on a random fence and marks them
@@ -448,6 +497,11 @@ func _on_townsperson_abducted(_person: Townsperson) -> void:
 	Game.set_info("wave", "FROST took a neighbor! Trust falling.")
 
 
+func _show_end(won: bool) -> void:
+	if is_inside_tree():
+		_end_screen.show_result(won, _waves_cleared, _spawner.total_waves())
+
+
 func _on_core_damaged(_amount: float, health: float) -> void:
 	Game.set_info("core", "Green datacenter  %d / %d" % [maxi(ceili(health), 0), int(core.max_health)])
 
@@ -459,3 +513,4 @@ func _on_core_destroyed(_core: Destructible) -> void:
 	Game.district.smog += 0.6
 	Game.set_info("core", "")
 	Game.set_objective("The green datacenter fell. Press [Enter] to retry.")
+	get_tree().create_timer(3.0).timeout.connect(_show_end.bind(false))

@@ -47,6 +47,8 @@ var waypoint_reach := 0.8
 ## Non-empty for bosses: joins group "bosses" and gets the HUD boss bar.
 var boss_name := ""
 
+## Pitch of the gibberish voice played with speak() (0 = silent).
+var voice_pitch := 0.0
 ## Kenney character skin (see CharacterModel / tools/generate_skins.py).
 ## Empty = procedural look (dogs, drones, turrets, pods).
 var outfit := ""
@@ -150,7 +152,15 @@ func speak(text: String, height := -1.0) -> void:
 		_speech_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		add_child(_speech_label)
 	_speech_label.position.y = (body_height + 1.0) if height < 0.0 else height
+	if text != _speech_label.text and not text.is_empty():
+		_babble()
 	_speech_label.text = text
+
+
+## Robotic corporate gibberish in this unit's voice_pitch (bosses, reply guys).
+func _babble() -> void:
+	if voice_pitch > 0.0:
+		Sfx.play(&"babble", aim_point(), -3.0 if not boss_name.is_empty() else -10.0, voice_pitch, 0.04)
 
 
 ## Protects this unit for `duration` seconds (see FIELD_DAMAGE_FACTOR).
@@ -520,6 +530,7 @@ func _die() -> void:
 	_is_dead = true
 	if faction == Faction.HOSTILE and not _defeated_emitted:
 		Game.add_cash(bounty)
+		Game.count("kills")
 	_emit_defeated()
 	_on_death()
 	for group in FACTION_GROUPS:

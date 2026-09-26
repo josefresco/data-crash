@@ -172,13 +172,17 @@ script = ExtResource("11_guard")
 [node name="Dog1" type="CharacterBody3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 0.1, -16)
 script = ExtResource("12_dog")
+territory_radius = 24.0
+territory_center = Vector3(0, 0, -31)
 
 [node name="Dog2" type="CharacterBody3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12, 0.1, -16)
 script = ExtResource("12_dog")
+territory_radius = 24.0
+territory_center = Vector3(0, 0, -31)
 
 [node name="PatrolFelsa" type="CharacterBody3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.2, -46)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 19, 0.2, -17)
 script = ExtResource("14_felsa")
 
 [node name="WaterMain" type="Node3D" parent="."]
@@ -197,10 +201,12 @@ route = Array[Vector3]([Vector3(-2.5, 0.2, 96), Vector3(-2.5, 0.2, -5)])
 [node name="StrayDog1" type="CharacterBody3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 24, 0.1, 31)
 script = ExtResource("12_dog")
+stray = true
 
 [node name="StrayDog2" type="CharacterBody3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 28, 0.1, 29)
 script = ExtResource("12_dog")
+stray = true
 
 [node name="GunShow" type="Node3D" parent="."]
 transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -12, 0, 57)

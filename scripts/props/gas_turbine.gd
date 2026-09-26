@@ -15,6 +15,7 @@ var dismantled := false
 
 var _smoke: GPUParticles3D
 var _glow: StandardMaterial3D
+var _roar: AudioStreamPlayer3D
 
 
 func _init() -> void:
@@ -49,12 +50,18 @@ func _ready() -> void:
 	_glow.emission_energy_multiplier = 3.0
 	Models.cylinder(self, 0.5, 0.2, Vector3(size.x * 0.36, size.y + 9.0, 0.0), _glow, 12)
 	_smoke = Vfx.smoke_column(self, Vector3(size.x * 0.36, size.y + 9.4, 0.0), 2.2)
+	_roar = Sfx.loop(self, &"turbine_loop", -3.0)
 	destroyed.connect(_on_destroyed)
 
 
 ## Datacenter offline: the turbine spins down and stops smoking.
 func shut_down() -> void:
 	is_running = false
+	if _roar:
+		var fade := create_tween()
+		fade.tween_property(_roar, "pitch_scale", 0.3, 2.5)
+		fade.parallel().tween_property(_roar, "volume_db", -40.0, 2.5)
+		fade.tween_callback(_roar.stop)
 	if _smoke:
 		_smoke.emitting = false
 	if _glow:
@@ -62,6 +69,8 @@ func shut_down() -> void:
 
 
 func _on_destroyed(_self: Destructible) -> void:
+	if _roar:
+		_roar.stop()
 	if dismantled:
 		return
 	var at := global_position + Vector3.UP * size.y * 0.5
@@ -78,6 +87,7 @@ func _on_destroyed(_self: Destructible) -> void:
 	parent.add_child(wreck)
 	wreck.global_position = global_position
 	Vfx.fire_patch(wreck, Vector3.UP * 0.3, 2.0)
+	Sfx.loop(wreck, &"fire_loop", 0.0)
 	var smoke := Vfx.smoke_column(wreck, Vector3.UP * 2.0, 2.0)
 	var light := OmniLight3D.new()
 	light.light_color = Color(1.0, 0.5, 0.15)

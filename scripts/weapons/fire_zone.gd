@@ -41,6 +41,7 @@ func _ready() -> void:
 	_light.position.y = 1.0
 	add_child(_light)
 	_flames = Vfx.fire_patch(self, Vector3.UP * 0.1, radius * 0.8)
+	Sfx.loop(self, &"fire_loop", -2.0)
 	Vfx.smoke_column(self, Vector3.UP * 1.5, 1.0)
 
 

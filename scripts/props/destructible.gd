@@ -89,6 +89,13 @@ func shatter(from: Vector3, force: float) -> void:
 	if is_destroyed:
 		return
 	is_destroyed = true
+	if not Engine.is_editor_hint():
+		var cue := &"break_rock"
+		if opacity < 0.99:
+			cue = &"glass_break"
+		elif surface_kind in [&"plates", &"corrugated", &"metal", &"solar", &"chainlink"]:
+			cue = &"break_heavy"
+		Sfx.play(cue, global_position + Vector3.UP * minf(size.y * 0.5, 2.0), 0.0 if size.length() > 4.0 else -6.0)
 	# Deferred: this is often called from physics callbacks (ram contacts), where
 	# adding new bodies to the space is not allowed.
 	_spawn_debris.call_deferred(from, force)

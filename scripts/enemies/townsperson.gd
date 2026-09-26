@@ -118,5 +118,5 @@ func _on_death() -> void:
 func _decorate(_visual_root: Node3D) -> void:
 	# Hard hat and tool belt: this is the repair crew (hi-vis is on the skin).
 	var top := _head_top()
-	_add_box(_anchor(&"head"), Vector3(0.62, 0.14, 0.64), Vector3(0.0, top - 0.02, 0.02), _solid(Color(0.95, 0.8, 0.1)))
+	Models.hat(_anchor(&"head"), &"hardhat", Color(0.95, 0.8, 0.1), top, body_height / 1.8)
 	_add_box(_anchor(&"hips"), Vector3(0.46, 0.1, 0.32), Vector3(0.0, 0.02, 0.0), _solid(Color(0.35, 0.25, 0.15)))

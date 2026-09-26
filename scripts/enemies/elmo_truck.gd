@@ -1,18 +1,19 @@
 class_name ElmoTruck
 extends FelsaCar
-## Boss phase A: Elmo Mushbrains in his armored Felsa Truck. Rams, and every
+## Boss phase A: Elmo Mushbrains in his armored Cyberdouche (a Felsa truck). Rams, and every
 ## few seconds stops to charge a "Beta Feature" shockwave (telegraphed with a
 ## growing ring). EMP only stalls it briefly. Wrecking it forces him out.
 
 signal wrecked(truck: ElmoTruck)
 
+## He Twats while driving, obviously. Every other Twat summons Reply Guys.
 const LINES := [
-	"You can't stop progress. I own progress.",
-	"This datacenter was carbon neutral. In beta.",
-	"Full Self-Ramming is a feature, not a bug.",
-	"Water is a legacy resource.",
-	"I'm literally saving humanity right now.",
-	"Your neighborhood is a rounding error.",
+	"TWAT: 'You can't stop progress. I own progress.'",
+	"TWAT: 'This datacenter was carbon neutral. In beta.'",
+	"TWAT: 'Full Self-Ramming is a feature, not a bug.'",
+	"TWAT: 'Water is a legacy resource.'",
+	"TWAT: 'Posting from the Cyberdouche. Hands-free!'",
+	"TWAT: 'Your neighborhood is a rounding error.'",
 ]
 
 @export var shockwave_interval := 9.0
@@ -30,6 +31,7 @@ var _ring: MeshInstance3D
 
 
 func _init() -> void:
+	voice_pitch = 1.25
 	max_health = 1200.0
 	top_speed = 13.0
 	acceleration = 5.0
@@ -37,9 +39,7 @@ func _init() -> void:
 	wobble = 0.1
 	ram_damage_per_mps = 3.5
 	body_size = Vector3(2.6, 2.0, 6.0)
-	body_color = Color(0.62, 0.64, 0.68)
-	model_path = "res://assets/kenney/cars/truck.glb"
-	model_scale = 2.0
+	body_color = Color(0.6, 0.62, 0.66)  # a bigger, darker Felsa Truck
 	explosion_radius = 7.0
 	explosion_damage = 60.0
 	bounty = 300
@@ -56,6 +56,7 @@ func stun(duration: float) -> void:
 func say(text: String) -> void:
 	if _speech:
 		_speech.text = text
+		_babble()
 
 
 func _ready() -> void:
@@ -94,6 +95,8 @@ func _physics_process(delta: float) -> void:
 		_line_left = line_interval
 		_line_index = (_line_index + 1) % LINES.size()
 		say(LINES[_line_index])
+		if _line_index % 2 == 1:
+			ReplyGuy.summon(self, 2)
 
 	if _charge_left > 0.0:
 		_charge_left -= delta

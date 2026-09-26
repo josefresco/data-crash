@@ -12,6 +12,13 @@ var _prompt: Label
 var _info_box: VBoxContainer
 var _info := {}
 var _player: Player
+var _toasts: VBoxContainer
+var _tip_panel: PanelContainer
+var _tip_label: Label
+var _tip_queue: Array[String] = []
+var _tip_left := 0.0
+
+const TIP_SECONDS := 9.0
 
 
 func _ready() -> void:
@@ -47,17 +54,48 @@ func _ready() -> void:
 	# so a wrapped objective pushes the rest down instead of overlapping.
 	_info_box = VBoxContainer.new()
 	root.add_child(_info_box)
-	_place(_info_box, Control.PRESET_CENTER_TOP, Rect2(-500, 20, 1000, 0))
+	# 860 px keeps clear of the meters (left) and the status block (right).
+	_place(_info_box, Control.PRESET_CENTER_TOP, Rect2(-430, 20, 860, 0))
 	_objective = _make_label(_info_box, 22, HORIZONTAL_ALIGNMENT_CENTER)
 	_objective.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_objective.custom_minimum_size = Vector2(1000, 0)
+	_objective.custom_minimum_size = Vector2(860, 0)
 	for key: String in ["deeds", "boss", "wave", "core", "build", "bribe", "notice"]:
 		var line := _make_label(_info_box, 18, HORIZONTAL_ALIGNMENT_CENTER)
+		line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		line.custom_minimum_size = Vector2(860, 0)
 		line.visible = false
 		_info[key] = line
 
 	_prompt = _make_label(root, 22, HORIZONTAL_ALIGNMENT_CENTER)
 	_place(_prompt, Control.PRESET_CENTER_BOTTOM, Rect2(-300, -80, 600, 40))
+
+	# Feedback toasts stack on the right under the status block.
+	_toasts = VBoxContainer.new()
+	_toasts.alignment = BoxContainer.ALIGNMENT_BEGIN
+	root.add_child(_toasts)
+	_place(_toasts, Control.PRESET_TOP_RIGHT, Rect2(-460, 150, 440, 0))
+
+	# One contextual tip at a time, bottom-left, queued.
+	_tip_panel = PanelContainer.new()
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.05, 0.12, 0.08, 0.82)
+	style.border_color = Color(0.45, 0.95, 0.55)
+	style.border_width_left = 4
+	style.content_margin_left = 14
+	style.content_margin_right = 14
+	style.content_margin_top = 10
+	style.content_margin_bottom = 10
+	style.corner_radius_top_right = 6
+	style.corner_radius_bottom_right = 6
+	_tip_panel.add_theme_stylebox_override("panel", style)
+	_tip_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(_tip_panel)
+	_place(_tip_panel, Control.PRESET_BOTTOM_LEFT, Rect2(20, -190, 470, 0))
+	_tip_panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	_tip_label = _make_label(_tip_panel, 17, HORIZONTAL_ALIGNMENT_LEFT)
+	_tip_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_tip_label.custom_minimum_size = Vector2(440, 0)
+	_tip_panel.visible = false
 
 	var crosshair := _make_label(root, 24, HORIZONTAL_ALIGNMENT_CENTER)
 	crosshair.text = "+"
@@ -66,11 +104,14 @@ func _ready() -> void:
 	Game.cash_changed.connect(func(_c: int) -> void: _refresh_status())
 	Game.objective_changed.connect(func(text: String) -> void: _objective.text = text)
 	Game.info_changed.connect(_on_info_changed)
+	Game.notice.connect(show_toast)
+	Game.tip_shown.connect(func(text: String) -> void: _tip_queue.append(text))
 	_objective.text = Game.objective
 	_connect_player.call_deferred()
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	_update_tip(delta)
 	var district := Game.district
 	if district == null:
 		return
@@ -88,6 +129,42 @@ func _connect_player() -> void:
 	_player.prompt_changed.connect(func(text: String) -> void: _prompt.text = text)
 	_player.weapon_changed.connect(func(_w: Weapon) -> void: _refresh_status())
 	_refresh_status()
+
+
+## Pops a feedback line on the right that fades after `seconds`.
+func show_toast(text: String, seconds := 5.0) -> void:
+	var label := _make_label(_toasts, 19, HORIZONTAL_ALIGNMENT_RIGHT)
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	label.custom_minimum_size = Vector2(440, 0)
+	label.text = text
+	label.modulate = Color(1.0, 0.95, 0.6)
+	while _toasts.get_child_count() > 4:
+		var oldest := _toasts.get_child(0)
+		_toasts.remove_child(oldest)
+		oldest.queue_free()
+	var tween := label.create_tween()
+	tween.tween_interval(seconds)
+	tween.tween_property(label, "modulate:a", 0.0, 0.6)
+	tween.tween_callback(label.queue_free)
+
+
+## The tip currently on screen ("" when none). Tests read this.
+func current_tip() -> String:
+	return _tip_label.text if _tip_panel.visible else ""
+
+
+func _update_tip(delta: float) -> void:
+	if _tip_panel.visible:
+		_tip_left -= delta
+		if _tip_left > 0.0:
+			return
+		_tip_panel.visible = false
+	if _tip_queue.is_empty():
+		return
+	_tip_label.text = "TIP  " + _tip_queue.pop_front()
+	_tip_left = TIP_SECONDS if _tip_queue.is_empty() else TIP_SECONDS * 0.7
+	_tip_panel.visible = true
+	Sfx.ui(&"tip")
 
 
 func _refresh_status() -> void:

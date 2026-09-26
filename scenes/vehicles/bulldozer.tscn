@@ -45,6 +45,7 @@ mass = 5000.0
 center_of_mass_mode = 1
 center_of_mass = Vector3(0, 0.4, 0)
 script = ExtResource("1_car")
+engine_cue = &"dozer_loop"
 max_engine_force = 7000.0
 max_brake = 80.0
 max_steer = 0.45

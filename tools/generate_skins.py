@@ -60,6 +60,19 @@ OUTFITS = {
     "crapya": ((0.1, 0.14, 0.26), "shirt", (0.08, 0.08, 0.1), (0.1, 0.1, 0.1), (0.3, 0.9, 0.6)),
     "vendor": ((0.36, 0.32, 0.2), "shirt", (0.3, 0.28, 0.22), (0.3, 0.2, 0.12), None),
     "foreman": ((1.0, 0.55, 0.1), "skin", (0.25, 0.3, 0.42), (0.35, 0.25, 0.15), (0.95, 0.95, 0.9)),
+    # Elmo's Twatter reply guys: faded black fan tee, khakis, white sneakers.
+    "reply_guy": ((0.16, 0.16, 0.18), "skin", (0.62, 0.56, 0.42), (0.95, 0.95, 0.95), (0.85, 0.85, 0.9)),
+}
+
+# Outfits that ignore TONES: reply guys are all very pale (basement tan).
+TONE_OVERRIDES = {
+    "reply_guy": [
+        ((1.0, 0.9, 0.86), (0.35, 0.25, 0.15)),
+        ((0.99, 0.92, 0.9), (0.55, 0.4, 0.22)),
+        ((1.0, 0.88, 0.84), (0.2, 0.15, 0.1)),
+        ((0.98, 0.9, 0.87), (0.7, 0.55, 0.3)),
+        ((1.0, 0.91, 0.88), (0.4, 0.3, 0.2)),
+    ],
 }
 
 
@@ -129,7 +142,7 @@ def main():
     base_rgb = np.asarray(Image.open(BASE).convert("RGB"), dtype=np.float32)
     count = 0
     for name, outfit in OUTFITS.items():
-        for index, tone in enumerate(TONES):
+        for index, tone in enumerate(TONE_OVERRIDES.get(name, TONES)):
             rgb = build(base_rgb, outfit, tone)
             image = Image.fromarray(rgb.astype(np.uint8)).resize((SIZE, SIZE), Image.LANCZOS)
             image.save(OUT / f"{name}_{index}.png", optimize=True)

@@ -65,8 +65,7 @@ func _decorate(_visual_root: Node3D) -> void:
 	_shield = _add_box(_anchor(&"chest"), Vector3(0.9, 1.3, 0.08), Vector3(-0.1, -0.35, -0.4), shield_mat)
 	var navy := _solid(Color(0.05, 0.08, 0.2))
 	var top := _head_top()
-	_add_box(_anchor(&"head"), Vector3(0.6, 0.12, 0.62), Vector3(0.0, top - 0.03, 0.02), navy)  # cap
-	_add_box(_anchor(&"head"), Vector3(0.58, 0.03, 0.24), Vector3(0.0, top - 0.09, -0.38), navy)  # brim
+	Models.hat(_anchor(&"head"), &"police", navy.albedo_color, top, body_height / 1.8)
 
 
 func _attack(victim: Node3D) -> void:
@@ -78,3 +77,4 @@ func _attack(victim: Node3D) -> void:
 	if victim.has_method("apply_slow"):
 		victim.call(&"apply_slow", taser_slow, taser_slow_duration)
 	Fx.tracer(get_parent(), from, _aim_point_of(victim), Color(0.5, 0.8, 1.0), 0.02, 0.15)
+	Sfx.play(&"zap", from, -6.0, 1.4)

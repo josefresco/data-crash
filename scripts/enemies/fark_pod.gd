@@ -35,6 +35,7 @@ var _line_left := 0.0
 
 
 func _init() -> void:
+	voice_pitch = 0.85
 	max_health = 1100.0
 	move_speed = 2.5
 	sight_range = 30.0

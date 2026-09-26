@@ -17,6 +17,7 @@ var _label: Label3D
 
 
 func _ready() -> void:
+	add_to_group("scout_points")
 	var ring := TorusMesh.new()
 	ring.inner_radius = radius - 0.15
 	ring.outer_radius = radius

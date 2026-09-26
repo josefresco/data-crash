@@ -57,6 +57,7 @@ func _physics_process(delta: float) -> void:
 			triggered = triggered or distance <= 1.5
 	if not triggered:
 		return
+	Sfx.play(&"emp", global_position, -2.0)
 
 	for enemy in victims:
 		enemy.stun(stun_duration)

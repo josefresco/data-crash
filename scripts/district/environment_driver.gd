@@ -55,6 +55,7 @@ var _notice_left := 0.0
 
 
 func _ready() -> void:
+	add_to_group("environment_drivers")
 	quality = _load_quality()
 
 
@@ -276,9 +277,21 @@ func _load_quality() -> Quality:
 
 
 func _save_quality() -> void:
+	save_quality(quality as int)
+
+
+## Saved quality index (High when nothing is saved). Used by the settings menu.
+static func saved_quality() -> int:
+	var config := ConfigFile.new()
+	if config.load(SETTINGS_PATH) != OK:
+		return Quality.HIGH
+	return clampi(int(config.get_value("graphics", "quality", Quality.HIGH)), 0, QUALITY_NAMES.size() - 1)
+
+
+static func save_quality(index: int) -> void:
 	var config := ConfigFile.new()
 	config.load(SETTINGS_PATH)  # keep any other sections; a missing file is fine
-	config.set_value("graphics", "quality", quality as int)
+	config.set_value("graphics", "quality", index)
 	var err := config.save(SETTINGS_PATH)
 	if err != OK:
 		push_warning("Couldn't save graphics settings (error %d)" % err)

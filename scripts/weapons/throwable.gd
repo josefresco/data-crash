@@ -112,10 +112,12 @@ func _impact(body: Variant) -> void:
 			blast.global_position = point
 			blast.detonate()
 		&"molotov":
+			Sfx.play(&"bottle", point, 0.0)
 			var fire := FireZone.new()
 			get_parent().add_child(fire)
 			fire.global_position = _ground_below(point)
 		_:
+			Sfx.play(&"hit_wood", point, -4.0)
 			var victim := body as Node
 			if is_instance_valid(victim) and victim is Enemy:
 				(victim as Enemy).apply_damage(damage, point, &"impact")

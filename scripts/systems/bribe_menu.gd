@@ -50,10 +50,12 @@ func buy(index: int) -> bool:
 	var offer: Dictionary = OFFERS[index]
 	var key: String = offer["key"]
 	if Game.has_bribe(key) or Game.cash < int(offer["cost"]):
+		Sfx.ui(&"error", -4.0)
 		return false
 	Game.add_cash(-int(offer["cost"]))
 	Game.bribes[key] = true
 	bribe_bought.emit(key)
+	Sfx.ui(&"cash")
 	set_open(false)
 	return true
 
@@ -61,6 +63,7 @@ func buy(index: int) -> bool:
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("bribe_menu"):
 		set_open(not is_open)
+		Sfx.ui(&"open" if is_open else &"close", -4.0)
 		get_viewport().set_input_as_handled()
 		return
 	if not is_open:

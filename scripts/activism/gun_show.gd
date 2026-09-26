@@ -12,7 +12,7 @@ signal purchased(item: String)
 
 
 func _ready() -> void:
-	add_to_group("vendors")
+	add_to_group("interactables")
 	var wood := Models.mat(Color(0.5, 0.35, 0.22))
 	var cloth := Models.mat(Color(0.2, 0.35, 0.25))
 	Models.box(self, Vector3(3.0, 0.9, 1.0), Vector3(0.0, 0.45, 0.0), wood)
@@ -47,18 +47,30 @@ func offer_text(player: Player) -> String:
 	return "[E] Gun show: grenades x%d $%d" % [grenades_per_pack, grenade_cost]
 
 
+func interact(player: Player) -> void:
+	buy(player)
+
+
 func buy(player: Player) -> bool:
 	var gun := player.weapon_named("Machine gun")
 	if gun and not gun.owned:
 		if Game.cash < machine_gun_cost:
+			Sfx.ui(&"error", -4.0)
+			Game.notify("Not enough cash: the machine gun costs $%d. Deeds, turbines, and Grock cameras pay." % machine_gun_cost, 3.0)
 			return false
 		Game.add_cash(-machine_gun_cost)
 		player.unlock_weapon("Machine gun")
+		Sfx.ui(&"cash")
+		Game.notify("Machine gun bought. Q switches to it. Come back for grenades.")
 		purchased.emit("Machine gun")
 		return true
 	if Game.cash < grenade_cost:
+		Sfx.ui(&"error", -4.0)
+		Game.notify("Not enough cash: grenades cost $%d." % grenade_cost, 3.0)
 		return false
 	Game.add_cash(-grenade_cost)
 	player.unlock_weapon("Grenades", grenades_per_pack)
+	Sfx.ui(&"cash")
+	Game.notify("+%d grenades. Throw with left click; they bounce, then blow." % grenades_per_pack)
 	purchased.emit("Grenades")
 	return true

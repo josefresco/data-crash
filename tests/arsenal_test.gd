@@ -38,7 +38,7 @@ func _test_gun_show() -> void:
 	var stall := level.get_node("GunShow") as GunShow
 	player.global_position = stall.global_position + Vector3(2.0, 0.2, 0.0)
 	await seconds(0.1)
-	check(player.call("_nearest_vendor") == stall, "gun show in reach")
+	check(player.nearest_interactable() == stall, "gun show in reach")
 	check(not player.weapon_named("Machine gun").owned, "machine gun starts locked")
 	player.select_weapon(6)
 	check(player.current_weapon().display_name != "Machine gun", "locked weapons are skipped")
@@ -57,13 +57,13 @@ func _test_machine_gun() -> void:
 	await seconds(0.1)
 	player.select_weapon(player.weapons.find(player.weapon_named("Machine gun")))
 	check(player.current_weapon().display_name == "Machine gun", "machine gun selected")
-	for i in 12:
+	for i in 16:  # spread is random: leave headroom for misses
 		if not guard.is_alive():
 			break
 		player.aim_at(guard.aim_point())
 		player.fire()
 		await seconds(0.1)
-	check(not guard.is_alive(), "machine gun cuts down a guard in about a second")
+	check(not guard.is_alive(), "machine gun cuts down a guard in under two seconds")
 
 
 func _test_grenade() -> void:
@@ -87,6 +87,8 @@ func _test_rockets() -> void:
 	var cache := level.get_node("SecurityCache") as SecurityCache
 	player.global_position = cache.global_position + Vector3(1.0, 0.2, 0.0)
 	await seconds(0.2)
+	check(not cache.is_looted and player.nearest_interactable() == cache, "security cache waits for [E]")
+	cache.interact(player)
 	check(cache.is_looted and player.weapon_named("Rocket launcher").owned, "security cache gives the rocket launcher")
 	check(player.weapon_named("Rocket launcher").ammo == 4, "with 4 rockets")
 

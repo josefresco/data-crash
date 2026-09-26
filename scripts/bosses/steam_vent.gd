@@ -113,5 +113,7 @@ func _hurt(delta: float) -> void:
 func _set_jet(intensity: float) -> void:
 	if _jet == null:
 		return
+	if intensity > 0.0 and not _jet.emitting:
+		Sfx.play(&"crunch" if crusher else &"hiss_loop", global_position + Vector3.UP * 2.0, -4.0)
 	_jet.emitting = intensity > 0.0
 	_jet.amount_ratio = maxf(intensity, 0.01)

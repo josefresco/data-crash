@@ -38,6 +38,144 @@ static func glass(color: Color) -> StandardMaterial3D:
 	return material
 
 
+## Shared emissive material: lamps, signage, indicator lights.
+static func glow(color: Color, energy := 2.0) -> StandardMaterial3D:
+	var key := "glow/%s/%.2f" % [color.to_html(), energy]
+	if not _materials.has(key):
+		var material := StandardMaterial3D.new()
+		material.albedo_color = color
+		material.emission_enabled = true
+		material.emission = color
+		material.emission_energy_multiplier = energy
+		_materials[key] = material
+	return _materials[key]
+
+
+## Side-profile extrusion: `profile` is a closed polygon of (z, y) points
+## (y up, -Z forward), extruded `width` meters along X and centered on x = 0.
+## Flat-shaded, for angular shapes like the Felsa Cyberdouche.
+static func extrude(parent: Node3D, profile: PackedVector2Array, width: float, material: Material,
+		at := Vector3.ZERO) -> MeshInstance3D:
+	var tool := SurfaceTool.new()
+	tool.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var half := width * 0.5
+	var count := profile.size()
+	# Signed area > 0: counter-clockwise with z right and y up.
+	var area := 0.0
+	for i in count:
+		var a := profile[i]
+		var b := profile[(i + 1) % count]
+		area += a.x * b.y - b.x * a.y
+	var ccw := area > 0.0
+	var tris := Geometry2D.triangulate_polygon(profile)
+	for side in [-half, half]:
+		for i in range(0, tris.size(), 3):
+			var face := PackedVector3Array()
+			for k in 3:
+				var p := profile[tris[i + k]]
+				face.append(Vector3(side, p.y, p.x))
+			_add_face(tool, face, Vector3(signf(side), 0.0, 0.0))
+	for i in count:
+		var a := profile[i]
+		var b := profile[(i + 1) % count]
+		var d := b - a
+		var out := Vector3(0.0, -d.x, d.y) * (1.0 if ccw else -1.0)
+		_add_face(tool, PackedVector3Array([Vector3(-half, a.y, a.x), Vector3(half, a.y, a.x), Vector3(half, b.y, b.x)]), out)
+		_add_face(tool, PackedVector3Array([Vector3(-half, a.y, a.x), Vector3(half, b.y, b.x), Vector3(-half, b.y, b.x)]), out)
+	var node := MeshInstance3D.new()
+	node.mesh = tool.commit()
+	node.material_override = material
+	node.position = at
+	parent.add_child(node)
+	return node
+
+
+## Low-poly headwear sized for the Kenney character head (about 0.6 m wide at
+## body height 1.8). `top` is the top of the head relative to `parent` (the
+## head anchor); `scale` follows the character's height. -Z is the face.
+## Kinds: cap (baseball cap), police (peaked cap), hardhat, helmet (tactical,
+## with a glowing visor in `accent`).
+static func hat(parent: Node3D, kind: StringName, color: Color, top: float, scale := 1.0,
+		accent := Color(0.4, 0.8, 1.0)) -> Node3D:
+	var root := Node3D.new()
+	root.position = Vector3(0.0, top, 0.02)
+	root.scale = Vector3.ONE * scale
+	parent.add_child(root)
+	var cloth := mat(color, &"cloth")
+	var shell := mat(color, &"paint")
+	match kind:
+		&"cap":
+			_dome(root, 0.33, 0.2, Vector3(0.0, -0.1, 0.0), cloth)
+			var brim := _disc(root, 0.3, 0.025, Vector3(0.0, -0.1, -0.2), cloth)
+			brim.scale = Vector3(0.95, 1.0, 0.75)
+			brim.rotation.x = deg_to_rad(-8.0)
+			cylinder(root, 0.035, 0.03, Vector3(0.0, 0.1, 0.0), cloth, 8)  # button
+		&"police":
+			var crown := CylinderMesh.new()
+			crown.top_radius = 0.37
+			crown.bottom_radius = 0.31
+			crown.height = 0.2
+			crown.radial_segments = 16
+			var node := MeshInstance3D.new()
+			node.mesh = crown
+			node.material_override = cloth
+			node.position = Vector3(0.0, 0.0, 0.0)
+			node.scale = Vector3(1.0, 1.0, 1.05)
+			root.add_child(node)
+			cylinder(root, 0.318, 0.06, Vector3(0.0, -0.07, 0.0), mat(Color(0.05, 0.05, 0.06), &"cloth"), 16)  # band
+			var peak := _disc(root, 0.26, 0.022, Vector3(0.0, -0.1, -0.24), mat(Color(0.04, 0.04, 0.05), &"paint"))
+			peak.scale = Vector3(1.0, 1.0, 0.55)
+			peak.rotation.x = deg_to_rad(-14.0)
+			box(root, Vector3(0.1, 0.08, 0.02), Vector3(0.0, 0.0, -0.33), mat(Color(0.95, 0.8, 0.3), &"metal"))  # badge
+		&"hardhat":
+			_dome(root, 0.34, 0.24, Vector3(0.0, -0.1, 0.0), shell)
+			_disc(root, 0.4, 0.025, Vector3(0.0, -0.1, -0.03), shell).scale = Vector3(1.0, 1.0, 1.1)
+			var ridge := box(root, Vector3(0.08, 0.05, 0.56), Vector3(0.0, 0.12, 0.0), shell)
+			ridge.scale = Vector3(1.0, 1.0, 1.0)
+		&"helmet":
+			var dome := _dome(root, 0.38, 0.3, Vector3(0.0, -0.14, 0.02), mat(color, &"paint"))
+			dome.scale.z = 1.05
+			# Ear guards down the sides and a visor strip across the eyes.
+			for x in [-1.0, 1.0]:
+				box(root, Vector3(0.06, 0.2, 0.4), Vector3(x * 0.34, -0.22, 0.04), shell)
+			var visor := box(root, Vector3(0.6, 0.1, 0.04), Vector3(0.0, -0.22, -0.34), glow(accent, 2.5))
+			visor.rotation.x = deg_to_rad(8.0)
+	return root
+
+
+## Flattened hemisphere (hat crowns): radius across, `height` tall, base at `at`.
+static func _dome(parent: Node3D, radius: float, height: float, at: Vector3, material: Material) -> MeshInstance3D:
+	var mesh := SphereMesh.new()
+	mesh.radius = radius
+	mesh.height = radius
+	mesh.is_hemisphere = true
+	mesh.radial_segments = 16
+	mesh.rings = 5
+	var node := MeshInstance3D.new()
+	node.mesh = mesh
+	node.material_override = material
+	node.position = at
+	node.scale = Vector3(1.0, height / radius, 1.0)
+	parent.add_child(node)
+	return node
+
+
+static func _disc(parent: Node3D, radius: float, thickness: float, at: Vector3, material: Material) -> MeshInstance3D:
+	return cylinder(parent, radius, thickness, at, material, 18)
+
+
+## Adds a flat triangle facing `outward` (Godot front faces wind clockwise).
+static func _add_face(tool: SurfaceTool, face: PackedVector3Array, outward: Vector3) -> void:
+	var cross := (face[1] - face[0]).cross(face[2] - face[0])
+	if cross.dot(outward) > 0.0:
+		face = PackedVector3Array([face[0], face[2], face[1]])
+	var normal := outward.normalized()
+	for v in face:
+		tool.set_normal(normal)
+		tool.set_uv(Vector2(v.z + v.x, v.y) * 0.5)
+		tool.add_vertex(v)
+
+
 ## Glossy dark window pane: reflects the sky with screen-space reflections.
 static func window() -> StandardMaterial3D:
 	return mat(Color(0.32, 0.42, 0.52), &"window")

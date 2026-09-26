@@ -11,6 +11,7 @@ var progress := 0.0
 var is_fixed := false
 
 var _spray: GPUParticles3D
+var _hiss: AudioStreamPlayer3D
 
 
 func _ready() -> void:
@@ -32,6 +33,7 @@ func _ready() -> void:
 	valve_mesh.position.y = 0.4
 	add_child(valve_mesh)
 	_spray = Vfx.water_spray(self, Vector3.UP * 0.8)
+	_hiss = Sfx.loop(self, &"hiss_loop", -8.0)
 
 
 func label() -> String:
@@ -46,5 +48,8 @@ func work(delta: float) -> bool:
 	if progress >= 1.0:
 		is_fixed = true
 		_spray.emitting = false
+		if _hiss:
+			_hiss.stop()
+		Sfx.play(&"hit_metal", global_position, 0.0, 0.7)
 		fixed.emit(self)
 	return is_fixed

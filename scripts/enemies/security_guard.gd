@@ -23,7 +23,7 @@ func _init() -> void:
 func _decorate(_visual_root: Node3D) -> void:
 	var dark := _solid(Color(0.06, 0.06, 0.07))
 	var top := _head_top()
-	_add_box(_anchor(&"head"), Vector3(0.6, 0.16, 0.62), Vector3(0.0, top - 0.05, 0.02), dark)  # helmet
+	Models.hat(_anchor(&"head"), &"cap", Color(0.08, 0.08, 0.09), top, body_height / 1.8)
 	_add_box(_anchor(&"chest"), Vector3(0.48, 0.42, 0.36), Vector3(0.0, -0.06, 0.0), dark)  # vest
 	_add_box(_anchor(&"hand_r"), Vector3(0.08, 0.1, 0.75), Vector3(0.0, -0.04, -0.28), dark)  # rifle
 
@@ -40,6 +40,7 @@ func _attack(victim: Node3D) -> void:
 	var query := PhysicsRayQueryParameters3D.create(from, to, SHOT_MASK, [get_rid()])
 	var hit := get_world_3d().direct_space_state.intersect_ray(query)
 	Vfx.muzzle(get_parent(), from + direction * 0.5)
+	Sfx.play(&"guard_gun", from, -6.0)
 	if not hit.is_empty():
 		to = hit["position"]
 		var struck := hit["collider"] as Node

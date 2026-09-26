@@ -31,6 +31,7 @@ var _line_left := 0.0
 
 
 func _init() -> void:
+	voice_pitch = 0.7
 	outfit = "harry"
 	max_health = 400.0
 	move_speed = 0.0

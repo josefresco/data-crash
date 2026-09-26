@@ -70,6 +70,8 @@ func place(index: int, point: Vector3, rotation_steps := 0, no_cost := false) ->
 	var item := _items[index]
 	var at := _snap(point)
 	if not _is_clear(item, at, rotation_steps, no_cost):
+		if not no_cost and Game.cash < int(item["cost"]):
+			Sfx.ui(&"error", -4.0)
 		return null
 	var node: Node3D = (item["kind"] as GDScript).new()
 	node.position = at
@@ -80,6 +82,8 @@ func place(index: int, point: Vector3, rotation_steps := 0, no_cost := false) ->
 	if node is Structure:
 		get_tree().call_group(&"nav_baker", &"request_rebake")
 	structure_placed.emit(node)
+	Game.count("built")
+	Sfx.play(&"place", at, 0.0)
 	_update_info()
 	return node
 
@@ -89,6 +93,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if event.is_action_pressed("build_mode"):
 		set_active(not active)
+		Sfx.ui(&"open" if active else &"close", -4.0)
 		return
 	if not active:
 		return

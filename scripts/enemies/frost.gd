@@ -93,7 +93,6 @@ func _decorate(_visual_root: Node3D) -> void:
 	var armor := _solid(Color(0.15, 0.18, 0.25))
 	var top := _head_top()
 	_add_box(_anchor(&"chest"), Vector3(0.56, 0.5, 0.4), Vector3(0.0, -0.05, 0.0), armor)  # plate carrier
-	_add_box(_anchor(&"head"), Vector3(0.66, 0.34, 0.66), Vector3(0.0, top - 0.16, 0.02), armor)  # helmet
-	# Visor stripe so they read at a distance.
-	_add_box(_anchor(&"head"), Vector3(0.52, 0.08, 0.04), Vector3(0.0, top - 0.26, -0.34), _solid(Color(0.4, 0.8, 1.0)))
+	# Tactical helmet; the glowing visor makes them read at a distance.
+	Models.hat(_anchor(&"head"), &"helmet", armor.albedo_color, top, body_height / 1.8)
 	_add_box(_anchor(&"hand_r"), Vector3(0.14, 0.14, 0.6), Vector3(0.0, -0.05, -0.25), armor)  # capture launcher

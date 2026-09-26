@@ -1,8 +1,22 @@
 class_name FelsaCar
 extends Enemy
-## Unmanned "self-driving" EV that hunts people by ramming them. Steers
+## Felsa Cyberdouche: unmanned "self-driving" EV that hunts people by ramming them. Steers
 ## erratically. An EMP hacks it into a battery fire: it stalls, burns out,
 ## and explodes (hurting whatever is nearby, including its friends).
+## A stainless-steel wedge truck with a red sensor bar (see
+## _build_cyberdouche); subclasses can swap in a Kenney model via model_path.
+
+## Collider floats this far off the ground; visuals are raised to match.
+const CLEARANCE := 0.25
+## Cyberdouche side profile, (z, y) with -Z forward, for a 5.1 m x 1.9 m truck.
+const WEDGE: Array[Vector2] = [
+	Vector2(-2.5, 0.45), Vector2(-2.28, 0.45), Vector2(-2.12, 0.98), Vector2(-1.3, 0.98),
+	Vector2(-1.14, 0.45), Vector2(0.84, 0.45), Vector2(1.0, 0.98), Vector2(1.82, 0.98),
+	Vector2(1.98, 0.45), Vector2(2.55, 0.45), Vector2(2.55, 1.3), Vector2(-0.35, 1.9),
+	Vector2(-2.45, 1.08), Vector2(-2.56, 0.98),
+]
+const WEDGE_LENGTH := 5.1
+const WEDGE_HEIGHT := 1.9
 
 @export var top_speed := 11.0
 @export var acceleration := 6.0
@@ -11,13 +25,13 @@ extends Enemy
 @export var wobble := 0.25
 @export var ram_min_speed := 4.0
 @export var ram_damage_per_mps := 3.0
-@export var body_size := Vector3(1.8, 1.3, 3.8)
+@export var body_size := Vector3(2.0, 1.4, 4.8)
 @export var explosion_radius := 5.0
 @export var explosion_damage := 90.0
 @export var battery_fire_dps := 25.0
-## Kenney Car Kit model shown instead of the box shell (faces +Z; this body
-## drives toward -Z, so it's turned around).
-@export_file("*.glb") var model_path := "res://assets/kenney/cars/sedan-sports.glb"
+## Optional Kenney Car Kit model shown instead of the Cyberdouche (faces +Z;
+## this body drives toward -Z, so it's turned around).
+@export_file("*.glb") var model_path := ""
 @export var model_scale := 1.5
 
 var speed := 0.0
@@ -32,6 +46,7 @@ var _fire_light: OmniLight3D
 ## Game-time clock and recent reversal times, for spotting a car that is wedged.
 var _clock := 0.0
 var _reversals: Array[float] = []
+var _motor: AudioStreamPlayer3D
 
 
 func _init() -> void:
@@ -41,7 +56,7 @@ func _init() -> void:
 	structure_engage_range = 0.0
 	waypoint_reach = 3.0  # a 4 m car can't thread 0.8 m waypoints
 	bounty = 30
-	body_color = Color(0.85, 0.86, 0.9)
+	body_color = Color(0.74, 0.75, 0.77)  # brushed stainless
 	outfit = ""
 
 
@@ -150,6 +165,7 @@ func _handle_collisions() -> void:
 		if _ram_cooldowns.has(id):
 			continue
 		_ram_cooldowns[id] = 1.0
+		Sfx.play(&"car_crash", global_position, -4.0)
 		if not _is_friend(hit) and hit.has_method("apply_damage"):
 			hit.call(&"apply_damage", absf(speed) * ram_damage_per_mps, global_position, &"impact")
 			if hit.has_method("apply_knockback"):
@@ -182,6 +198,9 @@ func _ignite() -> void:
 	add_child(_fire_light)
 	Vfx.fire_patch(self, Vector3.UP * (body_size.y * 0.8), 0.6)
 	Vfx.smoke_column(self, Vector3.UP * (body_size.y + 0.6), 1.2)
+	Sfx.play(&"emp", global_position, -2.0)
+	Sfx.loop(self, &"fire_loop", -6.0)
+	Game.tip("battery_fire", "Battery fire! A hacked Cyberdouche burns out and explodes. Keep your distance, and lure its friends close.")
 
 
 func _on_death() -> void:
@@ -206,42 +225,80 @@ func _play_death() -> void:
 
 
 func _build_body() -> void:
-	var clearance := 0.25
 	var shape := BoxShape3D.new()
 	shape.size = body_size
 	var collider := CollisionShape3D.new()
 	collider.shape = shape
-	collider.position.y = body_size.y * 0.5 + clearance
+	collider.position.y = body_size.y * 0.5 + CLEARANCE
 	add_child(collider)
 
+	# The collider floats CLEARANCE above the ground, so the body origin sits
+	# that far below it: lift the visuals back up or the wheels sink in.
 	_visual = Node3D.new()
+	_visual.position.y = CLEARANCE
 	add_child(_visual)
 	if not model_path.is_empty():
 		_build_model()
-		return
-	# Its own glossy paint: flashes and burn-out darkening recolor it.
-	_material = StandardMaterial3D.new()
-	_material.albedo_color = _base_color()
-	Models.surface(_material, &"paint")
-	var shell := _add_box(_visual, body_size, Vector3(0.0, body_size.y * 0.5 + clearance, 0.0), _material)
-	shell.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
-	_add_box(_visual, Vector3(body_size.x * 0.85, body_size.y * 0.45, body_size.z * 0.45),
-		Vector3(0.0, body_size.y + clearance + body_size.y * 0.2, body_size.z * 0.05), Models.window())
-	# Red "sensor" light bar across the nose (forward is -Z).
-	var glow := StandardMaterial3D.new()
-	glow.albedo_color = Color(1.0, 0.1, 0.1)
-	glow.emission_enabled = true
-	glow.emission = Color(1.0, 0.1, 0.05)
-	glow.emission_energy_multiplier = 2.0
-	_add_box(_visual, Vector3(body_size.x * 0.8, 0.1, 0.05),
-		Vector3(0.0, body_size.y * 0.7 + clearance, -body_size.z * 0.5 - 0.03), glow)
-	var tire := _solid(Color(0.05, 0.05, 0.05))
-	for x in [-1.0, 1.0]:
-		for z in [-1.0, 1.0]:
-			_add_box(_visual, Vector3(0.3, 0.6, 0.6),
-				Vector3(x * body_size.x * 0.5, 0.3, z * body_size.z * 0.32), tire)
+	else:
+		_build_cyberdouche()
 	_decorate(_visual)
 	Models.set_gi_mode(_visual, GeometryInstance3D.GI_MODE_DYNAMIC)
+	_motor = Sfx.loop(self, &"ev_loop", -10.0)
+
+
+func _process(delta: float) -> void:
+	super(delta)
+	if _motor:
+		_motor.pitch_scale = 0.6 + absf(speed) / maxf(top_speed, 1.0) * 0.9
+
+
+## Brushed stainless wedge: extruded side profile, dark glass band, raked
+## windshield, red sensor light bars front and back, chunky wheels. Sized from
+## body_size (the collider), origin at the ground.
+func _build_cyberdouche() -> void:
+	var length := body_size.z * 1.06
+	var width := body_size.x
+	var height := body_size.y + CLEARANCE + 0.25
+	var sz := length / WEDGE_LENGTH
+	var sy := height / WEDGE_HEIGHT
+	var profile := PackedVector2Array()
+	for p in WEDGE:
+		profile.append(Vector2(p.x * sz, p.y * sy))
+	# Its own material: hit flashes and burn-out darkening only touch this truck.
+	_material = StandardMaterial3D.new()
+	Models.surface(_material, &"paint")
+	_material.albedo_color = _base_color()
+	_material.metallic = 0.9
+	_material.roughness = 0.26
+	_material.anisotropy_enabled = true  # brushed steel streaks
+	_material.anisotropy = 0.6
+	var shell := Models.extrude(_visual, profile, width, _material)
+	shell.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	var glass := Models.window()
+	var side := PackedVector2Array([Vector2(-1.42, 1.42), Vector2(-0.45, 1.82), Vector2(1.05, 1.56), Vector2(1.05, 1.36)])
+	var windshield := PackedVector2Array([Vector2(-2.22, 1.19), Vector2(-0.52, 1.905), Vector2(-0.4, 1.905), Vector2(-2.14, 1.16)])
+	for points: PackedVector2Array in [side, windshield]:
+		var scaled := PackedVector2Array()
+		for p in points:
+			scaled.append(Vector2(p.x * sz, p.y * sy + (0.012 if points == windshield else 0.0)))
+		Models.extrude(_visual, scaled, width + (0.03 if points == side else -0.2), glass)
+	# Full-width light bars: red "sensor" bar up front, tail bar in back.
+	var red := Models.glow(Color(1.0, 0.08, 0.05), 3.5)
+	Models.box(_visual, Vector3(width * 0.98, 0.1, 0.06), Vector3(0.0, 1.03 * sy, -2.5 * sz), red)
+	Models.box(_visual, Vector3(width * 0.98, 0.1, 0.06), Vector3(0.0, 1.22 * sy, 2.57 * sz), Models.glow(Color(0.9, 0.05, 0.05), 2.0))
+	# Wheels with flat aero hubcaps.
+	var tire := Models.mat(Color(0.06, 0.06, 0.07), &"rough")
+	var hub := Models.mat(Color(0.3, 0.31, 0.33), &"metal")
+	var radius := 0.44 * sy
+	for z in [-1.71, 1.41]:
+		for x in [-1.0, 1.0]:
+			var wheel := Models.cylinder(_visual, radius, 0.38, Vector3(x * (width * 0.5 - 0.17), radius, z * sz), tire, 16)
+			wheel.rotation.z = PI * 0.5
+			var cap := Models.cylinder(_visual, radius * 0.7, 0.02, Vector3(x * (width * 0.5 + 0.03), radius, z * sz), hub, 6)
+			cap.rotation.z = PI * 0.5
+	# Roof sensor pod (it's "self-driving").
+	Models.box(_visual, Vector3(0.5, 0.12, 0.3), Vector3(0.0, 1.9 * sy + 0.05, -0.3 * sz), Models.mat(Color(0.12, 0.12, 0.14), &"metal"))
+	Models.box(_visual, Vector3(0.3, 0.03, 0.05), Vector3(0.0, 1.9 * sy + 0.12, -0.46 * sz), red)
 
 
 ## Kenney car body with its own copy of the palette material, so flashes and
@@ -265,10 +322,8 @@ func _build_model() -> void:
 	glow.emission_energy_multiplier = 2.5
 	_add_box(_visual, Vector3(bounds.size.x * 0.7, 0.08, 0.05),
 		Vector3(0.0, bounds.size.y * 0.55, bounds.position.z - 0.03), glow)
-	_decorate(_visual)
-	Models.set_gi_mode(_visual, GeometryInstance3D.GI_MODE_DYNAMIC)
 
 
 func _base_color() -> Color:
 	# Models carry their own paint in the palette texture.
-	return Color.WHITE if not model_path.is_empty() else super()
+	return Color.WHITE if not model_path.is_empty() else body_color

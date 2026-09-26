@@ -91,6 +91,7 @@ func detonate() -> void:
 			rigid.apply_central_impulse(direction * push_speed * falloff * rigid.mass)
 
 	Vfx.explosion(get_tree().current_scene, origin, radius)
+	Sfx.play(&"explosion_big" if radius >= 6.5 else &"explosion", origin, 4.0 if radius >= 6.5 else 2.0, 1.0, 0.1)
 	spawn_flash(get_tree().current_scene, origin, radius * 0.6, Color(1.0, 0.6, 0.15), false)
 	detonated.emit(origin)
 	queue_free()

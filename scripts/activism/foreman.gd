@@ -12,7 +12,7 @@ var _refresh_left := 0.0
 func _ready() -> void:
 	var rig := CharacterModel.create("foreman")
 	add_child(rig)
-	Models.box(rig.anchor(&"head"), Vector3(0.62, 0.14, 0.64), Vector3(0.0, 0.54, 0.02), Models.mat(Color(0.95, 0.95, 0.9)))  # white hard hat
+	Models.hat(rig.anchor(&"head"), &"hardhat", Color(0.95, 0.95, 0.9), 0.54)  # white hard hat
 	_label = Label3D.new()
 	_label.pixel_size = 0.01
 	_label.outline_size = 8

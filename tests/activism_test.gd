@@ -55,12 +55,16 @@ func _test_deeds() -> void:
 				marked += 1
 	check(marked == 3, "scouting marks all cooling units (%d)" % marked)
 
-	# Strays: treats.
-	for dog_name in ["StrayDog1", "StrayDog2"]:
-		var dog := level.get_node(dog_name) as Dog
-		player.global_position = dog.global_position + Vector3(1.5, 0.2, 0)
+	# Strays: treats. Approach each from the side away from the other one:
+	# they wander, and a treat goes to the nearest dog.
+	var strays: Array[Dog] = [level.get_node("StrayDog1") as Dog, level.get_node("StrayDog2") as Dog]
+	for i in 2:
+		var dog := strays[i]
+		var away := dog.global_position - strays[1 - i].global_position
+		away.y = 0.0
+		player.global_position = dog.global_position + away.normalized() * 1.5 + Vector3.UP * 0.2
 		await seconds(0.1)
-		check(player.give_treat(), "treat for %s" % dog_name)
+		check(player.give_treat() and dog.faction == Enemy.Faction.ALLY, "treat for %s" % dog.name)
 
 	# Supply van: take it out.
 	cash = Game.cash

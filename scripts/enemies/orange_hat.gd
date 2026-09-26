@@ -42,6 +42,8 @@ func persuade() -> bool:
 		return false
 	if Game.district:
 		Game.district.trust += trust_gain_on_persuade
+	Game.count("talked_down")
+	Sfx.ui(&"confirm", -6.0)
 	_flash(Color(0.6, 1.0, 0.6))
 	_go_home()
 	return true
@@ -115,8 +117,7 @@ func _on_death() -> void:
 func _decorate(_visual_root: Node3D) -> void:
 	var orange := _solid(Color(1.0, 0.45, 0.05))
 	var top := _head_top()
-	_add_box(_anchor(&"head"), Vector3(0.6, 0.16, 0.62), Vector3(0.0, top - 0.02, 0.02), orange)  # cap
-	_add_box(_anchor(&"head"), Vector3(0.58, 0.03, 0.26), Vector3(0.0, top - 0.09, -0.4), orange)  # brim
+	Models.hat(_anchor(&"head"), &"cap", orange.albedo_color, top, body_height / 1.8)
 	var hand := _anchor(&"hand_r")
 	_add_box(hand, Vector3(0.05, 1.3, 0.05), Vector3(0.0, 0.5, 0.0), _solid(Color(0.5, 0.35, 0.2)))  # sign pole
 	_add_box(hand, Vector3(0.8, 0.5, 0.04), Vector3(0.0, 1.2, 0.0), _solid(Color(0.95, 0.95, 0.9)))  # sign

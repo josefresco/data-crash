@@ -3,7 +3,7 @@ class_name NeighborhoodBuilder
 extends Node3D
 ## Procedural suburb south of the datacenter: a main road running north to the
 ## fence, two cross streets lined with houses, a park, and a construction site.
-## Houses, parked cars, and tree trunks get static colliders (layer 1), so the
+## Houses and tree trunks get static colliders (layer 1), so the
 ## navmesh routes around them. Deterministic via `layout_seed`.
 
 @export var layout_seed := 7
@@ -35,6 +35,7 @@ const FLOWER_MODELS: Array[String] = ["flower_redA", "flower_yellowA", "flower_p
 const PARKED_CARS: Array[String] = ["sedan", "suv", "hatchback-sports", "taxi", "van", "suv-luxury"]
 ## Kenney Car Kit is about 1/1.45 real size.
 const CAR_SCALE := 1.45
+const CAR_SCENE := preload("res://scenes/vehicles/car.tscn")
 
 const CAR_COLORS: Array[Color] = [
 	Color(0.7, 0.15, 0.15), Color(0.2, 0.3, 0.6), Color(0.85, 0.85, 0.8), Color(0.2, 0.2, 0.22),
@@ -155,20 +156,24 @@ func _add_house(at: Vector3, facing_side: float) -> void:
 	Models.box(mailbox, Vector3(0.25, 0.25, 0.45), Vector3(0.0, 1.05, 0.0), Models.mat(Color(0.2, 0.25, 0.5), &"metal"))
 
 
+## Parked cars are real, drivable Cars (keys in the ignition, this is a nice
+## neighborhood). In the editor they're shown as plain models.
 func _add_parked_car(at: Vector3, yaw: float) -> void:
-	var body := StaticBody3D.new()
-	body.position = at
-	body.rotation.y = yaw
-	add_child(body)
-	var car := Models.model("%scars/%s.glb" % [KENNEY, PARKED_CARS[_rng.randi() % PARKED_CARS.size()]], CAR_SCALE)
-	body.add_child(car)
-	var bounds := Models.model_bounds(car)
-	var shape := BoxShape3D.new()
-	shape.size = bounds.size
-	var collider := CollisionShape3D.new()
-	collider.shape = shape
-	collider.position = bounds.get_center()
-	body.add_child(collider)
+	var path := "%scars/%s.glb" % [KENNEY, PARKED_CARS[_rng.randi() % PARKED_CARS.size()]]
+	if Engine.is_editor_hint():
+		var preview := Models.model(path, CAR_SCALE)
+		preview.position = at
+		preview.rotation.y = yaw
+		add_child(preview)
+		return
+	var car := CAR_SCENE.instantiate() as Node3D
+	car.set(&"model_path", path)
+	car.set(&"model_scale", CAR_SCALE)
+	car.set(&"model_offset", Vector3(0.0, 0.05, 0.0))
+	car.set(&"fit_to_model", true)
+	car.position = at + Vector3.UP * 0.3
+	car.rotation.y = yaw
+	add_child(car)
 
 
 func _add_tree(at: Vector3, height: float) -> void:

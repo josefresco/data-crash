@@ -1,16 +1,21 @@
 extends Node
 ## Screenshots of bosses and props for visual review: tests/output/gallery_*.png.
 ## Needs a real window (no --headless):
-##   Godot_console.exe --path . res://tests/gallery.tscn
+##   Godot_console.exe --path . res://tests/gallery.tscn [-- only=felsa,parked]
 
 const MAIN_SCENE := preload("res://scenes/levels/test_block.tscn")
 
 var level: Node3D
 var player: Player
+## Sections to capture (user arg only=a,b); empty = all.
+var only: PackedStringArray = []
 
 
 func _ready() -> void:
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://tests/output"))
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("only="):
+			only = arg.trim_prefix("only=").split(",")
 	level = MAIN_SCENE.instantiate()
 	level.set("boss_enabled", false)
 	add_child(level)
@@ -19,6 +24,51 @@ func _ready() -> void:
 	for node in get_tree().get_nodes_in_group("hostiles"):
 		if not node is SentryTurret:
 			(node as Enemy).apply_damage(9999.0, Vector3.ZERO)
+
+	if _want("felsa"):
+		var truck := FelsaCar.new()
+		truck.position = Vector3(-84, -FelsaCar.CLEARANCE, 40)
+		level.add_child(truck)
+		truck.set_physics_process(false)
+		var elmo := ElmoTruck.new()
+		elmo.position = Vector3(-84, -FelsaCar.CLEARANCE, 52)
+		level.add_child(elmo)
+		elmo.set_physics_process(false)
+		await _wait(1.0)
+		await _shot("felsa", Vector3(-78, 0.2, 35), Vector3(-84, 1.0, 40))
+		await _shot("felsa_side", Vector3(-76, 0.2, 46), Vector3(-84, 1.2, 46))
+		truck.queue_free()
+		elmo.queue_free()
+	if _want("people"):
+		# Hats and Elmo's Twatter crowd, lined up and frozen.
+		var kinds: Array[GDScript] = [SecurityGuard, Police, Frost, OrangeHat, Townsperson, ReplyGuy, ReplyGuy, ElmoOnFoot]
+		var lineup: Array[Enemy] = []
+		for i in kinds.size():
+			var unit := kinds[i].new() as Enemy
+			unit.position = Vector3(-90.0 + i * 1.8, 0.1, 60.0)
+			level.add_child(unit)
+			unit.set_physics_process(false)
+			unit.rotation.y = PI
+			lineup.append(unit)
+		await _wait(1.0)
+		await _shot("people", Vector3(-84, 0.2, 67), Vector3(-84, 1.2, 60))
+		await _shot("hats", Vector3(-88, 0.2, 63.5), Vector3(-88, 1.6, 60))
+		for unit in lineup:
+			unit.queue_free()
+	if _want("parked"):
+		await _shot("parked", Vector3(-30, 0.2, 21), Vector3(-22, 0.8, 26.5))
+		await _shot("parked2", Vector3(46, 0.2, 21), Vector3(54, 0.8, 26.5))
+	if _want("datacenter"):
+		await _shot("dc_front", Vector3(14, 0.2, -4), Vector3(0, 5.0, -26))
+		await _shot("dc_side", Vector3(40, 6.0, -14), Vector3(8, 4.0, -32))
+		await _shot("dc_back", Vector3(-20, 0.2, -58), Vector3(-2, 5.0, -38))
+		await _shot("dc_cooling", Vector3(21, 0.2, -18), Vector3(15, 1.5, -28))
+		await _shot("dc_dock", Vector3(-20, 0.2, -22), Vector3(-12, 2.0, -34))
+	if _want("cache"):
+		await _shot("cache", Vector3(-14, 0.2, -40), Vector3(-18, 0.8, -44))
+	if not only.is_empty() and not _want("rest"):
+		get_tree().quit()
+		return
 
 	# Car kit lineup (labels above), each turned to show its +Z side to the camera.
 	var names := ["sedan", "sedan-sports", "suv", "van", "delivery", "police", "truck", "tractor-shovel", "garbage-truck", "hatchback-sports"]
@@ -79,6 +129,10 @@ func _ready() -> void:
 	await _wait(1.0)
 	await _shot("boss_harry", Vector3(10, 0.2, 90), Vector3(18, 1.5, 97))
 	get_tree().quit()
+
+
+func _want(section: String) -> bool:
+	return only.is_empty() or section in only
 
 
 func _shot(label: String, from: Vector3, look_at: Vector3) -> void:

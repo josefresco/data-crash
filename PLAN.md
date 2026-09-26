@@ -74,7 +74,7 @@ Each district or zone follows a distinct three-phase progression loop:
 #### Elmo Mushbrains
 
 * **Role:** Rogue Tech CEO & Hype-Man.
-* **Encounters:** Drives an armored **Felsa Truck** around the arena trying to ram the player while broadcasting corporate monologues. Deploys "Beta Feature" shockwaves. On foot (Phase 2), he uses a flamethrower and occasionally pauses to post updates, leaving himself vulnerable.
+* **Encounters:** Drives an armored **Cyberdouche** (Felsa truck) around the arena, Twatting the whole time, trying to ram the player while broadcasting corporate monologues. Deploys "Beta Feature" shockwaves. On foot (Phase 2), he uses a flamethrower with his phone in the other hand and occasionally pauses to post Twats on Twatter, leaving himself vulnerable; every Twat summons Reply Guys (very pale, very large fans) to fight for him.
 
 #### Fark Suckerbush
 
@@ -107,7 +107,7 @@ Each district or zone follows a distinct three-phase progression loop:
 | **FROST** | Heavy armored tactical agents that abduct townspeople to lower community morale. | Capture launchers, zip-ties, heavy body armor. | Priority target—must be neutralized before kidnapping key NPCs. |
 | **Dogs** | Fast pursuers that tackle and slow down the player. | Bite attacks (low damage, movement slowdown). | Throwing "Good Boy Treats" converts them permanently into friendly neighborhood guardians. |
 | **Orange Hat NPCs** | Misinformed local supporters who protest green builds and block attacks on corporate sites. | Picket signs, blocking vision, forming human chains. | Megaphones, community persuasion buffs, non-lethal distraction items. |
-| **Felsa Cars** | Unmanned, erratic electric vehicles roaming perimeters. | High-speed ramming attacks. | Hackable via EMP/decking tools to cause battery fires or hijack controls. |
+| **Felsa Cyberdouches** | Unmanned, erratic stainless-steel electric trucks roaming perimeters. | High-speed ramming attacks. | Hackable via EMP/decking tools to cause battery fires or hijack controls. |
 
 ---
 

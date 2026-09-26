@@ -1,14 +1,18 @@
 class_name ElmoOnFoot
 extends Enemy
-## Boss phase B: Elmo climbs out of the wreck with a flamethrower. Every so
-## often he stops to post an update, standing still and taking extra damage.
+## Boss phase B: Elmo climbs out of the wreck with a flamethrower in one hand
+## and his phone in the other. He never stops scrolling Twatter. Every so often
+## he stops to post a Twat, standing still and taking extra damage, and each
+## Twat summons Reply Guys to fight for him.
 
 const POSTS := [
-	"Posting: 'Datacenters are actually green if you think about it'",
-	"Posting: 'Engagement is up 400% on this situation'",
-	"Posting: 'Just got attacked by a garden hose. Wild times'",
-	"Posting: 'Concerning.'",
-	"Posting: 'Should I buy this neighborhood?' (poll)",
+	"TWAT: 'Datacenters are actually green if you think about it'",
+	"TWAT: 'Engagement is up 400% on this situation'",
+	"TWAT: 'Just got attacked by a garden hose. Wild times'",
+	"TWAT: 'Concerning.'",
+	"TWAT: 'Should I buy this neighborhood?' (poll)",
+	"TWAT: 'Need backup. Real ones know the address.'",
+	"TWAT: 'Replying to @everyone: help'",
 ]
 const TAUNTS := [
 	"Nobody reads the terms of service!",
@@ -22,6 +26,8 @@ const TAUNTS := [
 @export var post_interval := 10.0
 @export var post_duration := 3.0
 @export var posting_damage_multiplier := 2.5
+## Reply guys per Twat (one more below half health).
+@export var reply_guys_per_post := 2
 
 var is_posting := false
 
@@ -32,6 +38,7 @@ var _phone: MeshInstance3D
 
 
 func _init() -> void:
+	voice_pitch = 1.25
 	outfit = "elmo"
 	max_health = 600.0
 	move_speed = 4.8
@@ -71,16 +78,20 @@ func _physics_process(delta: float) -> void:
 		move_and_slide()
 		if _posting_left <= 0.0:
 			is_posting = false
-			_phone.visible = false
-			_speech.text = TAUNTS.pick_random()
+			var extra := 1 if health < max_health * 0.5 else 0
+			var came := ReplyGuy.summon(self, reply_guys_per_post + extra)
+			_speech.text = ("%d reply guys answered the call!" % came) if came > 0 else TAUNTS.pick_random()
+			if came > 0:
+				Game.tip("reply_guys", "Every Twat Elmo posts summons Reply Guys. They're slow: shoot Elmo while he's typing (2.5x damage), and they log off when he goes down.")
 		return
 	_post_left -= delta
 	if _post_left <= 0.0:
 		_post_left = post_interval
 		_posting_left = post_duration
 		is_posting = true
-		_phone.visible = true
 		_speech.text = POSTS.pick_random()
+		_babble()
+		Sfx.play(&"beep", global_position, 4.0)
 		return
 	super(delta)
 
@@ -91,6 +102,8 @@ func _modify_damage(amount: float, _from: Vector3, _kind: StringName) -> float:
 
 func _attack(victim: Node3D) -> void:
 	var nozzle := global_position + Vector3.UP * 1.2
+	if randf() < 0.3:
+		Sfx.play(&"fire_loop", nozzle, -6.0, 1.3)
 	var facing := (victim.global_position - global_position)
 	facing.y = 0.0
 	facing = facing.normalized()
@@ -119,5 +132,5 @@ func _decorate(_visual_root: Node3D) -> void:
 	screen.albedo_color = Color(0.6, 0.8, 1.0)
 	screen.emission_enabled = true
 	screen.emission = Color(0.5, 0.7, 1.0)
+	# Always on his phone: Twatter's blue glow never leaves his hand.
 	_phone = _add_box(_anchor(&"hand_l"), Vector3(0.1, 0.18, 0.03), Vector3(0.0, 0.08, -0.1), screen)
-	_phone.visible = false
