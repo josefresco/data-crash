@@ -10,6 +10,8 @@ extends Node3D
 @export var main_road_end_z := 148.0
 @export var street_z: Array[float] = [30.0, 70.0, 110.0]
 @export var street_half_length := 76.0
+## The first street runs on out to the side datacenters' front gates.
+@export var access_road_x := 121.0
 @export var road_width := 8.0
 ## House x positions along each street side (mirrored across the main road).
 @export var house_columns: Array[float] = [14.0, 30.0, 46.0, 62.0]
@@ -75,6 +77,9 @@ func build() -> void:
 	for z in range(-6, int(main_road_end_z), 6):
 		Models.box(self, Vector3(0.15, 0.05, 3.0), Vector3(0.0, 0.035, z), line)
 
+	for side in [-1.0, 1.0]:
+		var reach := access_road_x - street_half_length
+		Models.box(self, Vector3(reach, 0.04, road_width), Vector3(side * (street_half_length + reach * 0.5), 0.021, street_z[0]), asphalt)
 	for z: float in street_z:
 		Models.box(self, Vector3(street_half_length * 2.0, 0.04, road_width), Vector3(0.0, 0.021, z), asphalt)
 		for side in [-1.0, 1.0]:

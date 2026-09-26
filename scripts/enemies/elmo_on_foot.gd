@@ -30,6 +30,12 @@ const TAUNTS := [
 @export var reply_guys_per_post := 2
 
 var is_posting := false
+## His parked Cyberdouche (ElmoTruck). While set, Elmo waits inside the
+## datacenter; on the alarm he runs to it and takes the wheel. Untyped: the
+## truck may be wrecked first.
+var ride: Variant = null
+
+var _board_left := 20.0
 
 var _post_left := 6.0
 var _posting_left := 0.0
@@ -69,6 +75,19 @@ func _ready() -> void:
 func _physics_process(delta: float) -> void:
 	if _is_dead:
 		return
+	if is_dormant():
+		super(delta)  # pottering around the lobby, phone in hand
+		return
+	if _has_ride():
+		_board_left -= delta
+		var truck := ride as ElmoTruck
+		if global_position.distance_to(truck.global_position) < 4.5 or _board_left <= 0.0:
+			truck.take_wheel()
+			_emit_defeated()
+			queue_free()
+			return
+		super(delta)
+		return
 	if is_posting:
 		_posting_left -= delta
 		velocity.x = 0.0
@@ -94,6 +113,25 @@ func _physics_process(delta: float) -> void:
 		Sfx.play(&"beep", global_position, 4.0)
 		return
 	super(delta)
+
+
+func _has_ride() -> bool:
+	return ride != null and is_instance_valid(ride) and (ride as ElmoTruck).is_alive()
+
+
+func _pick_target() -> Node3D:
+	if _has_ride():
+		return null  # running for the truck
+	return super()
+
+
+func _idle() -> void:
+	if _has_ride() and not is_dormant():
+		if _speech and not _speech.text.begins_with("To the"):
+			_speech.text = "To the Cyberdouche!"
+		_nav.target_position = (ride as ElmoTruck).global_position
+		return
+	super()
 
 
 func _modify_damage(amount: float, _from: Vector3, _kind: StringName) -> float:

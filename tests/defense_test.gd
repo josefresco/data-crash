@@ -18,11 +18,19 @@ func _run() -> void:
 
 	var player := level.get_node("Player") as Player
 	var nav_map := player.get_world_3d().navigation_map
+	# The bigger map takes a moment to sync into the navigation server.
+	for i in 40:
+		if NavigationServer3D.map_get_closest_point(nav_map, Vector3(-40, 0, -30)) != Vector3.ZERO:
+			break
+		await seconds(0.25)
 	var path := NavigationServer3D.map_get_path(nav_map, Vector3(-40, 0, -30), Vector3(-20, 0, -20), true)
-	# The path must stop somewhere outside the fenced compound (x -25..25,
-	# z -50..-12), never reaching the target inside it.
+	var across := NavigationServer3D.map_get_path(nav_map, Vector3(-84, 0, 30), Vector3(-110, 0, 30), true)
+	check(across.size() > 0 and across[-1].distance_to(Vector3(-110, 0.5, 30)) < 1.5,
+		"paths cross from the center navmesh into the west one (ends at %s)" % [across[-1] if across.size() > 0 else "none"])
+	# The path must stop somewhere outside the fenced Felsa compound
+	# (x -34..34, z -72..-12), never reaching the target inside it.
 	var end: Vector3 = path[-1] if path.size() > 0 else Vector3.ZERO
-	var inside := end.x > -25.0 and end.x < 25.0 and end.z > -50.0 and end.z < -12.0
+	var inside := end.x > -34.0 and end.x < 34.0 and end.z > -72.0 and end.z < -12.0
 	check(path.size() > 0 and not inside,
 		"fence blocks outside-in path (ends at %s)" % [path[-1] if path.size() > 0 else "none"])
 
@@ -31,14 +39,14 @@ func _run() -> void:
 	player.health_changed.connect(func(_h: float, _m: float) -> void: hits[0] += 1)
 	player.global_position = Vector3(-18, 0.2, -28)
 	await seconds(2.0)
-	check(hits[0] == 0 and not Game.alarm, "site security ignores a player who hasn't attacked")
-	(level.get_node("FenceFront/Panel3") as Destructible).apply_damage(1.0, player.global_position, &"bullet")
-	check(Game.alarm, "hitting the fence raises the site alarm")
+	check(hits[0] == 0 and not Game.any_alarm(), "site security ignores a player who hasn't attacked")
+	(level.get_node("FelsaSite/FenceFront/Panel3") as Destructible).apply_damage(1.0, player.global_position, &"bullet")
+	check(Game.is_alarmed(&"felsa"), "hitting the fence raises the site alarm")
 	await seconds(3.0)
 	check(hits[0] > 0, "guard shot the player (%d hits)" % hits[0])
 
 	# Treat converts a dog.
-	var dog := level.get_node("Dog2") as Dog
+	var dog := level.get_node("FelsaSite/FrontDog") as Dog
 	player.global_position = dog.global_position + Vector3(1.5, 0.2, 0)
 	var treats_before := player.treats
 	check(player.give_treat(), "give_treat succeeded")
@@ -50,11 +58,9 @@ func _run() -> void:
 		(node as Enemy).apply_damage(9999.0, Vector3.ZERO)
 	player.global_position = Vector3(-5, 0.2, 20)
 
-	# Phase 3: take the datacenter down, open the front gate, wait for the core.
+	# Phase 3: take all three datacenters down (their gates come down too), wait for the core.
 	for node in get_tree().get_nodes_in_group("cooling_units"):
 		(node as Destructible).shatter((node as Node3D).global_position, 200.0)
-	for i in [9, 10]:
-		(level.get_node("FenceFront/Panel%d" % i) as Destructible).shatter(Vector3(0, 1, 0), 50.0)
 	for i in 80:
 		if level.phase == level.Phase.BUILD:
 			break

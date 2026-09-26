@@ -1,5 +1,6 @@
 extends TestCase
-## Felsa Cars and the Elmo Mushbrains boss fight, end to end into Phase 3.
+## Felsa Cars and the Elmo Mushbrains boss fight (inside Felsa, then his
+## Cyberdouche, then on foot), then clearing all three sites into Phase 3.
 ##
 ##   Godot_console.exe --headless --fixed-fps 60 --path . res://tests/boss_test.tscn
 
@@ -51,33 +52,37 @@ func _test_felsa_car() -> void:
 
 
 func _test_boss() -> void:
+	var felsa := level.get_node("FelsaSite") as DatacenterSite
+	var inside := felsa.elmo
+	var truck := felsa.elmo_truck
+	check(inside != null and felsa.datacenter.global_position.distance_to(inside.global_position) < 15.0,
+		"Elmo waits inside the Felsa datacenter")
+	check(truck != null and truck.parked, "his Cyberdouche is parked at the back dock")
+	await seconds(1.0)
+	check(Game.stat("time") > 0.0 and not inside.is_posting, "no Twats while the site is quiet")
+
+	# Clear the regular security everywhere (keep the bosses): that sets off the alarms.
 	for node in get_tree().get_nodes_in_group("hostiles"):
-		(node as Enemy).apply_damage(9999.0, Vector3.ZERO)
-	for node in get_tree().get_nodes_in_group("cooling_units"):
-		(node as Destructible).shatter((node as Node3D).global_position, 200.0)
-	for i in 80:
-		if level.phase == level.Phase.BOSS:
+		var unit := node as Enemy
+		if (unit is SecurityGuard and not unit is SentryTurret) or unit is Dog or (unit is FelsaCar and not unit is ElmoTruck):
+			unit.apply_damage(9999.0, Vector3.ZERO)
+	check(Game.is_alarmed(&"felsa"), "attacking Felsa's security raises its alarm")
+	player.global_position = Vector3(20, 0.2, -20)
+	for i in 120:
+		if not truck.parked:
 			break
 		await seconds(0.25)
-	check(level.phase == level.Phase.BOSS, "boss phase starts after the collapse")
-
-	var truck: ElmoTruck = null
-	for node in get_tree().get_nodes_in_group("hostiles"):
-		if node is ElmoTruck:
-			truck = node
-	check(truck != null, "Elmo's truck arrives")
-	if truck == null:
-		return
+	check(not truck.parked and not is_instance_valid(inside), "on the alarm, Elmo runs to his Cyberdouche and takes the wheel")
 
 	var hp := truck.health
 	truck.stun(5.0)
 	check(not truck.is_burning and truck.health < hp, "EMP only dents the boss truck")
 
 	# Let it hunt the player for a while: it should ram or shockwave.
-	player.global_position = Vector3(0, 0.2, 20)
+	player.global_position = Vector3(-24, 0.2, -64)  # the open yard behind the building
 	var hurt := [false]
 	player.health_changed.connect(func(_h: float, _m: float) -> void: hurt[0] = true)
-	for i in 120:
+	for i in 240:
 		if hurt[0]:
 			break
 		await seconds(0.25)
@@ -107,8 +112,15 @@ func _test_boss() -> void:
 		"posting takes extra damage (%.1f)" % (before - elmo.health))
 
 	elmo.apply_damage(99999.0, Vector3.ZERO, &"explosive")
+	await seconds(0.5)
+	check(felsa.boss_defeated, "Felsa's boss is down")
+	# Finish the other two sites: Sham, Crapya's room, and every cooling unit.
+	var forprofit := level.get_node("ForProfitSite") as DatacenterSite
+	forprofit.sham.apply_damage(99999.0, forprofit.sham.global_position, &"explosive")
+	for node in get_tree().get_nodes_in_group("cooling_units"):
+		(node as Destructible).shatter((node as Node3D).global_position, 200.0)
 	for i in 40:
 		if level.phase == level.Phase.BUILD:
 			break
 		await seconds(0.25)
-	check(level.phase == level.Phase.BUILD and level.get("core") != null, "defeating Elmo starts Phase 3")
+	check(level.phase == level.Phase.BUILD and level.get("core") != null, "all three datacenters and their bosses down starts Phase 3")

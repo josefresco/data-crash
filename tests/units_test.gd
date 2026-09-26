@@ -29,9 +29,6 @@ func _enter_defense_phase() -> void:
 		(node as Enemy).apply_damage(9999.0, Vector3.ZERO)
 	for node in get_tree().get_nodes_in_group("cooling_units"):
 		(node as Destructible).shatter((node as Node3D).global_position, 200.0)
-	# The player always breaches the fence in Phase 2; open the gate the same way.
-	for i in [9, 10]:
-		(level.get_node("FenceFront/Panel%d" % i) as Destructible).shatter(Vector3(0, 1, 0), 50.0)
 	for i in 80:
 		if level.phase == level.Phase.BUILD:
 			break

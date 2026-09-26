@@ -17,6 +17,9 @@ signal breached
 @export var panel_health := 60.0
 @export var damage_threshold := 20.0
 @export var color := Color(0.85, 0.87, 0.9)
+## Leave an opening (for a SiteGate) centered this far along the line. < 0 = none.
+@export var gap_center := -1.0
+@export var gap_width := 0.0
 
 var _breached := false
 
@@ -34,6 +37,9 @@ func _rebuild() -> void:
 	var count := maxi(int(round(length / panel_width)), 1)
 	var width := length / count
 	for i in count:
+		var mid := (i + 0.5) * width
+		if gap_center >= 0.0 and absf(mid - gap_center) < gap_width * 0.5:
+			continue
 		var panel := Destructible.new()
 		panel.set_meta(&"generated", true)
 		panel.name = "Panel%d" % i

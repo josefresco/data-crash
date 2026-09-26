@@ -56,7 +56,7 @@ func _test_deeds() -> void:
 		for child in unit.get_children():
 			if child is Label3D:
 				marked += 1
-	check(marked == 3, "scouting marks all cooling units (%d)" % marked)
+	check(marked == 9, "scouting marks every cooling unit at all three sites (%d)" % marked)
 
 	# Strays: treats. Approach each from the side away from the other one:
 	# they wander, and a treat goes to the nearest dog.
@@ -112,7 +112,7 @@ func _test_deeds() -> void:
 
 
 func _test_breach_ends_activism() -> void:
-	var panel := level.get_node("FenceFront/Panel4") as Destructible
+	var panel := level.get_node("FelsaSite/FenceFront/Panel4") as Destructible
 	panel.shatter(panel.global_position, 50.0)
 	await seconds(0.5)
 	check(level.phase == level.Phase.ASSAULT, "breaching the fence starts Phase 2")

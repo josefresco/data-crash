@@ -47,9 +47,9 @@ var waypoint_reach := 0.8
 ## Non-empty for bosses: joins group "bosses" and gets the HUD boss bar.
 var boss_name := ""
 
-## Datacenter security posted from the start: passive (no targets) until the
-## site alarm goes off (Game.alarm). Hurting one raises the alarm.
-var site_security := false
+## Datacenter site this unit guards (&"" = none). Site security is passive
+## (no targets) until that site's alarm goes off; hurting one raises it.
+var site := &""
 ## Pitch of the gibberish voice played with speak() (0 = silent).
 var voice_pitch := 0.0
 ## Kenney character skin (see CharacterModel / tools/generate_skins.py).
@@ -128,8 +128,8 @@ func is_alive() -> bool:
 func apply_damage(amount: float, from: Vector3, kind: StringName = &"generic") -> void:
 	if _is_dead:
 		return
-	if site_security and not Game.alarm:
-		get_tree().call_group(&"site_alarm", &"raise_alarm", label_for_alarm())
+	if is_dormant():
+		get_tree().call_group(&"site_alarm", &"raise_alarm", site, label_for_alarm())
 	amount = _modify_damage(amount, from, kind)
 	if _field_left > 0.0:
 		amount *= FIELD_DAMAGE_FACTOR
@@ -344,13 +344,18 @@ func _engage_range(other: Node3D) -> float:
 	return attack_range
 
 
+## Site security whose site hasn't been attacked yet.
+func is_dormant() -> bool:
+	return site != &"" and not Game.is_alarmed(site)
+
+
 ## What the alarm message calls this unit.
 func label_for_alarm() -> String:
 	return boss_name if not boss_name.is_empty() else (get_script() as Script).get_global_name().capitalize()
 
 
 func _pick_target() -> Node3D:
-	if site_security and not Game.alarm:
+	if is_dormant():
 		return null
 	if rushing and faction == Faction.HOSTILE and _is_valid(objective):
 		return objective
@@ -422,7 +427,9 @@ func _face(point: Vector3, delta: float) -> void:
 	if Vector2(direction.x, direction.z).length_squared() < 0.0001:
 		return
 	var yaw := atan2(-direction.x, -direction.z)
-	_visual.rotation.y = lerp_angle(_visual.rotation.y, yaw, 1.0 - exp(-12.0 * delta))
+	# World yaw: units parented under a rotated DatacenterSite must still face
+	# world-space directions.
+	_visual.global_rotation.y = lerp_angle(_visual.global_rotation.y, yaw, 1.0 - exp(-12.0 * delta))
 
 
 ## Horizontal distance, or distance to the surface for big box targets.

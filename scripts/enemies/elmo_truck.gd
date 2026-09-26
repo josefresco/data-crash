@@ -22,6 +22,10 @@ const LINES := [
 @export var shockwave_damage := 25.0
 @export var line_interval := 6.0
 
+## Parked at the dock with nobody in it: inert (but hittable) until Elmo
+## takes the wheel.
+var parked := false
+
 var _shock_left := 5.0
 var _charge_left := 0.0
 var _line_left := 0.0
@@ -70,7 +74,7 @@ func _ready() -> void:
 	_speech.position.y = body_size.y + 2.2
 	_speech.no_depth_test = true
 	add_child(_speech)
-	say(LINES[0])
+	say("" if parked else LINES[0])
 
 	var ring_mesh := TorusMesh.new()
 	ring_mesh.inner_radius = 0.9
@@ -86,7 +90,24 @@ func _ready() -> void:
 	add_child(_ring)
 
 
+## Elmo climbs in: the truck wakes up and hunts.
+func take_wheel() -> void:
+	if not parked:
+		return
+	parked = false
+	site = &""
+	say("Get in, loser. We're disrupting.")
+	Sfx.ui(&"jingle_boss", -2.0, "Music")
+	Game.set_objective("ELMO MUSHBRAINS jumped into his Cyberdouche. Wreck it! (EMP won't hack this one.)")
+	Game.tip("elmo_truck", "Elmo's Cyberdouche rams and charges a blue 'Beta Feature' shockwave. When the ring grows, get clear, then hit it while it's parked. Rockets, C4, and the rifle work best.")
+
+
 func _physics_process(delta: float) -> void:
+	if parked:
+		if not is_on_floor():
+			velocity = Vector3(0.0, velocity.y - _gravity * delta, 0.0)
+			move_and_slide()
+		return
 	super(delta)
 	if _is_dead:
 		return

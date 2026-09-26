@@ -4,16 +4,12 @@
 [ext_resource type="Script" path="res://scripts/district/environment_driver.gd" id="2_env"]
 [ext_resource type="PackedScene" path="res://scenes/player/player.tscn" id="3_player"]
 [ext_resource type="PackedScene" path="res://scenes/vehicles/car.tscn" id="4_car"]
-[ext_resource type="Script" path="res://scripts/props/fence_line.gd" id="5_fence"]
-[ext_resource type="Script" path="res://scripts/props/datacenter.gd" id="6_datacenter"]
 [ext_resource type="Script" path="res://scripts/ui/hud.gd" id="7_hud"]
 [ext_resource type="Script" path="res://scripts/nav/nav_baker.gd" id="8_nav"]
 [ext_resource type="Script" path="res://scripts/build/build_controller.gd" id="9_build"]
 [ext_resource type="Script" path="res://scripts/waves/wave_spawner.gd" id="10_waves"]
-[ext_resource type="Script" path="res://scripts/enemies/security_guard.gd" id="11_guard"]
 [ext_resource type="Script" path="res://scripts/enemies/dog.gd" id="12_dog"]
 [ext_resource type="Script" path="res://scripts/district/district_audio.gd" id="13_audio"]
-[ext_resource type="Script" path="res://scripts/enemies/felsa_car.gd" id="14_felsa"]
 [ext_resource type="Script" path="res://scripts/activism/water_main.gd" id="15_water"]
 [ext_resource type="Script" path="res://scripts/activism/scout_point.gd" id="16_scout"]
 [ext_resource type="Script" path="res://scripts/enemies/supply_van.gd" id="17_van"]
@@ -21,11 +17,9 @@
 [ext_resource type="Script" path="res://scripts/levels/neighborhood_builder.gd" id="19_hood"]
 [ext_resource type="Script" path="res://scripts/activism/gun_show.gd" id="20_gunshow"]
 [ext_resource type="Script" path="res://scripts/activism/security_cache.gd" id="21_cache"]
+[ext_resource type="Script" path="res://scripts/props/datacenter_site.gd" id="27_site"]
 [ext_resource type="Script" path="res://scripts/activism/foreman.gd" id="22_foreman"]
 [ext_resource type="PackedScene" path="res://scenes/vehicles/bulldozer.tscn" id="23_dozer"]
-[ext_resource type="Script" path="res://scripts/bosses/crapya_control_room.gd" id="24_crapya"]
-[ext_resource type="Script" path="res://scripts/bosses/sentry_turret.gd" id="25_sentry"]
-[ext_resource type="Script" path="res://scripts/bosses/steam_vent.gd" id="26_vent"]
 
 [sub_resource type="ProceduralSkyMaterial" id="SkyMat"]
 sky_top_color = Color(0.38, 0.32, 0.25, 1)
@@ -59,6 +53,15 @@ script = ExtResource("1_level")
 
 [node name="NavBaker" type="NavigationRegion3D" parent="."]
 script = ExtResource("8_nav")
+bake_bounds = AABB(-92, -2, -96, 184, 20, 260)
+
+[node name="NavBakerWest" type="NavigationRegion3D" parent="."]
+script = ExtResource("8_nav")
+bake_bounds = AABB(-190, -2, -96, 98, 20, 260)
+
+[node name="NavBakerEast" type="NavigationRegion3D" parent="."]
+script = ExtResource("8_nav")
+bake_bounds = AABB(92, -2, -96, 98, 20, 260)
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = SubResource("Environment")
@@ -91,99 +94,31 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, 0.1, 20)
 [node name="Car" parent="." instance=ExtResource("4_car")]
 transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 2, 0.6, 17)
 
-[node name="FenceFront" type="Node3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -25, 0, -12)
-script = ExtResource("5_fence")
-length = 50.0
+[node name="FelsaSite" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -42)
+script = ExtResource("27_site")
+boss = 1
+patrol_cyberdouche = true
 
-[node name="FenceBack" type="Node3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -25, 0, -50)
-script = ExtResource("5_fence")
-length = 50.0
+[node name="ScgrewgleSite" type="Node3D" parent="."]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -150, 0, 30)
+script = ExtResource("27_site")
+site_id = &"scgrewgle"
+display_name = "Scgrewgle"
+brand_name = "SCGREWGLE"
+brand_tagline = "DON'T BE EVIL (TERMS MAY CHANGE)  //  YOUR DATA, OUR WATER"
+brand_color = Color(0.95, 0.35, 0.25, 1)
+boss = 2
 
-[node name="FenceLeft" type="Node3D" parent="."]
-transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -25, 0, -12)
-script = ExtResource("5_fence")
-length = 38.0
-
-[node name="FenceRight" type="Node3D" parent="."]
-transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 25, 0, -12)
-script = ExtResource("5_fence")
-length = 38.0
-
-[node name="Datacenter" type="Node3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -32)
-script = ExtResource("6_datacenter")
-
-[node name="CrapyaControlRoom" type="StaticBody3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -18, 0, -30)
-script = ExtResource("24_crapya")
-
-[node name="SentryNE" type="CharacterBody3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10, 8.6, -26)
-script = ExtResource("25_sentry")
-
-[node name="SentryNW" type="CharacterBody3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -10, 8.6, -26)
-script = ExtResource("25_sentry")
-
-[node name="SteamVent1" type="Node3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 15, 0, -29.3)
-script = ExtResource("26_vent")
-
-[node name="SteamVent2" type="Node3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 15, 0, -34.7)
-script = ExtResource("26_vent")
-phase_offset = 1.5
-
-[node name="RackCrusher1" type="Node3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 18.5, 0, -32)
-script = ExtResource("26_vent")
-crusher = true
-radius = 1.3
-idle_time = 2.5
-warn_time = 0.8
-active_time = 0.6
-damage = 45.0
-
-[node name="RackCrusher2" type="Node3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 18.5, 0, -26.7)
-script = ExtResource("26_vent")
-crusher = true
-radius = 1.3
-idle_time = 2.5
-warn_time = 0.8
-active_time = 0.6
-damage = 45.0
-phase_offset = 1.2
-
-[node name="Guard1" type="CharacterBody3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -18, 0.1, -20)
-script = ExtResource("11_guard")
-
-[node name="Guard2" type="CharacterBody3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 18, 0.1, -45)
-script = ExtResource("11_guard")
-
-[node name="Guard3" type="CharacterBody3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, 0.1, -18)
-script = ExtResource("11_guard")
-
-[node name="Dog1" type="CharacterBody3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 0.1, -16)
-script = ExtResource("12_dog")
-territory_radius = 24.0
-territory_center = Vector3(0, 0, -31)
-
-[node name="Dog2" type="CharacterBody3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12, 0.1, -16)
-script = ExtResource("12_dog")
-territory_radius = 24.0
-territory_center = Vector3(0, 0, -31)
-
-[node name="PatrolFelsa" type="CharacterBody3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 19, 0.2, -17)
-script = ExtResource("14_felsa")
+[node name="ForProfitSite" type="Node3D" parent="."]
+transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, 150, 0, 30)
+script = ExtResource("27_site")
+site_id = &"forprofit"
+display_name = "ForProfitSI"
+brand_name = "FORPROFIT SI"
+brand_tagline = "BENEFITING HUMANITY (SHAREHOLDERS)  //  TRAINING RUN 4,812"
+brand_color = Color(0.7, 0.5, 1, 1)
+boss = 3
 
 [node name="WaterMain" type="Node3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6, 0, 33)
@@ -213,7 +148,7 @@ transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -12, 0, 57)
 script = ExtResource("20_gunshow")
 
 [node name="SecurityCache" type="Node3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -18, 0, -44)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -24, 0, -20)
 script = ExtResource("21_cache")
 
 [node name="Bulldozer" parent="." instance=ExtResource("23_dozer")]

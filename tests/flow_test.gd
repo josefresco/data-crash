@@ -40,6 +40,7 @@ func _run() -> void:
 	await _test_grock_cameras()
 	await _test_parked_cars()
 	await _test_reply_guys()
+	await _test_site_life()
 	_test_pause_and_end()
 
 
@@ -68,7 +69,7 @@ func _test_pickups() -> void:
 
 ## Cyberdouche and parked-car wheels touch the ground instead of sinking in.
 func _test_grounding() -> void:
-	var felsa := level.get_node("PatrolFelsa") as FelsaCar
+	var felsa := level.get_node("FelsaSite/PatrolFelsa") as FelsaCar
 	var bounds := Models.model_bounds(felsa.get("_visual"))
 	var bottom := felsa.global_position.y + bounds.position.y
 	if absf(bottom) >= 0.12:
@@ -88,7 +89,7 @@ func _test_grounding() -> void:
 
 
 func _test_dogs() -> void:
-	var dog := level.get_node("Dog1") as Dog
+	var dog := level.get_node("FelsaSite/FrontDog") as Dog
 	var stray := level.get_node("StrayDog1") as Dog
 	check(stray.is_in_group("strays") and not stray.is_in_group("hostiles"), "neighborhood strays aren't hostile")
 	# Outside the compound: guard dogs stay put.
@@ -106,10 +107,10 @@ func _test_dogs() -> void:
 	# Inside the fence: nothing happens until the player attacks the site.
 	player.global_position = Vector3(5, 0.2, -20)
 	await seconds(1.5)
-	check(dog.target != player and not Game.alarm, "guard dog holds off until the site is attacked")
-	var guard := level.get_node("Guard3") as Enemy
+	check(dog.target != player and not Game.is_alarmed(&"felsa"), "guard dog holds off until the site is attacked")
+	var guard := level.get_node("FelsaSite/PatrolGuard") as Enemy
 	guard.apply_damage(5.0, player.global_position, &"bullet")
-	check(Game.alarm, "hurting a guard raises the site alarm")
+	check(Game.is_alarmed(&"felsa") and not Game.is_alarmed(&"forprofit"), "hurting a guard raises the site alarm")
 	await seconds(1.5)
 	check(dog.target == player, "then the guard dog attacks inside the datacenter grounds")
 	player.global_position = Vector3(-60, 0.2, 40)
@@ -159,6 +160,34 @@ func _test_reply_guys() -> void:
 	get_tree().call_group(&"reply_guys", &"log_off")
 	await seconds(3.0)
 	check(get_tree().get_nodes_in_group("reply_guys").is_empty(), "reply guys log off when Elmo goes down")
+
+
+## Scgrewgle's cheese truck rolls in the back gate and leaves with money; the
+## ForProfitSI tech flees when that site's alarm goes off.
+func _test_site_life() -> void:
+	var scgrewgle := level.get_node("ScgrewgleSite") as DatacenterSite
+	var truck := scgrewgle.truck
+	var gate := scgrewgle.get_node("BackGate") as SiteGate
+	# Follow one full cycle from wherever the loop is: cheese in, gate open, money out.
+	var saw_cheese := false
+	var opened := false
+	var loaded := false
+	for i in 240:
+		saw_cheese = saw_cheese or (truck.cargo == CargoTruck.Cargo.CHEESE and truck.visible)
+		opened = opened or (saw_cheese and gate.open_amount > 0.6)
+		if saw_cheese and truck.cargo == CargoTruck.Cargo.MONEY:
+			loaded = true
+			break
+		await seconds(0.25)
+	check(saw_cheese, "trucks arrive with Government Cheese")
+	check(opened, "the back gate slides open for the truck")
+	check(loaded, "and it leaves full of money")
+	var forprofit := level.get_node("ForProfitSite") as DatacenterSite
+	var worker := forprofit.worker
+	check(not worker.fled, "the tech works quietly until the alarm")
+	level.call("raise_alarm", &"forprofit", "test")
+	await seconds(1.0)
+	check(worker.fled, "the tech flees when the alarm goes off")
 
 
 func _test_pause_and_end() -> void:

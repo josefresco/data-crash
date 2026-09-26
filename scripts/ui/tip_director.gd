@@ -92,9 +92,12 @@ func _scan() -> void:
 			Game.tip("cache", "Corporate security keeps a weapons cache here. Walk up and press E to take the rocket launcher.")
 		elif thing is GunShow and eye.distance_to(thing.global_position) < 12.0:
 			Game.tip("gunshow", "The weekend gun show: press E at the stall to buy a machine gun, then grenade packs.")
-	var fence_center := Vector3(0.0, 0.0, -31.0)
-	if level.get("phase") == 0 and Vector2(eye.x - fence_center.x, eye.z - fence_center.z).length() < 32.0:
-		Game.tip("fence", "The datacenter fence. Felsa security ignores you until you attack the site, so scout and prepare first. Ram the fence with a car or plant C4 [G] on a panel to start the assault.")
+	for node in get_tree().get_nodes_in_group("datacenter_sites"):
+		var site := node as DatacenterSite
+		if not site.is_alarmed() and eye.distance_to(site.global_position) < 42.0:
+			Game.tip("fence", "A datacenter compound. Its security ignores you until you attack the site, so scout and prepare first. Ram the fence or the flimsy gate, or plant C4 [G], to start the fight. The boss waits inside.")
+			if site.boss == DatacenterSite.Boss.ELMO:
+				Game.tip("felsa_trucks", "Out back, Government Cheese trucks roll in and money trucks roll out. Wreck a money truck for the cash inside.")
 	for node in get_tree().get_nodes_in_group("hostiles"):
 		var unit := node as Enemy
 		if unit == null:

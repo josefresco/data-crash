@@ -19,11 +19,13 @@ func _ready() -> void:
 	await get_tree().create_timer(2.0).timeout
 	await _save("collapsing")
 
-	# Boss: watch the truck come up the road, then Elmo on foot.
+	# Boss: the Felsa alarm sends Elmo to his Cyberdouche, then he's on foot.
 	var player := level.get_node("Player") as Player
-	while level.phase != level.Phase.BOSS:
+	var felsa := level.get_node("FelsaSite") as DatacenterSite
+	level.call("raise_alarm", &"felsa", "capture")
+	player.global_position = Vector3(-6, 0.2, -20)
+	while felsa.elmo_truck.parked:
 		await get_tree().create_timer(0.25).timeout
-	player.global_position = Vector3(-6, 0.2, 8)
 	await get_tree().create_timer(2.5).timeout
 	var truck := _find(ElmoTruck)
 	if truck:
@@ -38,20 +40,21 @@ func _ready() -> void:
 		player.aim_at(elmo.aim_point())
 		await _save("boss_elmo")
 		elmo.apply_damage(99999.0, Vector3.ZERO, &"explosive")
+	var sham := (level.get_node("ForProfitSite") as DatacenterSite).sham
+	if is_instance_valid(sham):
+		sham.apply_damage(99999.0, sham.global_position, &"explosive")
 	while level.phase != level.Phase.BUILD:
 		await get_tree().create_timer(0.25).timeout
 	await get_tree().create_timer(8.0).timeout
 	await _save("restored")
-	player.global_position = Vector3(16, 0.2, -30)
+	player.global_position = Vector3(16, 0.2, -34)
 	await get_tree().create_timer(0.3).timeout
-	player.aim_at(Vector3(0, 1.0, -44))
+	player.aim_at(Vector3(0, 1.0, -52))
 	await _save("solar_field")
 
 	# Phase 3: a few defenses, then a wave, seen from behind the turrets.
 	var core := level.get("core") as GreenCore
 	var build := level.get_node("BuildController") as BuildController
-	for i in [9, 10]:
-		(level.get_node("FenceFront/Panel%d" % i) as Destructible).shatter(Vector3(0, 1, 0), 50.0)
 	Game.cash = 2000
 	var center := core.global_position
 	build.place(1, center + Vector3(-5, 0, 8))

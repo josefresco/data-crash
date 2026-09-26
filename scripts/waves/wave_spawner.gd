@@ -26,7 +26,7 @@ static var unit_types := {
 ## One entry per wave: unit key -> count (see unit_types).
 @export var waves: Array[Dictionary] = [
 	{"guard": 4, "dog": 3},
-	{"guard": 5, "dog": 3, "orange_hat": 2, "sham": 1},
+	{"guard": 5, "dog": 3, "orange_hat": 2},
 	{"guard": 7, "police": 4, "frost": 1, "orange_hat": 3, "felsa": 2},
 	{"guard": 11, "police": 6, "dog": 4, "frost": 3, "orange_hat": 4, "felsa": 2, "fark": 1},
 	{"guard": 12, "police": 8, "dog": 6, "frost": 4, "orange_hat": 5, "felsa": 2, "harry": 1},

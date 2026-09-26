@@ -1,19 +1,20 @@
 extends Node3D
-## Vertical-slice test level.
-## Phase 1 (ACTIVISM): optional good deeds for cash and trust; breaching the fence ends it.
-## Phase 2 (ASSAULT): ram the fence, blow the cooling units, watch the sky clear.
-## Boss (BOSS): Elmo Mushbrains arrives in his Cyberdouche, then fights on foot
-## (and on Twatter: his Twats summon Reply Guys).
-## Phase 3 (BUILD / WAVE): defend the new green datacenter against waves.
+## Vertical-slice test level: one suburb, three corporate datacenters.
+## Phase 1 (ACTIVISM): optional good deeds for cash and trust; attacking any
+## site (or breaching a fence) ends it.
+## Phase 2 (ASSAULT): take down Felsa Cloud (north, Elmo inside, his
+## Cyberdouche at the dock), Scgrewgle (west, Crapya's control room), and
+## ForProfitSI (east, Sham Crapman), in any order. Each DatacenterSite is
+## cleared when its building collapses and its boss is down.
+## Phase 3 (BUILD / WAVE): the green datacenter goes up on the Felsa lot; defend it.
+## (BOSS is unused, kept so saved references and tests keep their values.)
 
 enum Phase { ACTIVISM, ASSAULT, BOSS, BUILD, WAVE, WON, LOST }
 
 ## Seconds between the collapse and the green core going up (lets debris settle).
 @export var core_delay := 3.0
-## Elmo shows up after the collapse. Tests that skip to Phase 3 turn this off.
+## Bosses inside the datacenters. Tests that skip to Phase 3 turn this off.
 @export var boss_enabled := true
-## Seconds after the collapse before the boss truck rolls in.
-@export var boss_delay := 4.0
 ## Seconds of build time before the next wave starts on its own.
 @export var auto_wave_delay := 45.0
 ## Neighbors who join the repair crew: base + trust * per_trust.
@@ -45,10 +46,8 @@ enum Phase { ACTIVISM, ASSAULT, BOSS, BUILD, WAVE, WON, LOST }
 	[&"rocks", Vector3(-10.0, 0.0, 26.0)], [&"rocks", Vector3(-30.0, 0.0, 57.0)], [&"rocks", Vector3(40.0, 0.0, 61.0)],
 	[&"rocks", Vector3(22.0, 0.0, 37.5)], [&"molotovs", Vector3(28.0, 0.0, 60.0)],
 ]
-## Datacenter security posted at the start. Passive until the site alarm.
-@export var site_security_nodes: Array[String] = ["Guard1", "Guard2", "Guard3", "Dog1", "Dog2", "PatrolFelsa", "SentryNE", "SentryNW"]
 ## Fence lines corporate crews cut through at the start of waves 2+.
-@export var breach_fences: Array[String] = ["FenceLeft", "FenceRight", "FenceBack"]
+@export var breach_fences: Array[String] = ["FelsaSite/FenceLeft", "FelsaSite/FenceRight", "FelsaSite/FenceBack"]
 ## Panels cut per breach.
 @export var breach_width := 2
 ## First wave that opens a new lane. Announced (with a flare) a build phase ahead.
@@ -58,6 +57,9 @@ var phase := Phase.ACTIVISM
 var core: GreenCore
 
 var _fence_breached := false
+## The three DatacenterSites; the green core goes up on the Felsa lot.
+var sites: Array[DatacenterSite] = []
+var _felsa: DatacenterSite
 var _auto_wave_left := -1.0
 var _planned_breach: Array[Destructible] = []
 var _breach_side := ""
@@ -74,7 +76,6 @@ var _end_screen: EndScreen
 var _waves_cleared := 0
 var _cameras_smashed := 0
 
-@onready var _datacenter: Datacenter = $Datacenter
 @onready var _env_driver: EnvironmentDriver = $EnvironmentDriver
 @onready var _spawner: WaveSpawner = $WaveSpawner
 @onready var _build: BuildController = $BuildController
@@ -87,17 +88,13 @@ func _ready() -> void:
 	_env_driver.sun = $Sun
 	_env_driver.ground = $Ground/Mesh
 
-	for child in get_children():
-		if child is FenceLine:
-			(child as FenceLine).breached.connect(_on_fence_breached)
-	_datacenter.cooling_unit_destroyed.connect(_on_cooling_unit_destroyed)
-	_datacenter.neutralized.connect(_on_neutralized)
-	_datacenter.turbine_destroyed.connect(func(remaining: int) -> void:
-		if phase == Phase.ACTIVISM or phase == Phase.ASSAULT:
-			Game.set_objective(("Gas turbine down: less smog, less noise. (+$%d)  %d left; take them all out to cut power to the defenses."
-				% [_datacenter.turbine_cash, remaining]) if remaining > 0 else "All gas turbines down."))
-	_datacenter.power_cut.connect(func() -> void:
-		Game.set_objective("Power cut! Crapya's sentries, vents, and crushers are dead. Her control room still shields the cooling units."))
+	add_to_group("site_alarm")
+	for node in get_tree().get_nodes_in_group("datacenter_sites"):
+		var site := node as DatacenterSite
+		sites.append(site)
+		if site.site_id == &"felsa":
+			_felsa = site
+		_connect_site(site)
 	_spawner.wave_started.connect(_on_wave_started)
 	_spawner.wave_cleared.connect(_on_wave_cleared)
 	_spawner.all_waves_cleared.connect(_on_all_waves_cleared)
@@ -115,18 +112,16 @@ func _ready() -> void:
 	_spawn_grock_cameras()
 	_spawn_pickups()
 	_spawn_neighborly_deeds()
-	_arm_site_security()
 	var tips := TipDirector.new()
 	tips.level = self
 	add_child(tips)
 	add_child(PauseMenu.new())
 	_end_screen = EndScreen.new()
 	add_child(_end_screen)
-	($CrapyaControlRoom as CrapyaControlRoom).defenses_offline.connect(func() -> void:
-		Game.set_objective("Crapya's control room is down: defenses offline, cooling units exposed. (+$300)"))
 	_update_deeds()
+	_update_sites()
 
-	Game.set_objective("Help the neighborhood first (optional), or ram the fence with the car [E]. Crapya's control room shields the cooling units.")
+	Game.set_objective("Three datacenters are draining the block: Felsa Cloud (north), Scgrewgle (west), and ForProfitSI (east), each with a boss inside. Help the neighbors first (optional), then hit them.")
 
 
 func _process(delta: float) -> void:
@@ -159,7 +154,8 @@ func start_defense() -> void:
 	phase = Phase.BUILD
 	_update_deeds()
 	core = GreenCore.new()
-	core.position = Vector3(_datacenter.global_position.x, 0.0, _datacenter.global_position.z)
+	var lot := _felsa.datacenter.global_position if _felsa else Vector3.ZERO
+	core.position = Vector3(lot.x, 0.0, lot.z)
 	add_child(core)
 	core.damaged.connect(_on_core_damaged)
 	core.repaired.connect(_on_core_damaged)
@@ -183,21 +179,9 @@ func start_defense() -> void:
 		% _spawner.total_waves())
 
 
-## Rolls Elmo's truck in from the south road. Public for tests.
+## Debug and tests: sets off the Felsa alarm (Elmo runs for his truck).
 func start_boss() -> void:
-	if phase != Phase.ACTIVISM and phase != Phase.ASSAULT:
-		return
-	phase = Phase.BOSS
-	_update_deeds()
-	Sfx.ui(&"jingle_boss", -2.0, "Music")
-	var truck := ElmoTruck.new()
-	truck.position = ($WaveSpawner/SouthRoad as Node3D).global_position
-	truck.objective = get_tree().get_first_node_in_group("player") as Node3D
-	truck.wrecked.connect(_on_truck_wrecked)
-	add_child(truck)
-	truck.rotation.y = PI  # face north, up the road
-	Game.set_objective("ELMO MUSHBRAINS rolls in with his Cyberdouche. Wreck it! (EMP won't hack this one.)")
-	Game.tip("elmo_truck", "Elmo's Cyberdouche rams and charges a blue 'Beta Feature' shockwave. When the ring grows, get clear, then hit it while it's parked. Rockets, C4, and the rifle work best.")
+	raise_alarm(&"felsa", "test")
 
 
 func has_planned_breach() -> bool:
@@ -217,41 +201,102 @@ func start_next_wave() -> void:
 		_spawner.start_next_wave()
 
 
-func _on_fence_breached() -> void:
+func site(id: StringName) -> DatacenterSite:
+	for candidate in sites:
+		if candidate.site_id == id:
+			return candidate
+	return null
+
+
+func _connect_site(site_node: DatacenterSite) -> void:
+	var building := site_node.datacenter
+	site_node.fence_breached.connect(func(_s: DatacenterSite) -> void: _on_fence_breached(site_node))
+	building.cooling_unit_destroyed.connect(func(remaining: int) -> void:
+		if remaining > 0:
+			Game.set_objective("%s: cooling unit destroyed. %d left." % [site_node.display_name, remaining])
+		else:
+			Game.set_objective("%s: cooling offline. The building is coming down!" % site_node.display_name))
+	building.turbine_destroyed.connect(func(remaining: int) -> void:
+		if phase == Phase.ACTIVISM or phase == Phase.ASSAULT:
+			Game.set_objective(("%s: gas turbine down, less smog and noise. (+$%d)  %d left." % [site_node.display_name,
+				building.turbine_cash, remaining]) if remaining > 0 else "%s: all gas turbines down." % site_node.display_name))
+	if site_node.boss == DatacenterSite.Boss.CRAPYA:
+		building.power_cut.connect(func() -> void:
+			Game.set_objective("Scgrewgle's power is cut! Crapya's water cannons, vents, and crushers are dead. Her control room still shields the cooling units."))
+	if site_node.crapya_room:
+		site_node.crapya_room.defenses_offline.connect(func() -> void:
+			Game.set_objective("Crapya's control room is down: Scgrewgle's defenses are offline and its cooling units exposed. (+$300)"))
+	if site_node.elmo_truck:
+		site_node.elmo_truck.wrecked.connect(_on_truck_wrecked)
+	if site_node.elmo:
+		site_node.elmo.died.connect(_on_boss_defeated)
+	if site_node.sham:
+		site_node.sham.died.connect(func(_e: Enemy) -> void:
+			Game.set_objective("Sham Crapman is down: \"This is just a pivot.\" (+$400)"))
+	site_node.neutralized.connect(func(_s: DatacenterSite) -> void:
+		Game.set_objective("%s is down. The air is clearing. (+$%d)%s" % [site_node.display_name, site_node.cash_reward,
+			"" if site_node.boss_defeated else "  %s is still loose!" % site_node.boss_label()])
+		_update_sites())
+	site_node.cleared.connect(_on_site_cleared)
+
+
+func _on_fence_breached(site_node: DatacenterSite) -> void:
+	raise_alarm(site_node.site_id, "fence")
 	if _fence_breached or (phase != Phase.ACTIVISM and phase != Phase.ASSAULT):
 		return
 	_fence_breached = true
-	phase = Phase.ASSAULT
-	_update_deeds()
-	var room := get_node_or_null("CrapyaControlRoom") as Destructible
-	if room and not room.is_destroyed:
-		Game.set_objective("Fence down. Take out Crapya's glass control room (rifle or explosives), then C4 [G] the cooling units.")
+	_start_assault()
+	if site_node.crapya_room and not site_node.crapya_room.is_destroyed:
+		Game.set_objective("Fence down. Crapya's glass control room inside Scgrewgle shields the cooling units: rifle or explosives, then C4 [G] the units.")
 	else:
-		Game.set_objective("Fence down. Plant C4 [G] on the %d cooling units, then get clear."
-			% _datacenter.cooling_remaining)
+		Game.set_objective("Fence down at %s. Plant C4 [G] on its %d cooling units, then get clear."
+			% [site_node.display_name, site_node.datacenter.cooling_remaining])
 
 
-func _on_cooling_unit_destroyed(remaining: int) -> void:
-	if remaining > 0:
-		Game.set_objective("Cooling unit destroyed. %d left." % remaining)
-	else:
-		Game.set_objective("Cooling offline. The building is coming down!")
+func _start_assault() -> void:
+	if phase == Phase.ACTIVISM:
+		phase = Phase.ASSAULT
+		_update_deeds()
 
 
-func _on_neutralized() -> void:
-	Game.set_objective("Datacenter down. The air is clearing. (+$%d)" % _datacenter.cash_reward)
-	# The collapse takes Crapya's control room (and her defenses) down with it.
-	var room := get_node_or_null("CrapyaControlRoom") as Destructible
-	if room and not room.is_destroyed:
-		room.shatter(room.global_position + Vector3.UP * 2.0, 120.0)
-	if boss_enabled:
-		get_tree().create_timer(boss_delay).timeout.connect(start_boss)
-	else:
+## A site is done when its building is down and its boss is out. All three
+## done: the neighbors build the green datacenter on the Felsa lot.
+func _on_site_cleared(site_node: DatacenterSite) -> void:
+	_update_sites()
+	var left := sites.filter(func(s: DatacenterSite) -> bool: return not s.is_cleared)
+	if left.is_empty():
+		Game.set_objective("All three datacenters are down! The neighbors are coming to build.")
 		get_tree().create_timer(core_delay).timeout.connect(start_defense)
+	else:
+		Game.set_objective("%s is finished. Still standing: %s." % [site_node.display_name,
+			", ".join(left.map(func(s: DatacenterSite) -> String: return s.display_name))])
+
+
+func _update_sites() -> void:
+	if phase != Phase.ACTIVISM and phase != Phase.ASSAULT:
+		Game.set_info("sites", "")
+		return
+	var parts: Array[String] = []
+	for site_node in sites:
+		var status := "quiet"
+		if site_node.is_cleared:
+			status = "DOWN"
+		elif site_node.is_neutralized:
+			status = "boss loose"
+		elif site_node.is_alarmed():
+			status = "ALARM"
+		parts.append("%s: %s" % [site_node.display_name, status])
+	Game.set_info("sites", "Datacenters   " + "   ".join(parts))
 
 
 func _on_truck_wrecked(truck: ElmoTruck) -> void:
 	var wreck := truck.global_position
+	var felsa := site(&"felsa")
+	# Wrecked before he got in: the Elmo inside is the on-foot fight.
+	if felsa and is_instance_valid(felsa.elmo) and felsa.elmo.is_alive():
+		felsa.elmo.ride = null
+		Game.set_objective("His Cyberdouche is scrap. Elmo's on foot, flamethrower in one hand, phone in the other. Hit him while he Twats!")
+		return
 	Game.set_objective("The Cyberdouche is scrap. Elmo climbs out, flamethrower in one hand, phone in the other. Hit him while he Twats!")
 	# Give the wreck's explosion a moment before he climbs out beside it.
 	await get_tree().create_timer(1.2).timeout
@@ -265,8 +310,10 @@ func _on_truck_wrecked(truck: ElmoTruck) -> void:
 func _on_boss_defeated(_elmo: Enemy) -> void:
 	get_tree().call_group(&"reply_guys", &"log_off")
 	Game.district.trust += 0.15
-	Game.set_objective("Elmo is out, logged off for good. The neighbors are coming to build.")
-	get_tree().create_timer(core_delay).timeout.connect(start_defense)
+	Game.set_objective("Elmo is out, logged off for good.")
+	var felsa := site(&"felsa")
+	if felsa:
+		felsa.mark_boss_defeated()
 
 
 ## Shows the first live member of group "bosses" (any node with boss_name,
@@ -275,7 +322,10 @@ func _update_boss_bar() -> void:
 	var boss: Node = null
 	for node in get_tree().get_nodes_in_group("bosses"):
 		var alive: bool = (node as Enemy).is_alive() if node is Enemy else not (node as Destructible).is_destroyed
-		if alive:
+		# Bosses waiting inside a quiet datacenter don't get a bar yet.
+		var waiting: bool = (node as Enemy).is_dormant() or (node is ElmoTruck and (node as ElmoTruck).parked) if node is Enemy \
+			else (node as Destructible).site_id != &"" and not Game.is_alarmed((node as Destructible).site_id)
+		if alive and not waiting:
 			boss = node
 			break
 	if boss == null:
@@ -331,38 +381,24 @@ func _on_stray_dog_defeated(dog: Enemy) -> void:
 		_update_deeds()
 
 
-## Security stands down until the player attacks the site: hurting a guard,
-## dog, truck, or sentry, or hitting the fence, walls, turbines, cooling
-## units, or Crapya's control room raises the alarm.
-func _arm_site_security() -> void:
-	add_to_group("site_alarm")
-	for unit_name in site_security_nodes:
-		var unit := get_node_or_null(unit_name) as Enemy
-		if unit:
-			unit.site_security = true
-	var property: Array[Node] = [_datacenter, get_node_or_null("CrapyaControlRoom")]
-	for child in get_children():
-		if child is FenceLine:
-			property.append(child)
-	for root in property:
-		if root == null:
-			continue
-		if root is Destructible:
-			(root as Destructible).site_property = true
-		for node in root.find_children("*", "", true, false):
-			if node is Destructible:
-				(node as Destructible).site_property = true
-
-
-## Everyone on the site's payroll engages. Idempotent. Public for tests.
-func raise_alarm(reason := "") -> void:
-	if Game.alarm:
+## Everyone on `site_id`'s payroll engages. Idempotent. Group "site_alarm"
+## routes hits on site units and property here.
+func raise_alarm(site_id: StringName, reason := "") -> void:
+	if Game.is_alarmed(site_id):
 		return
-	Game.alarm = true
-	Game.notify("ALARM! You hit the %s. Felsa security is engaging: guards, dogs, the Cyberdouche, and the roof water cannons."
-		% (reason.to_lower() if not reason.is_empty() else "site"), 7.0)
-	Sfx.play(&"alarm", _datacenter.global_position + Vector3.UP * 9.0, 8.0, 1.0, 0.0)
-	Game.tip("alarm", "The alarm is up. Roof water cannons soak and shove you: take out the gas turbines to cut their power, or break Crapya's control room.")
+	Game.alarms[site_id] = true
+	var site_node := site(site_id)
+	var site_name := site_node.display_name if site_node else String(site_id)
+	Game.notify("ALARM at %s! You hit the %s. Its security is engaging." % [site_name,
+		reason.to_lower() if not reason.is_empty() else "site"], 7.0)
+	if site_node:
+		Sfx.play(&"alarm", site_node.datacenter.global_position + Vector3.UP * 11.0, 8.0, 1.0, 0.0)
+		if site_node.boss == DatacenterSite.Boss.CRAPYA:
+			Game.tip("alarm", "Scgrewgle's roof water cannons soak and shove you: take out its gas turbines to cut their power, or break Crapya's control room.")
+		elif site_node.boss == DatacenterSite.Boss.ELMO:
+			Game.tip("alarm_elmo", "Elmo's making a run for his Cyberdouche at the back dock. Catch him first, or wreck the truck.")
+	_start_assault()
+	_update_sites()
 
 
 ## Old ladies to walk across, a house to repaint, and litter to pick up.
@@ -552,7 +588,7 @@ func _plan_breach() -> void:
 			continue
 		var start := randi_range(0, panels.size() - breach_width)
 		_planned_breach = panels.slice(start, start + breach_width)
-		_breach_side = fence_name.trim_prefix("Fence").to_lower()
+		_breach_side = fence_name.get_file().trim_prefix("Fence").to_lower()
 		_breach_flare = _make_flare()
 		add_child(_breach_flare)
 		_breach_flare.global_position = next_breach_point()
@@ -623,8 +659,8 @@ func _spawn_townspeople(count: int) -> void:
 ## The four front doors closest to the datacenter site (quickest to arrive).
 func _nearest_doors() -> Array[Vector3]:
 	var doors := ($Neighborhood as NeighborhoodBuilder).door_positions().duplicate()
-	var site := _datacenter.global_position
-	doors.sort_custom(func(a: Vector3, b: Vector3) -> bool: return a.distance_to(site) < b.distance_to(site))
+	var lot := core.global_position
+	doors.sort_custom(func(a: Vector3, b: Vector3) -> bool: return a.distance_to(lot) < b.distance_to(lot))
 	return doors.slice(0, 4)
 
 

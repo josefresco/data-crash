@@ -64,7 +64,7 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
-	if Engine.is_editor_hint() or is_destroyed:
+	if Engine.is_editor_hint() or is_destroyed or (site_id != &"" and not Game.is_alarmed(site_id)):
 		return
 	_line_left -= delta
 	if _line_left <= 0.0:
@@ -75,7 +75,7 @@ func _process(delta: float) -> void:
 func _shield_targets() -> void:
 	for node in get_tree().get_nodes_in_group(shielded_group):
 		var unit := node as Destructible
-		if unit == null or unit.has_meta(SHIELD_META):
+		if unit == null or unit.has_meta(SHIELD_META) or unit.site_id != site_id:
 			continue
 		unit.set_meta(&"base_threshold", unit.damage_threshold)
 		unit.damage_threshold = 1.0e9

@@ -158,3 +158,14 @@ Earn cash by completing neighborhood goals and spend it to influence local syste
 
 * **Distraction Operations:** High community reputation brings local townspeople out to form protest lines, drawing **Local Police** and **Orange Hat NPCs** away from facility entrances.
 * **Tower Defense Repair Crew:** During Phase 3, neighbors automatically repair solar panels, restock ammo crates, and man non-lethal defense turrets alongside the player.
+
+## Prototype layout (current build)
+
+Three datacenters border the suburb, each a fenced compound with a flimsy front
+gate and a back delivery gate (guards and guard dogs posted at both). Trucks of
+Government Cheese roll in the back and trucks full of money roll out. Inside:
+racks of servers, one worker, and the boss.
+* **Felsa Cloud** (north): Elmo Mushbrains, with his Cyberdouche parked at the dock.
+* **Scgrewgle** (west): Crapya Butella in her glass control room.
+* **ForProfitSI** (east): Sham Crapman.
+Take all three down (any order) before the green datacenter goes up.

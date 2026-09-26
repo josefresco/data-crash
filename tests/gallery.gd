@@ -17,13 +17,14 @@ func _ready() -> void:
 		if arg.begins_with("only="):
 			only = arg.trim_prefix("only=").split(",")
 	level = MAIN_SCENE.instantiate()
-	level.set("boss_enabled", false)
+	level.set("boss_enabled", not only.is_empty() and _want("sites"))
 	add_child(level)
 	player = level.get_node("Player") as Player
 	await _wait(1.0)
-	for node in get_tree().get_nodes_in_group("hostiles"):
-		if not node is SentryTurret:
-			(node as Enemy).apply_damage(9999.0, Vector3.ZERO)
+	if not _want("sites") or only.is_empty():
+		for node in get_tree().get_nodes_in_group("hostiles"):
+			if not node is SentryTurret:
+				(node as Enemy).apply_damage(9999.0, Vector3.ZERO)
 
 	if _want("felsa"):
 		var truck := FelsaCar.new()
@@ -84,6 +85,18 @@ func _ready() -> void:
 			print("saved hands %s" % weapon_name)
 			side.clear_current()
 		side.queue_free()
+	if _want("sites"):
+		await _shot("site_felsa_gate", Vector3(10, 0.2, 2), Vector3(0, 3.0, -30))
+		await _shot("site_felsa_lobby", Vector3(-3, 0.2, -30), Vector3(4, 1.5, -39))
+		await _shot("site_felsa_racks", Vector3(-2, 0.2, -40), Vector3(-12, 1.2, -46))
+		await _wait(6.0)  # let the cheese truck reach the dock
+		await _shot("site_felsa_dock", Vector3(12, 0.2, -66), Vector3(0, 1.5, -60))
+		var forprofit := level.get_node("ForProfitSite") as DatacenterSite
+		await _shot("site_forprofit_sham", forprofit.to_global(Vector3(-3, 0.2, 14)), forprofit.sham.global_position + Vector3.UP * 1.5)
+		var scg := level.get_node("ScgrewgleSite") as DatacenterSite
+		await _shot("site_scgrewgle_crapya", scg.to_global(Vector3(-2, 0.2, 13)), scg.crapya_room.global_position + Vector3.UP * 1.5)
+		await _shot("site_scgrewgle", Vector3(-100, 0.2, 38), Vector3(-140, 5.0, 30))
+		await _shot("site_forprofit", Vector3(100, 0.2, 22), Vector3(140, 5.0, 30))
 	if _want("deeds"):
 		var lady := get_tree().get_nodes_in_group("neighbors")[0] as Node3D
 		await _shot("deed_grandma", lady.global_position + Vector3(3.5, 0.1, 3.0), lady.global_position + Vector3(0, 1.0, 0))

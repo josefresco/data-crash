@@ -35,8 +35,6 @@ func _run() -> void:
 		(node as Enemy).apply_damage(9999.0, Vector3.ZERO)
 	for node in get_tree().get_nodes_in_group("cooling_units"):
 		(node as Destructible).shatter((node as Node3D).global_position, 200.0)
-	for i in [9, 10]:
-		(level.get_node("FenceFront/Panel%d" % i) as Destructible).shatter(Vector3(0, 1, 0), 50.0)
 	while level.phase != level.Phase.BUILD:
 		await seconds(0.25)
 	level.set("_auto_wave_left", 9999.0)

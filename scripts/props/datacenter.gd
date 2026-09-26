@@ -1,8 +1,11 @@
 @tool
 class_name Datacenter
 extends Node3D
-## A corporate "bad" datacenter: a destructible shell plus external cooling units.
-## Destroying every cooling unit collapses the building and heals the district.
+## A corporate "bad" datacenter: a destructible shell with walk-in front and
+## back doorways, rows of server racks and ceiling lights inside, external
+## cooling units, and gas turbines out back. Destroying every cooling unit
+## collapses the building and heals the district. `site_id` tags every piece
+## as site property (hits raise that site's alarm).
 
 signal cooling_unit_destroyed(remaining: int)
 signal neutralized
@@ -10,8 +13,20 @@ signal turbine_destroyed(remaining: int)
 ## Every gas turbine is down: powered defenses (sentries, vents, crushers) are off.
 signal power_cut
 
-@export var footprint := Vector2(24.0, 16.0)
-@export var height := 8.0
+@export var footprint := Vector2(36.0, 22.0)
+@export var height := 10.0
+## Front (+Z) and back doorways in the middle wall segment.
+@export var doorway_height := 3.8
+@export var brand_name := "FELSA CLOUD"
+@export var brand_tagline := "REGION US-SUBURB-1  //  99.99% UPTIME, 0% WATER LEFT"
+@export var brand_color := Color(0.3, 0.85, 1.0)
+## Datacenter site this building belongs to (see Destructible.site_id).
+@export var site_id := &""
+## Group of powered defenses (sentries, vents) shut down when the turbines
+## die and dismantled on collapse. Empty = none.
+@export var defenses_group := &""
+## X offset of the turbine row (keeps the truck lane behind the building clear).
+@export var turbine_x := 17.5
 ## Width of each destructible wall / roof segment.
 @export var segment_size := 4.0
 @export var cooling_unit_count := 3
@@ -37,6 +52,7 @@ var is_neutralized := false
 
 var _structure: Array[Destructible] = []
 var _roof: Array[Destructible] = []
+var _racks: Array[Destructible] = []
 var _fans: Array[Node3D] = []
 var _blinkers: Array[Node3D] = []
 var _clock := 0.0
@@ -45,8 +61,22 @@ var _clock := 0.0
 func _ready() -> void:
 	_build_shell()
 	_decorate_shell()
+	_build_interior()
 	_build_cooling_units()
 	_build_turbines()
+	if site_id != &"":
+		for node in find_children("*", "", true, false):
+			if node is Destructible:
+				(node as Destructible).site_id = site_id
+
+
+## Where the front doorway is, in this node's space (the lobby is just inside).
+func front_door() -> Vector3:
+	return Vector3(0.0, 0.0, footprint.y * 0.5)
+
+
+func back_door() -> Vector3:
+	return Vector3(0.0, 0.0, -footprint.y * 0.5)
 
 
 func _process(delta: float) -> void:
@@ -87,12 +117,21 @@ func _add_wall_run(start: Vector3, direction: Vector3, run_length: float, thickn
 	for i in count:
 		var along := direction.x != 0.0
 		var seg_size := Vector3(width, height, thickness) if along else Vector3(thickness, height, width)
+		var doorway := along and count % 2 == 1 and i == count / 2
+		if doorway:
+			# Middle of the front and back walls: a lintel over a walk-in doorway.
+			seg_size.y = height - doorway_height
 		var piece := _make_segment(seg_size, wall_color, Vector3i(3, 3, 1) if along else Vector3i(1, 3, 3))
+		if doorway:
+			piece.set_meta(&"doorway", true)
+			piece.chunks = Vector3i(3, 1, 1)
 		var offset := direction * ((i + 0.5) * width)
 		# Keep walls inside the footprint edge.
 		var inset := Vector3(0.0, 0.0, -thickness * 0.5 * signf(start.z)) if along \
 			else Vector3(-thickness * 0.5 * signf(start.x), 0.0, 0.0)
 		piece.position = start + offset + inset
+		if doorway:
+			piece.position.y = doorway_height
 		_structure.append(piece)
 
 
@@ -127,6 +166,8 @@ func _decorate_shell() -> void:
 	var index := 0
 	for piece in _structure:
 		index += 1
+		if piece.has_meta(&"doorway"):
+			continue
 		var along := piece.size.x > piece.size.z
 		var normal := Vector3(0.0, 0.0, signf(piece.position.z)) if along else Vector3(signf(piece.position.x), 0.0, 0.0)
 		var depth := (piece.size.z if along else piece.size.x) * 0.5
@@ -162,42 +203,92 @@ func _decorate_shell() -> void:
 	_add_cameras(dark)
 
 
-## Glass entrance vestibule, canopy, and a backlit sign on the front wall.
+## Canopy and lit frame over the open front doorway, and a backlit sign
+## with the brand ring and name above it.
 func _decorate_front(steel: Material, dark: Material) -> void:
 	var front: Array[Destructible] = _structure.filter(func(p: Destructible) -> bool:
-		return p.size.x > p.size.z and p.position.z > 0.0)
+		return p.has_meta(&"doorway") and p.position.z > 0.0)
 	if front.is_empty():
 		return
-	var middle: Destructible = front[front.size() >> 1]
-	var face := Vector3(0.0, 0.0, middle.size.z * 0.5)
-	var glass := Models.glass(Color(0.35, 0.55, 0.7, 0.45))
-	Models.box(middle, Vector3(3.6, 3.0, 1.6), face + Vector3(0.0, 1.5, 0.8), glass)
-	for x in [-1.8, 1.8]:
-		Models.box(middle, Vector3(0.15, 3.0, 1.7), face + Vector3(x, 1.5, 0.85), steel)
-	Models.box(middle, Vector3(1.6, 2.4, 0.05), face + Vector3(0.0, 1.2, 1.62), dark)  # doors
-	var canopy := Models.box(middle, Vector3(6.0, 0.25, 3.0), face + Vector3(0.0, 3.3, 1.5), steel)
-	Models.box(canopy, Vector3(5.6, 0.04, 0.12), Vector3(0.0, -0.14, 1.3), Models.glow(Color(1.0, 0.95, 0.85), 3.0))
+	var lintel: Destructible = front[0]
+	var face := Vector3(0.0, 0.0, lintel.size.z * 0.5)
+	var ground := -lintel.position.y  # the lintel's origin sits at the top of the door
+	var accent := Models.glow(brand_color, 2.5)
+	for x in [-2.05, 2.05]:
+		Models.box(lintel, Vector3(0.18, doorway_height, 0.5), face + Vector3(x, ground + doorway_height * 0.5, 0.0), steel)
+	var canopy := Models.box(lintel, Vector3(7.0, 0.25, 3.2), face + Vector3(0.0, 0.2, 1.6), steel)
+	Models.box(canopy, Vector3(6.6, 0.04, 0.12), Vector3(0.0, -0.14, 1.4), Models.glow(Color(1.0, 0.95, 0.85), 3.0))
+	Models.box(lintel, Vector3(4.0, 0.08, 0.1), face + Vector3(0.0, -0.05, 0.05), accent)
 	# Backlit sign panel with the logo ring and the name.
-	Models.box(middle, Vector3(13.0, 1.8, 0.2), face + Vector3(0.0, height * 0.85, 0.2), dark)
-	Models.box(middle, Vector3(13.2, 0.06, 0.24), face + Vector3(0.0, height * 0.85 - 0.93, 0.2), Models.glow(Color(0.3, 0.8, 1.0), 2.5))
+	var sign_y := ground + height * 0.8
+	Models.box(lintel, Vector3(15.0, 2.0, 0.2), face + Vector3(0.0, sign_y, 0.2), dark)
+	Models.box(lintel, Vector3(15.2, 0.06, 0.24), face + Vector3(0.0, sign_y - 1.03, 0.2), accent)
 	var ring := MeshInstance3D.new()
 	var torus := TorusMesh.new()
-	torus.inner_radius = 0.45
-	torus.outer_radius = 0.62
+	torus.inner_radius = 0.5
+	torus.outer_radius = 0.68
 	ring.mesh = torus
-	ring.material_override = Models.glow(Color(0.3, 0.85, 1.0), 4.0)
+	ring.material_override = Models.glow(brand_color, 4.0)
 	ring.rotation.x = PI * 0.5
-	ring.position = face + Vector3(-5.4, height * 0.85, 0.35)
-	middle.add_child(ring)
-	for line in [["FELSA CLOUD", 0.016, 0.22], ["REGION US-SUBURB-1  //  99.99% UPTIME, 0% WATER LEFT", 0.0055, -0.5]]:
+	ring.position = face + Vector3(-6.3, sign_y, 0.35)
+	lintel.add_child(ring)
+	for line in [[brand_name, 0.018, 0.25], [brand_tagline, 0.0058, -0.55]]:
 		var sign_label := Label3D.new()
 		sign_label.text = line[0]
 		sign_label.pixel_size = line[1]
 		sign_label.font_size = 72
 		sign_label.outline_size = 0
-		sign_label.modulate = Color(0.8, 0.95, 1.0)
-		sign_label.position = face + Vector3(0.9, height * 0.85 + float(line[2]), 0.32)
-		middle.add_child(sign_label)
+		sign_label.modulate = brand_color.lerp(Color.WHITE, 0.6)
+		sign_label.position = face + Vector3(0.9, sign_y + float(line[2]), 0.32)
+		lintel.add_child(sign_label)
+
+
+## Rows of server racks (one Destructible per run, with rack dividers and
+## blinking status LEDs), leaving a center aisle between the doorways and an
+## open lobby just inside the front door. Cold ceiling lights overhead.
+func _build_interior() -> void:
+	var half := footprint * 0.5
+	var run := half.x - 5.0  # each side of the 6 m center aisle
+	var divider := Models.mat(Color(0.55, 0.57, 0.6), &"metal")
+	var leds: Array[Material] = [Models.glow(Color(0.3, 1.0, 0.5), 3.0), Models.glow(brand_color, 3.0),
+		Models.glow(Color(1.0, 0.7, 0.2), 3.0)]
+	var index := 0
+	for z in range(int(-half.y + 3.0), int(half.y - 7.0), 4):
+		for side in [-1.0, 1.0]:
+			var rack := Destructible.new()
+			rack.set_meta(&"generated", true)
+			rack.size = Vector3(run, 2.3, 1.1)
+			rack.color = Color(0.3, 0.31, 0.34)
+			rack.surface_kind = &"plates"
+			rack.max_health = 220.0
+			rack.damage_threshold = 12.0
+			rack.chunks = Vector3i(4, 1, 1)
+			rack.label = "Server rack"
+			rack.position = Vector3(side * (3.0 + run * 0.5), 0.0, z)
+			add_child(rack)
+			_racks.append(rack)
+			var cabinets := int(run / 1.3)
+			for k in cabinets:
+				var x := -run * 0.5 + (k + 0.5) * run / cabinets
+				for face in [-1.0, 1.0]:
+					var edge := Models.box(rack, Vector3(0.04, 2.2, 0.02), Vector3(x + run / cabinets * 0.5, 1.15, face * 0.56), divider)
+					index += 1
+					var led := Models.box(rack, Vector3(0.5, 0.06, 0.02), Vector3(x, 0.6 + (index % 5) * 0.32, face * 0.565), leds[index % leds.size()])
+					edge.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+					led.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			Models.box(rack, Vector3(run, 0.1, 0.4), Vector3(0.0, 2.6, 0.0), Models.mat(Color(0.8, 0.65, 0.1), &"metal"))  # cable tray
+	if Engine.is_editor_hint():
+		return
+	for x in [-half.x * 0.55, 0.0, half.x * 0.55]:
+		for z in [-half.y * 0.4, half.y * 0.35]:
+			var lamp := OmniLight3D.new()
+			lamp.light_color = Color(0.82, 0.9, 1.0)
+			lamp.light_energy = 3.5
+			lamp.omni_range = 16.0
+			lamp.position = Vector3(x, height - 1.2, z)
+			add_child(lamp)
+			lamp.set_meta(&"generated", true)
+			Models.box(self, Vector3(3.0, 0.08, 0.4), Vector3(x, height - 0.4, z), Models.glow(Color(0.9, 0.95, 1.0), 2.0))
 
 
 ## Roll-up loading door with ribs, dock bumpers, bollards, and a dock light.
@@ -368,7 +459,7 @@ func _build_turbines() -> void:
 		var turbine := GasTurbine.new()
 		turbine.set_meta(&"generated", true)
 		turbine.name = "Turbine%d" % i
-		turbine.position = Vector3((i - (turbine_count - 1) * 0.5) * spacing, 0.0, -footprint.y * 0.5 - 5.0)
+		turbine.position = Vector3(turbine_x + (i - (turbine_count - 1) * 0.5) * spacing, 0.0, -footprint.y * 0.5 - 5.0)
 		add_child(turbine)
 		if not Engine.is_editor_hint():
 			turbine.destroyed.connect(_on_turbine_destroyed)
@@ -384,7 +475,8 @@ func _on_turbine_destroyed(_turbine: Destructible) -> void:
 	Game.add_cash(turbine_cash)
 	turbine_destroyed.emit(turbines_remaining)
 	if turbines_remaining <= 0 and not is_neutralized:
-		get_tree().call_group(&"crapya_defenses", &"shut_down")
+		if defenses_group != &"":
+			get_tree().call_group(defenses_group, &"shut_down")
 		power_cut.emit()
 
 
@@ -392,8 +484,9 @@ func _collapse(origin: Vector3) -> void:
 	if is_neutralized:
 		return
 	is_neutralized = true
-	# Crapya's automated defenses and the generators go too, clearing the lot.
-	get_tree().call_group(&"crapya_defenses", &"dismantle")
+	# Powered defenses (Crapya's) and the generators go too, clearing the lot.
+	if defenses_group != &"":
+		get_tree().call_group(defenses_group, &"dismantle")
 	for node in get_tree().get_nodes_in_group("gas_turbines"):
 		var turbine := node as GasTurbine
 		if turbine and is_ancestor_of(turbine) and not turbine.is_destroyed:
@@ -411,6 +504,12 @@ func _collapse(origin: Vector3) -> void:
 	for piece: Destructible in walls:
 		delay += 0.12
 		get_tree().create_timer(delay).timeout.connect(_shatter_piece.bind(piece, origin, 120.0))
+	# The racks are buried under the roof: haul them off without extra debris.
+	for rack in _racks:
+		if is_instance_valid(rack):
+			get_tree().create_timer(delay).timeout.connect(rack.queue_free)
+	get_tree().create_timer(delay).timeout.connect(func() -> void:
+		get_tree().call_group(&"nav_baker", &"request_rebake"))
 
 	get_tree().create_timer(delay + 0.5).timeout.connect(_heal_district)
 

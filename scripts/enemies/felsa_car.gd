@@ -117,7 +117,7 @@ func _drive(delta: float) -> void:
 	if _reverse_left > 0.0:
 		_reverse_left -= delta
 		speed = move_toward(speed, -5.0, acceleration * 2.0 * delta)
-		rotation.y += _reverse_steer * turn_rate * 0.6 * delta
+		global_rotation.y += _reverse_steer * turn_rate * 0.6 * delta
 		return
 
 	var to_goal := _goal_point() - global_position
@@ -130,8 +130,9 @@ func _drive(delta: float) -> void:
 		return
 	var sway := sin(Time.get_ticks_msec() / 1000.0 * 1.7 + _wobble_phase) * wobble
 	var desired := atan2(-to_goal.x, -to_goal.z) + sway
-	var diff := wrapf(desired - rotation.y, -PI, PI)
-	rotation.y += clampf(diff, -turn_rate * delta, turn_rate * delta)
+	# World yaw (the car may be parented under a rotated DatacenterSite).
+	var diff := wrapf(desired - global_rotation.y, -PI, PI)
+	global_rotation.y += clampf(diff, -turn_rate * delta, turn_rate * delta)
 	# Brake into sharp turns so it doesn't orbit its target forever.
 	var target_speed := top_speed * clampf(1.0 - absf(diff) / PI * 1.2, 0.3, 1.0)
 	speed = move_toward(speed, target_speed, acceleration * delta)
@@ -165,7 +166,7 @@ func _handle_collisions() -> void:
 		if _ram_cooldowns.has(id):
 			continue
 		_ram_cooldowns[id] = 1.0
-		if site_security and not Game.alarm:
+		if is_dormant():
 			_begin_reverse()  # off duty: bump and back off, no ram damage
 			continue
 		Sfx.play(&"car_crash", global_position, -4.0)
@@ -183,7 +184,7 @@ func _begin_reverse() -> void:
 	_reverse_steer = 1.0 if randf() < 0.5 else -1.0
 	# Wedged (e.g. a fence corner the navmesh thinks it can round): after
 	# four reversals in 20s the battery goes into thermal runaway.
-	if site_security and not Game.alarm:
+	if is_dormant():
 		return  # off duty: no thermal runaway from idle bumping
 	_reversals.append(_clock)
 	_reversals = _reversals.filter(func(t: float) -> bool: return _clock - t < 20.0)

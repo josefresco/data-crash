@@ -96,13 +96,13 @@ func _test_rockets() -> void:
 	check(cache.is_looted and player.weapon_named("Rocket launcher").owned, "security cache gives the rocket launcher")
 	check(player.weapon_named("Rocket launcher").ammo == 4, "with 4 rockets")
 
-	# Fire at the middle of the datacenter's front wall (z = -24).
-	var datacenter := level.get_node("Datacenter") as Datacenter
+	# Fire at the Felsa datacenter's front wall (z = -33), beside the doorway.
+	var datacenter := (level.get_node("FelsaSite") as DatacenterSite).datacenter
 	var walls_before: int = datacenter.get("_structure").filter(func(p: Variant) -> bool: return is_instance_valid(p)).size()
-	player.global_position = Vector3(3, 0.2, -14)
+	player.global_position = Vector3(6, 0.2, -23)
 	await seconds(0.1)
 	player.select_weapon(player.weapons.find(player.weapon_named("Rocket launcher")))
-	player.aim_at(Vector3(2, 4.0, -24))
+	player.aim_at(Vector3(7, 4.0, -33))
 	player.fire()
 	await seconds(1.0)
 	var walls_after: int = datacenter.get("_structure").filter(func(p: Variant) -> bool:
@@ -123,13 +123,13 @@ func _test_bulldozer() -> void:
 	dozer.exit()
 	await seconds(0.2)
 
-	# Ram the datacenter's front wall from inside the fence.
-	var datacenter := level.get_node("Datacenter") as Datacenter
+	# Ram the Felsa datacenter's front wall from inside the fence.
+	var datacenter := (level.get_node("FelsaSite") as DatacenterSite).datacenter
 	var intact := func() -> int:
 		return datacenter.get("_structure").filter(func(p: Variant) -> bool:
 			return is_instance_valid(p) and not (p as Destructible).is_destroyed).size()
 	var before: int = intact.call()
-	dozer.global_transform = Transform3D(Basis(Vector3.UP, PI), Vector3(-6, 0.9, -17))
+	dozer.global_transform = Transform3D(Basis(Vector3.UP, PI), Vector3(-8, 0.9, -26))
 	dozer.brake = 0.0  # exit() parks it with the brake on
 	dozer.linear_velocity = Vector3(0, 0, -6)
 	await seconds(1.5)

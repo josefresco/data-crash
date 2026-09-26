@@ -1,6 +1,6 @@
 class_name ShamCrapman
 extends Enemy
-## Boss (wave 2): Sham Crapman, Synthetic Evangelist. Three projection drones
+## Boss (inside the ForProfitSI datacenter): Sham Crapman, Synthetic Evangelist. Three projection drones
 ## wrap him and nearby hostiles in force fields. His energy blasts draw on
 ## two power pylons he plants on arrival: each standing pylon adds damage.
 ## Counter: shotgun the drones, then the pylons, then him.
@@ -55,6 +55,7 @@ func _deploy() -> void:
 	for i in drone_count:
 		var drone := ProjectionDrone.new()
 		drone.owner_unit = self
+		drone.site = site
 		drone.position = global_position + Vector3(0.0, 3.0, 0.0)
 		drone.set("_angle", TAU * i / drone_count)
 		get_parent().add_child(drone)
@@ -66,6 +67,7 @@ func _deploy() -> void:
 		pylon.max_health = 150.0
 		pylon.chunks = Vector3i(1, 3, 1)
 		pylon.label = "Power pylon"
+		pylon.site_id = site
 		pylon.position = global_position + Vector3(-4.0 + i * 8.0, -global_position.y, 3.0)
 		get_parent().add_child(pylon)
 		pylon.add_to_group("pylons")
@@ -81,6 +83,8 @@ func _deploy() -> void:
 func _physics_process(delta: float) -> void:
 	super(delta)
 	if _is_dead:
+		return
+	if is_dormant():
 		return
 	_line_left -= delta
 	if _line_left <= 0.0:

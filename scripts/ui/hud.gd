@@ -59,7 +59,7 @@ func _ready() -> void:
 	_objective = _make_label(_info_box, 22, HORIZONTAL_ALIGNMENT_CENTER)
 	_objective.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_objective.custom_minimum_size = Vector2(860, 0)
-	for key: String in ["deeds", "boss", "wave", "core", "build", "bribe", "shop", "notice"]:
+	for key: String in ["sites", "deeds", "boss", "wave", "core", "build", "bribe", "shop", "notice"]:
 		var line := _make_label(_info_box, 18, HORIZONTAL_ALIGNMENT_CENTER)
 		line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		line.custom_minimum_size = Vector2(860, 0)

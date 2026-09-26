@@ -8,7 +8,7 @@ extends NavigationRegion3D
 ## Emitted after every finished bake, including the first.
 signal navmesh_ready
 
-@export var bake_bounds := AABB(Vector3(-92.0, -2.0, -72.0), Vector3(184.0, 20.0, 236.0))
+@export var bake_bounds := AABB(Vector3(-92.0, -2.0, -96.0), Vector3(184.0, 20.0, 260.0))
 @export var rebake_delay := 0.4
 
 var bake_count := 0
@@ -31,6 +31,11 @@ func _ready() -> void:
 	mesh.agent_height = 2.0  # multiples of cell_height (0.25)
 	mesh.agent_max_climb = 0.25
 	mesh.filter_baking_aabb = bake_bounds
+	# Bake right up to the box edges so neighboring regions (the map is split
+	# into three: one very wide bake silently produced an unusable mesh) join
+	# through edge connections instead of leaving an eroded gap.
+	mesh.border_size = mesh.agent_radius
+	mesh.edge_max_error = 1.0
 	bake_finished.connect(_on_bake_finished)
 	# Deferred: procedural builders (fences, datacenter) create colliders in their own _ready.
 	_start_bake.call_deferred()

@@ -32,9 +32,9 @@ var stats := {}
 ## Settings menu toggle. Tips already shown stay hidden for the whole session.
 var show_tips := true
 var _tips_seen := {}
-## The datacenter's security is on alert (the player attacked the site).
-## Units with Enemy.site_security stay passive until this is set.
-var alarm := false
+## Datacenter sites on alert (the player attacked them): site id -> true.
+## Units and props tagged with a site stay passive until theirs is raised.
+var alarms := {}
 ## Radians per pixel of mouse motion (settings menu).
 var mouse_sensitivity := DEFAULT_SENSITIVITY
 var fullscreen := false
@@ -79,15 +79,24 @@ func reset() -> void:
 	cash = 0
 	bribes.clear()
 	stats = {}
-	alarm = false
+	alarms = {}
 	district = DistrictState.new()
 	cash_changed.emit(cash)
-	for key in ["deeds", "boss", "wave", "core", "build", "bribe", "shop", "notice"]:
+	for key in ["sites", "deeds", "boss", "wave", "core", "build", "bribe", "shop", "notice"]:
 		set_info(key, "")
 
 
 func set_info(key: String, text: String) -> void:
 	info_changed.emit(key, text)
+
+
+func is_alarmed(site: StringName) -> bool:
+	return alarms.get(site, false)
+
+
+## True once any site has been attacked.
+func any_alarm() -> bool:
+	return not alarms.is_empty()
 
 
 func notify(text: String, seconds := 5.0) -> void:
