@@ -32,6 +32,11 @@ var two_handed := false
 ## MELEE: how far the swing reaches, and how hard it shoves.
 var reach := 2.0
 var knockback := 0.0
+## Muzzle flash scale, camera kick per shot (radians), and what it ejects
+## (&"brass", &"shell", or &"" for nothing).
+var flash_size := 1.0
+var recoil := 0.0
+var casing := &""
 
 
 static func make(weapon_name: String, props: Dictionary) -> Weapon:
@@ -55,19 +60,20 @@ static func default_loadout() -> Array[Weapon]:
 		make("Rocks", {"kind": Kind.THROWN, "throw_kind": &"rock", "damage": 5.0, "cooldown": 0.6, "ammo": 0,
 			"max_ammo": 12, "owned": false, "sound": &"throw", "model": &"rock"}),
 		make("Pistol", {"damage": 15.0, "cooldown": 0.25, "spread": 0.01, "max_range": 60.0, "owned": false,
-			"model": &"pistol"}),
+			"model": &"pistol", "flash_size": 0.75, "recoil": 0.025, "casing": &"brass"}),
 		make("Shotgun", {"damage": 10.0, "pellets": 8, "spread": 0.045, "cooldown": 0.8,
-			"max_range": 25.0, "ammo": 24, "owned": false, "sound": &"shotgun", "model": &"shotgun", "two_handed": true}),
+			"max_range": 25.0, "ammo": 24, "owned": false, "sound": &"shotgun", "model": &"shotgun", "two_handed": true,
+			"flash_size": 1.5, "recoil": 0.09, "casing": &"shell"}),
 		make("Hunting rifle", {"damage": 70.0, "cooldown": 1.2, "spread": 0.0, "max_range": 120.0,
 			"ammo": 15, "owned": false, "tracer_color": Color(1.0, 0.9, 0.6), "sound": &"rifle", "model": &"rifle",
-			"two_handed": true}),
+			"two_handed": true, "flash_size": 1.25, "recoil": 0.07, "casing": &"brass"}),
 		make("Molotov", {"kind": Kind.THROWN, "throw_kind": &"molotov", "cooldown": 1.0, "ammo": 0, "max_ammo": 3,
 			"owned": false, "sound": &"throw", "model": &"molotov"}),
 		make("Grenades", {"kind": Kind.THROWN, "throw_kind": &"grenade", "damage": 130.0, "cooldown": 0.9,
 			"ammo": 0, "max_ammo": 3, "owned": false, "sound": &"throw", "model": &"grenade"}),
 		make("Machine gun", {"damage": 9.0, "cooldown": 0.08, "spread": 0.03, "max_range": 50.0,
 			"ammo": 150, "owned": false, "tracer_color": Color(1.0, 0.8, 0.4), "sound": &"mg", "model": &"mg",
-			"two_handed": true}),
+			"two_handed": true, "flash_size": 1.0, "recoil": 0.018, "casing": &"brass"}),
 		make("Rocket launcher", {"kind": Kind.THROWN, "throw_kind": &"rocket", "damage": 260.0,
 			"cooldown": 1.5, "throw_speed": 42.0, "ammo": 0, "max_ammo": 4, "owned": false, "sound": &"rocket",
 			"model": &"rocket", "two_handed": true}),

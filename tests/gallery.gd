@@ -65,6 +65,55 @@ func _ready() -> void:
 		await _shot("dc_back", Vector3(-20, 0.2, -58), Vector3(-2, 5.0, -38))
 		await _shot("dc_cooling", Vector3(21, 0.2, -18), Vector3(15, 1.5, -28))
 		await _shot("dc_dock", Vector3(-20, 0.2, -22), Vector3(-12, 2.0, -34))
+	if _want("shots"):
+		player.arm_all()
+		var wall := Destructible.new()
+		wall.size = Vector3(6.0, 3.0, 0.4)
+		wall.surface_kind = &"plates"
+		wall.color = Color(0.6, 0.62, 0.65)
+		wall.max_health = 99999.0
+		wall.position = Vector3(-84, 0, 50)
+		level.add_child(wall)
+		var cam := Camera3D.new()
+		level.add_child(cam)
+		for weapon_name in ["Pistol", "Shotgun", "Machine gun", "Hunting rifle"]:
+			player.global_position = Vector3(-84, 0.1, 58)
+			player.select_weapon(player.weapons.find(player.weapon_named(weapon_name)))
+			player.aim_at(Vector3(-84, 1.4, 50))
+			await _wait(0.5)
+			if weapon_name == "Machine gun":
+				for k in 6:
+					player.fire()
+					await _wait(0.08)
+			cam.global_position = player.global_position + Vector3(3.0, 1.6, -1.2)
+			cam.look_at(player.global_position + Vector3(0, 1.3, -3.0))
+			cam.make_current()
+			player.fire()
+			await get_tree().process_frame
+			await RenderingServer.frame_post_draw
+			get_viewport().get_texture().get_image().save_png("res://tests/output/gallery_shot_%s.png" % weapon_name.to_snake_case())
+			print("saved shot %s" % weapon_name)
+			await _wait(0.12)
+			cam.global_position = Vector3(-81, 1.8, 54)
+			cam.look_at(Vector3(-84, 1.3, 50.2))
+			await RenderingServer.frame_post_draw
+			get_viewport().get_texture().get_image().save_png("res://tests/output/gallery_impact_%s.png" % weapon_name.to_snake_case())
+			cam.clear_current()
+			await _wait(0.6)
+		# Dirt: shoot the ground.
+		player.select_weapon(player.weapons.find(player.weapon_named("Pistol")))
+		player.aim_at(Vector3(-84, 0.0, 53))
+		await _wait(0.3)
+		cam.global_position = Vector3(-81.5, 1.2, 55)
+		cam.look_at(Vector3(-84, 0.3, 53))
+		cam.make_current()
+		player.fire()
+		await _wait(0.08)
+		await RenderingServer.frame_post_draw
+		get_viewport().get_texture().get_image().save_png("res://tests/output/gallery_impact_dirt.png")
+		print("saved dirt")
+		cam.clear_current()
+		cam.queue_free()
 	if _want("hands"):
 		player.arm_all()
 		var side := Camera3D.new()

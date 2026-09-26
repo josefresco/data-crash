@@ -91,7 +91,10 @@ func _shoot(aim: Vector3) -> void:
 		var enemy := hit["collider"] as Enemy
 		if enemy and enemy.faction == Enemy.Faction.HOSTILE:
 			enemy.apply_damage(shot_damage, from, &"bullet")
-	Vfx.muzzle(get_parent(), from + (to - from).normalized() * 0.7, Color(0.6, 1.0, 0.7))
+	var dir := (to - from).normalized()
+	Vfx.muzzle(get_parent(), from + dir * 0.7, Color(0.6, 1.0, 0.7), dir, 0.7)
+	if not hit.is_empty() and not hit["collider"] is Enemy:
+		Vfx.impact(get_parent(), to, hit["normal"], Player.surface_of(hit["collider"], hit["normal"]), 0.6)
 	Fx.tracer(get_parent(), from, to, Color(0.5, 1.0, 0.6))
 	Sfx.play(&"laser", from, -8.0)
 

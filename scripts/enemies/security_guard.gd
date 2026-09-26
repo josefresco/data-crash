@@ -39,14 +39,26 @@ func _attack(victim: Node3D) -> void:
 	var to := from + direction * (sight_range + 5.0)
 	var query := PhysicsRayQueryParameters3D.create(from, to, SHOT_MASK, [get_rid()])
 	var hit := get_world_3d().direct_space_state.intersect_ray(query)
-	Vfx.muzzle(get_parent(), from + direction * 0.5)
+	Vfx.muzzle(get_parent(), from + direction * 0.5, Color(1.0, 0.8, 0.45), direction, 0.9)
 	Sfx.play(&"guard_gun", from, -6.0)
 	if not hit.is_empty():
 		to = hit["position"]
 		var struck := hit["collider"] as Node
 		if not struck is Enemy and not struck is Player:
-			Vfx.impact(get_parent(), to, hit["normal"])
+			Vfx.impact(get_parent(), to, hit["normal"], Player.surface_of(struck, hit["normal"]), 0.8)
 		if struck and struck.has_method("apply_damage") and not _is_friend(struck):
 			struck.call(&"apply_damage", shot_damage, from, &"bullet")
 	Fx.tracer(get_parent(), from, to, Color(1.0, 0.85, 0.5))
+	_whiz_past_player(from, to, hit)
+
+
+## A round that just misses the player cracks past their ear.
+func _whiz_past_player(from: Vector3, to: Vector3, hit: Dictionary) -> void:
+	var player := get_tree().get_first_node_in_group("player") as Player
+	if player == null or not player.is_visible_in_tree() or (not hit.is_empty() and hit["collider"] == player):
+		return
+	var ear := player.global_position + Vector3.UP * 1.5
+	var closest := Geometry3D.get_closest_point_to_segment(ear, from, to)
+	if closest.distance_to(ear) < 2.5 and closest.distance_to(from) > 4.0:
+		Sfx.play(&"whiz", closest, 2.0, 1.0, 0.12)
 

@@ -6,6 +6,8 @@ signal health_changed(health: float, max_health: float)
 signal charges_changed(charges: int)
 signal prompt_changed(text: String)
 signal weapon_changed(weapon: Weapon)
+## A shot hit a hostile (the HUD's hit marker); `killed` if it went down.
+signal hit_confirmed(killed: bool)
 
 ## Hitscan and aim rays hit world, vehicles, destructibles, and units (not debris).
 const AIM_MASK := 1 | 4 | 16 | 32
@@ -418,9 +420,16 @@ func fire() -> void:
 	if weapon.kind == Weapon.Kind.THROWN:
 		_throw(weapon)
 	else:
-		Vfx.muzzle(get_parent(), muzzle_point())
+		var aim := _aim_direction()
+		Vfx.muzzle(get_parent(), muzzle_point(), Color(1.0, 0.8, 0.45), aim, weapon.flash_size)
+		# Shotguns: every pellet hits, but only a few spawn impact effects.
 		for i in weapon.pellets:
-			_fire_pellet(weapon)
+			_fire_pellet(weapon, i < 4)
+		if weapon.casing != &"":
+			var right := _body.global_basis.x.normalized()
+			Vfx.shell_casing(get_parent(), muzzle_point() - aim * 0.3, right + Vector3.UP * 0.2, global_position.y,
+				weapon.casing == &"shell")
+		_kick(weapon.recoil)
 	weapon_changed.emit(weapon)
 
 
@@ -533,7 +542,32 @@ func _aim_direction() -> Vector3:
 	return _camera.project_ray_normal(center)
 
 
-func _fire_pellet(weapon: Weapon) -> void:
+## Recoil: the camera kicks up (and a touch sideways); the aim drifts back
+## on its own as you keep aiming.
+func _kick(amount: float) -> void:
+	if amount <= 0.0:
+		return
+	_pitch = clampf(_pitch + amount, -1.2, 0.6)
+	_spring.rotation.x = _pitch
+	_pivot.rotate_y(randf_range(-1.0, 1.0) * amount * 0.35)
+
+
+## What a bullet hitting `collider` looks like: metal props spark, the
+## ground throws dirt, people puff, everything else chips.
+static func surface_of(collider: Node, normal: Vector3) -> StringName:
+	if collider is Enemy:
+		return &"metal" if collider is FelsaCar or collider is Drone or collider is SentryTurret else &"flesh"
+	if collider is VehicleBody3D:
+		return &"metal"
+	if collider is Destructible:
+		var kind := (collider as Destructible).surface_kind
+		if kind in [&"plates", &"corrugated", &"metal", &"solar", &"chainlink", &"paint"]:
+			return &"metal"
+		return &"default"
+	return &"dirt" if normal.y > 0.7 else &"default"
+
+
+func _fire_pellet(weapon: Weapon, effects := true) -> void:
 	var muzzle := muzzle_point()
 	var center := get_viewport().get_visible_rect().size * 0.5
 	var origin := _camera.project_ray_origin(center)
@@ -542,24 +576,35 @@ func _fire_pellet(weapon: Weapon) -> void:
 	var query := PhysicsRayQueryParameters3D.create(origin, origin + direction * weapon.max_range, AIM_MASK, [get_rid()])
 	var hit := get_world_3d().direct_space_state.intersect_ray(query)
 	if hit.is_empty():
-		Fx.tracer(get_parent(), muzzle, origin + direction * weapon.max_range, weapon.tracer_color)
+		if effects:
+			Fx.tracer(get_parent(), muzzle, origin + direction * weapon.max_range, weapon.tracer_color)
 		return
-	Fx.tracer(get_parent(), muzzle, hit["position"], weapon.tracer_color)
+	var point: Vector3 = hit["position"]
+	var normal: Vector3 = hit["normal"]
 	var target := hit["collider"] as Node
-	if not target is Enemy:
-		Vfx.impact(get_parent(), hit["position"], hit["normal"])
-		if randf() < 0.35:
-			Sfx.play(&"hit_metal", hit["position"], -10.0)
-	elif randf() < 0.5:
-		Sfx.play(&"hit_flesh", hit["position"], -8.0)
+	if effects:
+		Fx.tracer(get_parent(), muzzle, point, weapon.tracer_color)
+		var surface := surface_of(target, normal)
+		Vfx.impact(get_parent(), point, normal, surface, 1.0 if weapon.pellets == 1 else 0.6)
+		match surface:
+			&"metal":
+				Sfx.play(&"ricochet" if randf() < 0.3 else &"hit_metal", point, -8.0)
+			&"flesh":
+				Sfx.play(&"hit_flesh", point, -6.0)
+			_:
+				if randf() < 0.4:
+					Sfx.play(&"hit_wood", point, -12.0, 1.3)
+		if not target is Enemy and target is Node3D:
+			Vfx.bullet_hole(target, point, normal)
 	var friendly := target != null and (target.is_in_group("structures") \
 		or (target is Enemy and (target as Enemy).faction == Enemy.Faction.ALLY))
 	if target and not friendly and target.has_method("apply_damage"):
 		# `from` is the shooter: riot shields and debris direction depend on it.
 		target.call(&"apply_damage", weapon.damage, muzzle, &"bullet")
+		if target is Enemy and (target as Enemy).faction == Enemy.Faction.HOSTILE:
+			hit_confirmed.emit(not (target as Enemy).is_alive())
 	if target is RigidBody3D:
-		(target as RigidBody3D).apply_impulse(
-			-(hit["normal"] as Vector3) * 2.0, (hit["position"] as Vector3) - (target as Node3D).global_position)
+		(target as RigidBody3D).apply_impulse(-normal * 2.0, point - (target as Node3D).global_position)
 
 
 func _throw(weapon: Weapon) -> void:

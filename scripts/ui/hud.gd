@@ -40,6 +40,7 @@ var _vignette: TextureRect
 var _hurt := 0.0
 var _last_health := -1.0
 var _map_frame: Panel
+var _hit_marker: _HitMarker
 var _minimap: Minimap
 
 
@@ -186,6 +187,9 @@ func _ready() -> void:
 	var crosshair := _make_label(root, 24, HORIZONTAL_ALIGNMENT_CENTER)
 	crosshair.text = "+"
 	_place(crosshair, Control.PRESET_CENTER, Rect2(-20, -18, 40, 36))
+	_hit_marker = _HitMarker.new()
+	root.add_child(_hit_marker)
+	_place(_hit_marker, Control.PRESET_CENTER, Rect2(-24, -24, 48, 48))
 
 	Game.cash_changed.connect(func(_c: int) -> void: _refresh_status())
 	Game.objective_changed.connect(func(text: String) -> void: _objective.text = text)
@@ -252,6 +256,9 @@ func _connect_player() -> void:
 		_last_health = health
 		_refresh_status())
 	_player.charges_changed.connect(func(_c: int) -> void: _refresh_status())
+	_player.hit_confirmed.connect(func(killed: bool) -> void:
+		_hit_marker.show_hit(killed)
+		Sfx.ui(&"hitmarker", -2.0 if killed else -8.0))
 	_player.prompt_changed.connect(func(text: String) -> void: _prompt.text = text)
 	_player.weapon_changed.connect(func(_w: Weapon) -> void: _refresh_status())
 	_last_health = _player.health
@@ -355,6 +362,38 @@ func _make_label(parent: Control, font_size: int, align: HorizontalAlignment) ->
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	parent.add_child(label)
 	return label
+
+
+## Four short strokes around the crosshair when a shot lands: white for a
+## hit, red and bigger for a kill.
+class _HitMarker extends Control:
+	var _left := 0.0
+	var _killed := false
+
+	func _init() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	func show_hit(killed: bool) -> void:
+		_left = 0.3 if killed else 0.15
+		_killed = killed
+		queue_redraw()
+
+	func _process(delta: float) -> void:
+		if _left > 0.0:
+			_left -= delta
+			queue_redraw()
+
+	func _draw() -> void:
+		if _left <= 0.0:
+			return
+		var c := size * 0.5
+		var color := Color(1.0, 0.25, 0.2, minf(_left * 8.0, 1.0)) if _killed else Color(1, 1, 1, minf(_left * 8.0, 1.0))
+		var inner := 7.0 if not _killed else 8.0
+		var outer := 14.0 if not _killed else 19.0
+		for d in [Vector2(1, 1), Vector2(-1, 1), Vector2(1, -1), Vector2(-1, -1)]:
+			var n := (d as Vector2).normalized()
+			draw_line(c + n * inner, c + n * outer, Color(0, 0, 0, color.a * 0.6), 5.0)
+			draw_line(c + n * inner, c + n * outer, color, 2.5)
 
 
 ## A fixed-size control that draws one HudIcons icon.

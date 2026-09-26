@@ -15,7 +15,8 @@ from PIL import Image
 ROOT = Path(__file__).resolve().parent.parent
 PARTICLES = ROOT / "assets/kenney/particles"
 NAMES = ["smoke_01", "smoke_04", "smoke_07", "dirt_02", "scorch_01", "scorch_02", "scorch_03", "circle_05",
-         "fire_01", "fire_02", "flame_03", "muzzle_02"]
+         "fire_01", "fire_02", "flame_03", "muzzle_01", "muzzle_02", "muzzle_03", "muzzle_04", "muzzle_05",
+         "trace_01", "star_06"]
 SIZE = 256
 
 

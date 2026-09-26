@@ -95,23 +95,91 @@ def loopable(x, fade=0.25):
 
 # --- Guns ---------------------------------------------------------------
 
-def gunshot(seconds, crack_decay, thump_hz, thump_decay, tail, bright):
-    crack = highpass(noise(seconds), bright) * env(seconds, 0.0005, crack_decay)
-    body = band(noise(seconds), 150, 2500) * env(seconds, 0.001, crack_decay * 3)
+def place(x, sound, at):
+    """Mixes `sound` into `x` starting `at` seconds in (clipped to fit)."""
+    i = int(RATE * at)
+    n = min(len(sound), len(x) - i)
+    if n > 0:
+        x[i:i + n] += sound[:n]
+    return x
+
+
+def click(seconds, low, high, decay, gain=1.0):
+    """A small metallic mechanism click."""
+    return band(noise(seconds), low, high, 3) * env(seconds, 0.0003, decay) * gain
+
+
+def gunshot(seconds, caliber, blast_decay, tail, bright, mech=None):
+    """A layered outdoor gunshot.
+
+    caliber: 0..1 (pistol ~0.3, rifle ~0.8, shotgun ~1). Layers: a 1-2 ms
+    supersonic crack, a saturated muzzle blast, a low thump that sweeps down,
+    a noisy outdoor tail, two slapback echoes off the houses, then an optional
+    mechanism (slide, pump, bolt) as [(time, sound)].
+    """
     t = t_axis(seconds)
-    thump = np.sin(2 * np.pi * thump_hz * t * (1 - 0.4 * t / seconds)) * env(seconds, 0.001, thump_decay)
-    x = crack * 0.9 + body * 0.8 + thump * 1.2
-    return echo(x, 0.09, tail, taps=4)
+    crack = highpass(noise(seconds), bright, 4) * env(seconds, 0.0001, 0.0018) * 1.6
+    blast = band(noise(seconds), 180, 4200, 2) * env(seconds, 0.0006, blast_decay)
+    blast = np.tanh(blast * (2.5 + caliber * 2.5)) * 0.9
+    f0 = 95 + (1 - caliber) * 90
+    sweep = f0 * (1.0 - 0.55 * np.clip(t / 0.09, 0, 1))
+    thump = np.sin(2 * np.pi * np.cumsum(sweep) / RATE) * env(seconds, 0.0008, 0.035 + caliber * 0.05) * (0.8 + caliber * 0.7)
+    body = crack + blast + thump
+    # Outdoor tail: filtered noise rolling off, and slapback echoes.
+    rumble = lowpass(noise(seconds), 700 + caliber * 300, 3) * env(seconds, 0.02, 0.18 + caliber * 0.35) * tail
+    x = body + rumble
+    for delay, gain, cut in [(0.11, 0.35, 2200), (0.24, 0.22, 1400), (0.41, 0.12, 900)]:
+        echoed = np.zeros_like(x)
+        n = int(RATE * delay)
+        echoed[n:] = body[:-n] * gain * tail * 2.0
+        x += lowpass(echoed, cut, 2)
+    for at, sound in (mech or []):
+        x = place(x, sound, at)
+    return x
 
 
 def guns():
     for i in range(3):
-        save(f"pistol_{i}", gunshot(0.6, 0.012 + i * 0.002, 140 + i * 15, 0.05, 0.25, 1800))
-        save(f"mg_{i}", gunshot(0.35, 0.01, 120 + i * 10, 0.04, 0.15, 1500))
-        save(f"guard_gun_{i}", gunshot(0.5, 0.01, 170 + i * 12, 0.04, 0.2, 2200))
+        slide = click(0.05, 2500, 7000, 0.006, 0.35)
+        save(f"pistol_{i}", gunshot(0.9, 0.3 + i * 0.03, 0.03, 0.55, 2600, [(0.055, slide)]))
+        save(f"mg_{i}", gunshot(0.55, 0.5 + i * 0.03, 0.028, 0.35, 2200))
+        # Enemy rifles: a touch further away (less crack, more tail).
+        save(f"guard_gun_{i}", lowpass(gunshot(0.8, 0.45 + i * 0.04, 0.03, 0.7, 2400), 5200))
     for i in range(2):
-        save(f"shotgun_{i}", gunshot(0.9, 0.025, 85 + i * 8, 0.12, 0.35, 900))
-        save(f"rifle_{i}", gunshot(1.2, 0.008, 110 + i * 10, 0.08, 0.45, 2500))
+        pump = click(0.09, 900, 3500, 0.02, 0.6)
+        chk = click(0.07, 1500, 5000, 0.012, 0.7)
+        save(f"shotgun_{i}", gunshot(1.3, 1.0, 0.07, 0.9, 1400, [(0.42, pump), (0.56, chk)]))
+        bolt_up = click(0.06, 1200, 4500, 0.012, 0.45)
+        bolt_back = click(0.1, 800, 3000, 0.03, 0.5)
+        save(f"rifle_{i}", gunshot(1.8, 0.85, 0.045, 1.0, 3000, [(0.55, bolt_up), (0.68, bolt_back), (0.86, bolt_up)]))
+    # A bullet passing close: a sharp crack-snap that whistles down.
+    for i in range(3):
+        seconds = 0.35
+        tt = t_axis(seconds)
+        whistle = np.sin(2 * np.pi * np.cumsum(3200 - 2400 * tt / seconds) / RATE) * env(seconds, 0.005, 0.08) * 0.35
+        snap = highpass(noise(seconds), 3000, 3) * env(seconds, 0.0002, 0.004)
+        hiss = band(noise(seconds), 1500, 6000) * env(seconds, 0.01, 0.07) * 0.5
+        save(f"whiz_{i}", snap + whistle + hiss, peak=0.7)
+    # Spent casings tinkling on pavement.
+    for i in range(3):
+        seconds = 0.45
+        x = np.zeros(int(RATE * seconds))
+        for k, at in enumerate([0.0, 0.09 + i * 0.01, 0.16 + i * 0.02]):
+            d = 0.12
+            tt = t_axis(d)
+            ring = sum(np.sin(2 * np.pi * f * tt) * a for f, a in [(5200 + i * 300, 1.0), (7900, 0.5), (11800, 0.25)])
+            x = place(x, ring * np.exp(-tt / 0.03) * (0.6 ** k), at)
+        save(f"casing_{i}", x, peak=0.5)
+    # Ricochet off metal: a ping that bends away.
+    for i in range(3):
+        seconds = 0.5
+        tt = t_axis(seconds)
+        f = (2800 + i * 400) * (1.0 - 0.45 * tt / seconds)
+        ping = np.sin(2 * np.pi * np.cumsum(f) / RATE) * env(seconds, 0.002, 0.12)
+        save(f"ricochet_{i}", ping + highpass(noise(seconds), 2500) * env(seconds, 0.0003, 0.01), peak=0.6)
+    # Crosshair hit marker: a tight tick.
+    tt = t_axis(0.06)
+    save("hitmarker_0", np.sin(2 * np.pi * 2200 * tt) * np.exp(-tt / 0.012) + click(0.06, 3000, 8000, 0.004, 0.4), peak=0.5)
 
 
 def whoosh(seconds, start_hz, end_hz, rough=0.0):
@@ -128,7 +196,7 @@ def whoosh(seconds, start_hz, end_hz, rough=0.0):
 def throws():
     for i in range(2):
         save(f"throw_{i}", whoosh(0.35, 500 + i * 150, 1600))
-    launch = whoosh(1.0, 300, 2400, rough=1.0) + gunshot(1.0, 0.02, 70, 0.15, 0.3, 600) * 0.8
+    launch = whoosh(1.0, 300, 2400, rough=1.0) + gunshot(1.0, 1.0, 0.06, 0.6, 700) * 0.6
     save("rocket_0", launch)
 
 

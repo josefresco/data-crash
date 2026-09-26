@@ -29,6 +29,7 @@ func _run() -> void:
 	await _test_knockback()
 	await _test_shovel()
 	await _test_held_models()
+	await _test_hit_feedback()
 
 
 func _select(weapon_name: String) -> void:
@@ -156,3 +157,19 @@ func _test_knockback() -> void:
 	player.apply_knockback(Vector3(15, 4, 0))
 	await seconds(0.4)
 	check(player.global_position.x > start.x + 2.0, "knockback shoves the player")
+
+
+## Landing a shot confirms the hit (the HUD's marker), and guns kick.
+func _test_hit_feedback() -> void:
+	player.global_position = Vector3(-84, 0.2, 30)
+	var guard := _dummy(SecurityGuard.new(), player.global_position + Vector3(0, 0, -8)) as SecurityGuard
+	await seconds(0.1)
+	_select("Pistol")
+	var hits := []
+	player.hit_confirmed.connect(func(killed: bool) -> void: hits.append(killed))
+	player.aim_at(guard.aim_point())
+	var pitch: float = player.get("_pitch")
+	player.fire()
+	check(hits.size() == 1 and hits[0] == false, "a pistol hit confirms on the crosshair")
+	check(float(player.get("_pitch")) > pitch, "the pistol kicks the aim up")
+	guard.apply_damage(9999.0, Vector3.ZERO)
