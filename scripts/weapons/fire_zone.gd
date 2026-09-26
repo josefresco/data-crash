@@ -14,6 +14,7 @@ var _time_left := 0.0
 var _tick_left := 0.0
 var _light: OmniLight3D
 var _mat: StandardMaterial3D
+var _flames: GPUParticles3D
 
 
 func _ready() -> void:
@@ -39,6 +40,8 @@ func _ready() -> void:
 	_light.omni_range = radius * 2.5
 	_light.position.y = 1.0
 	add_child(_light)
+	_flames = Vfx.fire_patch(self, Vector3.UP * 0.1, radius * 0.8)
+	Vfx.smoke_column(self, Vector3.UP * 1.5, 1.0)
 
 
 func _physics_process(delta: float) -> void:
@@ -52,8 +55,6 @@ func _physics_process(delta: float) -> void:
 	if _tick_left > 0.0:
 		return
 	_tick_left = TICK
-	Fx.flame_puff(get_parent(), global_position + Vector3(randf_range(-radius, radius) * 0.6, 0.2,
-		randf_range(-radius, radius) * 0.6), 0.5)
 
 	for node in get_tree().get_nodes_in_group("hostiles"):
 		var enemy := node as Enemy

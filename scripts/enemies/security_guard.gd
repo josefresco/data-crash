@@ -39,9 +39,12 @@ func _attack(victim: Node3D) -> void:
 	var to := from + direction * (sight_range + 5.0)
 	var query := PhysicsRayQueryParameters3D.create(from, to, SHOT_MASK, [get_rid()])
 	var hit := get_world_3d().direct_space_state.intersect_ray(query)
+	Vfx.muzzle(get_parent(), from + direction * 0.5)
 	if not hit.is_empty():
 		to = hit["position"]
 		var struck := hit["collider"] as Node
+		if not struck is Enemy and not struck is Player:
+			Vfx.impact(get_parent(), to, hit["normal"])
 		if struck and struck.has_method("apply_damage") and not _is_friend(struck):
 			struck.call(&"apply_damage", shot_damage, from, &"bullet")
 	Fx.tracer(get_parent(), from, to, Color(1.0, 0.85, 0.5))

@@ -10,7 +10,7 @@ signal fixed(main: WaterMain)
 var progress := 0.0
 var is_fixed := false
 
-var _spray_left := 0.0
+var _spray: GPUParticles3D
 
 
 func _ready() -> void:
@@ -31,6 +31,7 @@ func _ready() -> void:
 	valve_mesh.material_override = pipe_mat
 	valve_mesh.position.y = 0.4
 	add_child(valve_mesh)
+	_spray = Vfx.water_spray(self, Vector3.UP * 0.8)
 
 
 func label() -> String:
@@ -44,31 +45,6 @@ func work(delta: float) -> bool:
 	progress = minf(progress + delta / fix_time, 1.0)
 	if progress >= 1.0:
 		is_fixed = true
+		_spray.emitting = false
 		fixed.emit(self)
 	return is_fixed
-
-
-func _process(delta: float) -> void:
-	if is_fixed:
-		return
-	_spray_left -= delta
-	if _spray_left > 0.0:
-		return
-	_spray_left = 0.08
-	# Leak: blue-white puffs shooting up and falling off.
-	var mat := StandardMaterial3D.new()
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.albedo_color = Color(0.7, 0.85, 1.0, 0.8)
-	var drop := MeshInstance3D.new()
-	var box := BoxMesh.new()
-	box.size = Vector3.ONE * 0.2
-	drop.mesh = box
-	drop.material_override = mat
-	add_child(drop)
-	drop.position = Vector3(0.0, 0.8, 0.0)
-	var peak := Vector3(randf_range(-0.8, 0.8), randf_range(2.5, 3.5), randf_range(-0.8, 0.8))
-	var tween := drop.create_tween()
-	tween.tween_property(drop, "position", peak, 0.35).set_ease(Tween.EASE_OUT)
-	tween.tween_property(drop, "position", Vector3(peak.x * 1.8, 0.0, peak.z * 1.8), 0.35).set_ease(Tween.EASE_IN)
-	tween.tween_callback(drop.queue_free)

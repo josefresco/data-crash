@@ -382,6 +382,7 @@ func fire() -> void:
 	if weapon.kind == Weapon.Kind.THROWN:
 		_throw(weapon)
 	else:
+		Vfx.muzzle(get_parent(), global_position + Vector3.UP * 1.4 + _aim_direction() * 0.6)
 		for i in weapon.pellets:
 			_fire_pellet(weapon)
 	weapon_changed.emit(weapon)
@@ -405,6 +406,8 @@ func _fire_pellet(weapon: Weapon) -> void:
 		return
 	Fx.tracer(get_parent(), muzzle, hit["position"], weapon.tracer_color)
 	var target := hit["collider"] as Node
+	if not target is Enemy:
+		Vfx.impact(get_parent(), hit["position"], hit["normal"])
 	var friendly := target != null and (target.is_in_group("structures") \
 		or (target is Enemy and (target as Enemy).faction == Enemy.Faction.ALLY))
 	if target and not friendly and target.has_method("apply_damage"):

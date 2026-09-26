@@ -23,6 +23,7 @@ var _puff_left := 0.0
 var _rack: MeshInstance3D
 var _grate_mat: StandardMaterial3D
 var _hit_this_slam := {}
+var _jet: GPUParticles3D
 
 
 func _ready() -> void:
@@ -31,6 +32,8 @@ func _ready() -> void:
 	_grate_mat = StandardMaterial3D.new()
 	_grate_mat.albedo_color = Color(0.2, 0.2, 0.22)
 	Models.box(self, Vector3(radius * 1.4, 0.08, radius * 1.4), Vector3(0.0, 0.04, 0.0), _grate_mat)
+	if not crusher:
+		_jet = Vfx.steam_jet(self, Vector3.UP * 0.2, 4.0)
 	if crusher:
 		_rack = Models.box(self, Vector3(1.2, 2.2, 0.9), Vector3(0.0, 4.5, 0.0), Models.mat(Color(0.15, 0.16, 0.2)))
 		for i in 5:
@@ -43,6 +46,8 @@ func _ready() -> void:
 
 func shut_down() -> void:
 	state = State.OFF
+	if _jet:
+		_jet.emitting = false
 	_grate_mat.albedo_color = Color(0.2, 0.2, 0.22)
 	if _rack:
 		_rack.position.y = 1.1  # dropped, harmless
@@ -59,8 +64,7 @@ func _physics_process(delta: float) -> void:
 				_left = warn_time
 				_grate_mat.albedo_color = Color(0.9, 0.5, 0.1)
 		State.WARN:
-			if not crusher:
-				_puff(0.3)
+			_set_jet(0.3)
 			if _left <= 0.0:
 				state = State.ACTIVE
 				_left = active_time
@@ -69,12 +73,13 @@ func _physics_process(delta: float) -> void:
 			if crusher:
 				_rack.position.y = move_toward(_rack.position.y, 1.1, delta * 30.0)
 			else:
-				_puff(1.0)
+				_set_jet(1.0)
 			_hurt(delta)
 			if _left <= 0.0:
 				state = State.IDLE
 				_left = idle_time
 				_grate_mat.albedo_color = Color(0.2, 0.2, 0.22)
+				_set_jet(0.0)
 		_:
 			pass
 	if crusher and state == State.IDLE:
@@ -99,19 +104,8 @@ func _hurt(delta: float) -> void:
 			victim.call(&"apply_damage", damage * delta, global_position, &"steam")
 
 
-func _puff(intensity: float) -> void:
-	_puff_left -= get_physics_process_delta_time()
-	if _puff_left > 0.0:
+func _set_jet(intensity: float) -> void:
+	if _jet == null:
 		return
-	_puff_left = 0.06 / intensity
-	var mat := StandardMaterial3D.new()
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.albedo_color = Color(0.95, 0.95, 0.95, 0.6)
-	var puff := Models.box(get_parent() as Node3D, Vector3.ONE * 0.5,
-		global_position + Vector3(randf_range(-0.6, 0.6), 0.3, randf_range(-0.6, 0.6)), mat)
-	var tween := puff.create_tween().set_parallel()
-	tween.tween_property(puff, "global_position:y", puff.global_position.y + 3.0 * intensity + 0.5, 0.6)
-	tween.tween_property(puff, "scale", Vector3.ONE * (1.5 + intensity * 2.0), 0.6)
-	tween.tween_property(mat, "albedo_color:a", 0.0, 0.6)
-	tween.chain().tween_callback(puff.queue_free)
+	_jet.emitting = intensity > 0.0
+	_jet.amount_ratio = maxf(intensity, 0.01)

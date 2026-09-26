@@ -35,6 +35,23 @@ func _ready() -> void:
 		level.add_child(tag)
 	await _shot("cars", Vector3(-68, 0.2, 44), Vector3(-68, 1.0, 30))
 
+	# Particle effects: a burning Felsa car, a molotov fire, then an explosion.
+	var car := FelsaCar.new()
+	car.position = Vector3(-86, 0.2, 80)
+	level.add_child(car)
+	car.set_physics_process(false)
+	car.call("_ignite")
+	var fire := FireZone.new()
+	fire.duration = 60.0
+	level.add_child(fire)
+	fire.global_position = Vector3(-80, 0.05, 86)
+	await _wait(2.5)
+	Vfx.explosion(level, Vector3(-88, 0.5, 80), 6.0)
+	await _wait(0.2)
+	await _shot("vfx", Vector3(-76, 0.2, 72), Vector3(-83, 2.0, 86))
+	await _wait(1.2)
+	await _shot("vfx_smoke", Vector3(-76, 0.2, 72), Vector3(-83, 2.5, 86))
+
 	await _shot("crapya", Vector3(-10, 0.2, -18), Vector3(-18, 1.5, -30))
 	await _shot("dozer", Vector3(18, 0.2, 48), Vector3(25, 1.0, 57))
 	await _shot("gunshow", Vector3(-4, 0.2, 52), Vector3(-12, 1.2, 57))

@@ -13,7 +13,7 @@ extends RigidBody3D
 @export var lure_radius := 10.0
 
 var _done := false
-var _trail_left := 0.0
+var _trail: GPUParticles3D
 
 
 func _ready() -> void:
@@ -72,19 +72,19 @@ func _ready() -> void:
 	mesh.material_override = mat
 	add_child(mesh)
 
+	if kind == &"rocket":
+		_trail = Vfx.smoke_column(self, Vector3.ZERO, 0.4, false)
+		(_trail.process_material as ParticleProcessMaterial).gravity = Vector3(0.0, 0.3, 0.0)
+		(_trail.process_material as ParticleProcessMaterial).initial_velocity_max = 0.5
 	var lifetime := fuse if kind == &"grenade" else max_flight
 	get_tree().create_timer(lifetime).timeout.connect(_impact.bind(null))
 
 
-func _physics_process(delta: float) -> void:
+func _physics_process(_delta: float) -> void:
 	if kind != &"rocket" or _done:
 		return
 	if linear_velocity.length_squared() > 1.0:
 		look_at(global_position + linear_velocity, Vector3.UP if absf(linear_velocity.normalized().y) < 0.99 else Vector3.RIGHT)
-	_trail_left -= delta
-	if _trail_left <= 0.0:
-		_trail_left = 0.03
-		Fx.flame_puff(get_parent(), global_position, 0.25, 0.25)
 
 
 func _on_body_entered(body: Node) -> void:
@@ -99,6 +99,10 @@ func _impact(body: Variant) -> void:
 		return
 	_done = true
 	var point := global_position
+	if _trail:  # let the trail drift and fade instead of vanishing with the rocket
+		_trail.emitting = false
+		_trail.reparent(get_parent())
+		get_tree().create_timer(_trail.lifetime + 0.5).timeout.connect(_trail.queue_free)
 	match kind:
 		&"grenade", &"rocket":
 			var blast := Explosive.new()

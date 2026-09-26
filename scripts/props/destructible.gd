@@ -145,6 +145,7 @@ func _spawn_debris(from: Vector3, force: float) -> void:
 			_spawn_fractured(parent, from, force, budget)
 		else:
 			_spawn_box_chunks(parent, from, force, budget)
+	Vfx.dust(parent, global_position + Vector3.UP * size.y * 0.5, maxf(size.x, maxf(size.y, size.z)) * 0.6)
 	destroyed.emit(self)
 	get_tree().call_group(&"nav_baker", &"request_rebake")
 	queue_free()

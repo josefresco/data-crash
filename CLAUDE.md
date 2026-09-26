@@ -21,6 +21,14 @@ Godot 4.7 (GDScript, Jolt physics) prototype of the game in `PLAN.md` (design), 
 - Run the fast tests after gameplay changes, and the sim after balance changes. Under `--fixed-fps`, threaded work (navmesh bakes) finishes in real time, so tests await `NavBaker.navmesh_ready` instead of fixed delays. Tests are scenes, not `--script`, because `--script` mode doesn't compile autoload references (`Game`).
 - After script edits, run `--headless --path . --import` and check for `SCRIPT ERROR` before running tests.
 
+## Assets
+
+- `assets/kenney/` holds CC0 Kenney packs (each folder keeps its `License.txt`): `suburban` (houses, paths), `cars`, `characters` (one animated humanoid FBX, idle/run/jump clips, base skins), `nature` (trees, bushes, flowers), `particles`.
+- Generated from those, reproducible with Python + Pillow (commit the outputs):
+  - `python tools/generate_skins.py`: faction outfit skins (13 outfits x 5 skin tones) by recoloring atlas regions of `skaterMaleA`. Add an outfit there, then use its name as `Enemy.outfit` / `CharacterModel.create()`.
+  - `python tools/generate_palettes.py`: roof-color variants of the suburban palette.
+  - `python tools/prepare_particles.py`: `*_alpha.png` particle textures (white, alpha from brightness). The pack's own PNGs are opaque black backgrounds; always use the alpha versions.
+
 ## Conventions
 
 - **GDScript uses tabs** (overrides the global 2-space rule). Godot's editor and style guide use tabs, and mixing tabs and spaces is a parse error. See `.editorconfig`.
@@ -43,6 +51,9 @@ Godot 4.7 (GDScript, Jolt physics) prototype of the game in `PLAN.md` (design), 
 - `Destructible` (@tool StaticBody3D): builds its own box mesh/collider from `size` (origin at bottom center). HP, `damage_threshold`, `repair()` / `needs_repair()`, and shatters into box chunks or a `fractured_scene` (Blender pre-fractured model). Debris is in group `debris`, capped at 400, and shrinks away after `debris_lifetime`.
 - `FenceLine`, `Datacenter` (@tool): procedural builders made of Destructibles. Datacenter collapses when all cooling units die, then heals the district and pays cash.
 - Materials: `Models.mat(color, kind)` caches per color+kind; `Models.surface(material, kind)` adds object-space triplanar procedural grain and normal noise (kinds: rough, asphalt, grass, metal, paint, cloth, skin, window). Moving things must be `GI_MODE_DYNAMIC` (`Models.set_gi_mode`) and short-lived FX `GI_MODE_DISABLED`, or SDFGI voxelizes them. Materials that get recolored at runtime (unit shirts, Felsa paint, Destructibles) must be unique, not from the `mat()` cache.
+- `CharacterModel`: animated Kenney humanoid. `create(outfit, height, tone)`, `set_motion(speed / Enemy.RUN_CLIP_SPEED)`, `play_jump()`, `anchor(&"head"|&"chest"|&"hips"|&"hand_r"|&"hand_l")` returns a meters-scaled, rest-aligned node on that bone for gear; the head anchor is at the neck, so hats go at `Enemy._head_top()`. Its `material` is unique per character (flash and tint by `albedo_color`). Enemies with a non-empty `outfit` use it automatically; dogs, drones, turrets, and pods stay procedural.
+- Imported models: `Models.model(path, scale)`, `Models.model_bounds()` (for colliders), `Models.retexture()`. Kenney cars face +Z (same as VehicleBody3D); `Car.model_path` / `FelsaCar.model_path` swap visuals while keeping physics colliders. Never apply `Models.surface()` to imported palette materials (triplanar would break their UVs).
+- `Vfx` (static): GPU particle effects. One-shot `explosion`, `dust`, `impact`, `muzzle`, `fire_puff`, `scorch` (decal, capped); continuous `smoke_column`, `fire_patch`, `steam_jet`, `water_spray` (toggle `emitting`). Fire is alpha-blended unshaded with moderate HDR colors: additive or very bright fire washes out under AgX and the smog grade.
 - `Models` (@tool, static): low-poly kit. `humanoid()` and `dog()` rigs with named pivots animated by `animate_walk()`, plus `house()`, `tree()`, `streetlight()`, `parked_car()`, and a shared `mat(color)` cache. Enemies build their look in `_build_visual()`; `_material` is the unit's own tintable shirt.
 - `NeighborhoodBuilder` (@tool): main road, two cross streets, 24 houses (static colliders), park, construction site, deterministic `layout_seed`. `door_positions()` feeds townspeople spawns.
 - `Explosive`: C4 (sphere query, falloff, pushes rigid bodies). `Explosive.spawn_flash()` is reusable VFX; `Fx.tracer()` draws shot lines.
@@ -62,7 +73,7 @@ Godot 4.7 (GDScript, Jolt physics) prototype of the game in `PLAN.md` (design), 
 
 ## Status (2026-09-25)
 
-- Done: Phase 1 activism + bribery; Phase 2 slice; full standard enemy roster incl. Felsa cars; all five bosses; Level 1-3 weapons incl. bulldozer; low-poly models; expanded neighborhood; navmesh; Phase 3 build mode, 5 waves, win/lose; townspeople repair crew; player repair and talk-down; announced fence breaches; procedural drone audio; balance pass via `balance_sim`.
+- Done: Phase 1 activism + bribery; Phase 2 slice; full standard enemy roster incl. Felsa cars; all five bosses; Level 1-3 weapons incl. bulldozer; Kenney CC0 models (characters, houses, cars, nature) and GPU particle effects; expanded neighborhood; navmesh; Phase 3 build mode, 5 waves, win/lose; townspeople repair crew; player repair and talk-down; announced fence breaches; procedural drone audio; balance pass via `balance_sim`.
 - Known: Jolt occasionally logs "job system exceeded the maximum number of jobs" when many bodies shatter in one frame (a warning; it waits).
 - Balance: hands-off sim loses in waves 2-5; wave 5 never clears hands-off by design (Harry needs player explosives).
 - Next ideas: hand-playtest; recon/FPV drones; garden and fire hoses; more districts/datacenters; audio beyond the drone.

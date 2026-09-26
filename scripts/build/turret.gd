@@ -90,6 +90,7 @@ func _shoot(aim: Vector3) -> void:
 		var enemy := hit["collider"] as Enemy
 		if enemy and enemy.faction == Enemy.Faction.HOSTILE:
 			enemy.apply_damage(shot_damage, from, &"bullet")
+	Vfx.muzzle(get_parent(), from + (to - from).normalized() * 0.7, Color(0.6, 1.0, 0.7))
 	Fx.tracer(get_parent(), from, to, Color(0.5, 1.0, 0.6))
 
 

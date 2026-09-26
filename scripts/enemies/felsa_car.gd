@@ -74,8 +74,6 @@ func _physics_process(delta: float) -> void:
 
 	if is_burning:
 		health -= battery_fire_dps * delta
-		if randf() < delta * 8.0:
-			Fx.flame_puff(get_parent(), global_position + Vector3.UP * body_size.y, 0.7)
 		if health <= 0.0:
 			_die()
 			return
@@ -182,6 +180,8 @@ func _ignite() -> void:
 	_fire_light.omni_range = 6.0
 	_fire_light.position.y = body_size.y + 0.5
 	add_child(_fire_light)
+	Vfx.fire_patch(self, Vector3.UP * (body_size.y * 0.8), 0.6)
+	Vfx.smoke_column(self, Vector3.UP * (body_size.y + 0.6), 1.2)
 
 
 func _on_death() -> void:

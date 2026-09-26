@@ -90,14 +90,28 @@ func detonate() -> void:
 			var direction := (rigid.global_position - origin + Vector3.UP * 0.5).normalized()
 			rigid.apply_central_impulse(direction * push_speed * falloff * rigid.mass)
 
-	spawn_flash(get_tree().current_scene, origin, radius * 0.6)
+	Vfx.explosion(get_tree().current_scene, origin, radius)
+	spawn_flash(get_tree().current_scene, origin, radius * 0.6, Color(1.0, 0.6, 0.15), false)
 	detonated.emit(origin)
 	queue_free()
 
 
 ## Expanding fireball plus light. Static so other scripts (bosses, rockets) can reuse it.
+## `with_fireball = false` gives just the light (particle explosions bring their own).
 static func spawn_flash(parent: Node, at: Vector3, size: float,
-		color := Color(1.0, 0.6, 0.15)) -> void:
+		color := Color(1.0, 0.6, 0.15), with_fireball := true) -> void:
+	var light := OmniLight3D.new()
+	light.light_color = color
+	light.light_energy = 12.0
+	light.omni_range = size * 4.0
+	parent.add_child(light)
+	light.global_position = at
+	var fade := light.create_tween()
+	fade.tween_property(light, "light_energy", 0.0, 0.5)
+	fade.tween_callback(light.queue_free)
+	if not with_fireball:
+		return
+
 	var mat := StandardMaterial3D.new()
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
@@ -116,17 +130,8 @@ static func spawn_flash(parent: Node, at: Vector3, size: float,
 	flash.global_position = at
 	flash.scale = Vector3.ONE * 0.3
 
-	var light := OmniLight3D.new()
-	light.light_color = color
-	light.light_energy = 12.0
-	light.omni_range = size * 4.0
-	parent.add_child(light)
-	light.global_position = at
-
 	var tween := flash.create_tween().set_parallel()
 	tween.tween_property(flash, "scale", Vector3.ONE * size, 0.35) \
 		.set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_OUT)
 	tween.tween_property(mat, "albedo_color:a", 0.0, 0.5)
-	tween.tween_property(light, "light_energy", 0.0, 0.5)
-	tween.chain().tween_callback(light.queue_free)
 	tween.chain().tween_callback(flash.queue_free)
