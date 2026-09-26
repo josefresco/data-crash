@@ -79,10 +79,15 @@ func _test_dogs() -> void:
 	await seconds(2.0)
 	check(hurt[0] == 0, "strays never bite")
 	player.health_changed.disconnect(on_hurt)
-	# Inside the fence: the guard dog comes for you.
+	# Inside the fence: nothing happens until the player attacks the site.
 	player.global_position = Vector3(5, 0.2, -20)
 	await seconds(1.5)
-	check(dog.target == player, "guard dog attacks inside the datacenter grounds")
+	check(dog.target != player and not Game.alarm, "guard dog holds off until the site is attacked")
+	var guard := level.get_node("Guard3") as Enemy
+	guard.apply_damage(5.0, player.global_position, &"bullet")
+	check(Game.alarm, "hurting a guard raises the site alarm")
+	await seconds(1.5)
+	check(dog.target == player, "then the guard dog attacks inside the datacenter grounds")
 	player.global_position = Vector3(-60, 0.2, 40)
 	await seconds(0.5)
 

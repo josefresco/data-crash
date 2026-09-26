@@ -219,6 +219,29 @@ static func water_spray(host: Node3D, offset := Vector3.ZERO) -> GPUParticles3D:
 	return spray
 
 
+## Pressurized stream along the host's -Z (water cannons). Starts off: toggle
+## `emitting`. Droplets arc under gravity and fade.
+static func water_jet(host: Node3D, offset := Vector3.ZERO) -> GPUParticles3D:
+	var jet := _emitter("circle_05_alpha.png", false, 380, 1.1, false)
+	jet.one_shot = false
+	jet.explosiveness = 0.0
+	jet.emitting = false
+	jet.visibility_aabb = AABB(Vector3(-40, -40, -40), Vector3(80, 60, 80))
+	var pm := jet.process_material as ParticleProcessMaterial
+	pm.direction = Vector3(0.0, 0.0, -1.0)
+	pm.spread = 2.0
+	pm.initial_velocity_min = 21.0
+	pm.initial_velocity_max = 24.0
+	pm.gravity = Vector3(0.0, -9.8, 0.0)
+	pm.scale_min = 0.35
+	pm.scale_max = 0.7
+	pm.scale_curve = _curve([0.5, 1.0, 2.2])
+	pm.color_ramp = _ramp([Color(0.92, 0.97, 1.0, 1.0), Color(0.82, 0.92, 1.0, 0.85), Color(0.9, 0.95, 1.0, 0.0)])
+	host.add_child(jet)
+	jet.position = offset
+	return jet
+
+
 ## Burn mark on the ground that fades out after a while.
 static func scorch(parent: Node, at: Vector3, radius := 2.0) -> void:
 	var decal := Decal.new()

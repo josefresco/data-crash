@@ -25,7 +25,7 @@ static var UNIT_TIPS := {
 	Police: ["police", 25.0, "Riot police: their shields block most frontal fire. Flank them, stun them, or use explosives and fire."],
 	Frost: ["frost", 30.0, "FROST agents abduct neighbors and carry them off. Kill the agent to free its captive before it escapes (trust drops if it does)."],
 	FelsaCar: ["felsa", 30.0, "Felsa Cyberdouche: a self-driving truck that rams people. Sidestep it, and an EMP trap sets its battery on fire."],
-	SentryTurret: ["sentries", 30.0, "Crapya's roof sentries run on the gas turbines' power. Knock out all three turbines and they shut down."],
+	SentryTurret: ["sentries", 30.0, "Crapya's roof water cannons run on the gas turbines' power. Knock out all three turbines and they shut down."],
 	ShamCrapman: ["sham", 40.0, "Sham Crapman hides in a force field fed by projection drones. Shoot the drones first; blast damage breaks the pylons."],
 	FarkPod: ["fark", 40.0, "Fark's pod: glass halves bullets and surveillance drones track you. Kill the drones, ignore the holo clones."],
 	HarryPerckerson: ["harry", 45.0, "Harry hides behind a glass boardroom. Only heavy explosives (rockets, grenades, C4) crack it; then he's exposed."],
@@ -90,7 +90,7 @@ func _scan() -> void:
 			Game.tip("gunshow", "The weekend gun show: press E at the stall to buy a machine gun, then grenade packs.")
 	var fence_center := Vector3(0.0, 0.0, -31.0)
 	if level.get("phase") == 0 and Vector2(eye.x - fence_center.x, eye.z - fence_center.z).length() < 32.0:
-		Game.tip("fence", "The datacenter fence. Ram it with a car at speed or plant C4 [G] on a panel. Breaching it starts the assault.")
+		Game.tip("fence", "The datacenter fence. Felsa security ignores you until you attack the site, so scout and prepare first. Ram the fence with a car or plant C4 [G] on a panel to start the assault.")
 	for node in get_tree().get_nodes_in_group("hostiles"):
 		var unit := node as Enemy
 		if unit == null:

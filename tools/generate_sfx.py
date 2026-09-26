@@ -236,6 +236,15 @@ def voices():
         save(f"babble_{i}", babble(int(rng.integers(5, 9)), 140))
 
 
+def alarm():
+    """Two-tone site siren, about 2.4 s."""
+    seconds = 2.4
+    t = t_axis(seconds)
+    f = np.where((t * 2.5).astype(int) % 2 == 0, 880.0, 660.0)
+    tone = signal.square(2 * np.pi * np.cumsum(f) / RATE, duty=0.5) * 0.5 + np.sin(2 * np.pi * np.cumsum(f) / RATE) * 0.5
+    save("alarm_0", lowpass(tone, 3500) * np.clip(t / 0.05, 0, 1) * np.clip((seconds - t) / 0.2, 0, 1))
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--kenney", type=Path, help="folder holding the unzipped kenney_* packs")
@@ -246,6 +255,7 @@ def main():
     loops()
     barks()
     voices()
+    alarm()
     if args.kenney:
         copy_kenney(args.kenney)
     print(f"wrote {len(list(OUT.glob('*.*')))} files to {OUT}")

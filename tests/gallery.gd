@@ -64,6 +64,14 @@ func _ready() -> void:
 		await _shot("dc_back", Vector3(-20, 0.2, -58), Vector3(-2, 5.0, -38))
 		await _shot("dc_cooling", Vector3(21, 0.2, -18), Vector3(15, 1.5, -28))
 		await _shot("dc_dock", Vector3(-20, 0.2, -22), Vector3(-12, 2.0, -34))
+	if _want("cannon"):
+		level.call("raise_alarm", "test")
+		player.global_position = Vector3(6, 0.2, -6)
+		for i in 8:
+			player.health = player.max_health  # stay alive for the shot
+			await _wait(0.25)
+		await _shot("cannon", Vector3(4, 0.2, -4), Vector3(10, 7.0, -26))
+		await _shot("cannon_side", Vector3(-8, 0.2, -2), Vector3(6, 3.0, -14))
 	if _want("cache"):
 		await _shot("cache", Vector3(-14, 0.2, -40), Vector3(-18, 0.8, -44))
 	if not only.is_empty() and not _want("rest"):

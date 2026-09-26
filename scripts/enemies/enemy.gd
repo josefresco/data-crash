@@ -47,6 +47,9 @@ var waypoint_reach := 0.8
 ## Non-empty for bosses: joins group "bosses" and gets the HUD boss bar.
 var boss_name := ""
 
+## Datacenter security posted from the start: passive (no targets) until the
+## site alarm goes off (Game.alarm). Hurting one raises the alarm.
+var site_security := false
 ## Pitch of the gibberish voice played with speak() (0 = silent).
 var voice_pitch := 0.0
 ## Kenney character skin (see CharacterModel / tools/generate_skins.py).
@@ -125,6 +128,8 @@ func is_alive() -> bool:
 func apply_damage(amount: float, from: Vector3, kind: StringName = &"generic") -> void:
 	if _is_dead:
 		return
+	if site_security and not Game.alarm:
+		get_tree().call_group(&"site_alarm", &"raise_alarm", label_for_alarm())
 	amount = _modify_damage(amount, from, kind)
 	if _field_left > 0.0:
 		amount *= FIELD_DAMAGE_FACTOR
@@ -339,7 +344,14 @@ func _engage_range(other: Node3D) -> float:
 	return attack_range
 
 
+## What the alarm message calls this unit.
+func label_for_alarm() -> String:
+	return boss_name if not boss_name.is_empty() else (get_script() as Script).get_global_name().capitalize()
+
+
 func _pick_target() -> Node3D:
+	if site_security and not Game.alarm:
+		return null
 	if rushing and faction == Faction.HOSTILE and _is_valid(objective):
 		return objective
 	var best: Node3D = null

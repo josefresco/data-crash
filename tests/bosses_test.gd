@@ -48,7 +48,8 @@ func _test_crapya() -> void:
 	unit.apply_damage(500.0, unit.global_position, &"explosive")
 	check(is_equal_approx(unit.health, unit.max_health), "shielded cooling unit ignores C4-level damage")
 
-	# Roof sentries see over the fence.
+	# Roof water cannons reach over the fence once the alarm is up.
+	level.call("raise_alarm", "test")
 	player.global_position = Vector3(0, 0.2, -5)
 	var hit := [false]
 	var on_hit := func(_h: float, _m: float) -> void: hit[0] = true
@@ -57,7 +58,7 @@ func _test_crapya() -> void:
 		if hit[0]:
 			break
 		await seconds(0.25)
-	check(hit[0], "roof sentries fire on the player")
+	check(hit[0], "roof water cannons soak the player")
 	for name in ["SentryNE", "SentryNW"]:
 		(level.get_node(name) as Enemy).apply_damage(9999.0, Vector3.ZERO)
 

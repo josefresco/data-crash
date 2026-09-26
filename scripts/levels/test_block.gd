@@ -24,6 +24,8 @@ enum Phase { ACTIVISM, ASSAULT, BOSS, BUILD, WAVE, WON, LOST }
 	Vector4(6.2, 0, 8, PI), Vector4(-6.2, 0, 56, 0), Vector4(6.2, 0, 88, PI), Vector4(-46, 0, 24.6, -PI * 0.5),
 	Vector4(18, 0, 35.4, PI * 0.5), Vector4(50, 0, 24.6, -PI * 0.5), Vector4(-30, 0, 75.4, PI * 0.5),
 ]
+## Datacenter security posted at the start. Passive until the site alarm.
+@export var site_security_nodes: Array[String] = ["Guard1", "Guard2", "Guard3", "Dog1", "Dog2", "PatrolFelsa", "SentryNE", "SentryNW"]
 ## Fence lines corporate crews cut through at the start of waves 2+.
 @export var breach_fences: Array[String] = ["FenceLeft", "FenceRight", "FenceBack"]
 ## Panels cut per breach.
@@ -86,6 +88,7 @@ func _ready() -> void:
 		dog.defeated.connect(_on_stray_dog_defeated)
 	($BribeMenu as BribeMenu).bribe_bought.connect(_on_bribe_bought)
 	_spawn_grock_cameras()
+	_arm_site_security()
 	var tips := TipDirector.new()
 	tips.level = self
 	add_child(tips)
@@ -299,6 +302,40 @@ func _on_stray_dog_defeated(dog: Enemy) -> void:
 		_complete_deed("dogs", 50, 0.05, "Both strays tamed. They'll guard the block now. (+$50)")
 	else:
 		_update_deeds()
+
+
+## Security stands down until the player attacks the site: hurting a guard,
+## dog, truck, or sentry, or hitting the fence, walls, turbines, cooling
+## units, or Crapya's control room raises the alarm.
+func _arm_site_security() -> void:
+	add_to_group("site_alarm")
+	for unit_name in site_security_nodes:
+		var unit := get_node_or_null(unit_name) as Enemy
+		if unit:
+			unit.site_security = true
+	var property: Array[Node] = [_datacenter, get_node_or_null("CrapyaControlRoom")]
+	for child in get_children():
+		if child is FenceLine:
+			property.append(child)
+	for root in property:
+		if root == null:
+			continue
+		if root is Destructible:
+			(root as Destructible).site_property = true
+		for node in root.find_children("*", "", true, false):
+			if node is Destructible:
+				(node as Destructible).site_property = true
+
+
+## Everyone on the site's payroll engages. Idempotent. Public for tests.
+func raise_alarm(reason := "") -> void:
+	if Game.alarm:
+		return
+	Game.alarm = true
+	Game.notify("ALARM! You hit the %s. Felsa security is engaging: guards, dogs, the Cyberdouche, and the roof water cannons."
+		% (reason.to_lower() if not reason.is_empty() else "site"), 7.0)
+	Sfx.play(&"alarm", _datacenter.global_position + Vector3.UP * 9.0, 8.0, 1.0, 0.0)
+	Game.tip("alarm", "The alarm is up. Roof water cannons soak and shove you: take out the gas turbines to cut their power, or break Crapya's control room.")
 
 
 func _spawn_grock_cameras() -> void:

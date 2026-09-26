@@ -165,6 +165,9 @@ func _handle_collisions() -> void:
 		if _ram_cooldowns.has(id):
 			continue
 		_ram_cooldowns[id] = 1.0
+		if site_security and not Game.alarm:
+			_begin_reverse()  # off duty: bump and back off, no ram damage
+			continue
 		Sfx.play(&"car_crash", global_position, -4.0)
 		if not _is_friend(hit) and hit.has_method("apply_damage"):
 			hit.call(&"apply_damage", absf(speed) * ram_damage_per_mps, global_position, &"impact")
@@ -180,6 +183,8 @@ func _begin_reverse() -> void:
 	_reverse_steer = 1.0 if randf() < 0.5 else -1.0
 	# Wedged (e.g. a fence corner the navmesh thinks it can round): after
 	# four reversals in 20s the battery goes into thermal runaway.
+	if site_security and not Game.alarm:
+		return  # off duty: no thermal runaway from idle bumping
 	_reversals.append(_clock)
 	_reversals = _reversals.filter(func(t: float) -> bool: return _clock - t < 20.0)
 	if _reversals.size() >= 4 and not is_burning:

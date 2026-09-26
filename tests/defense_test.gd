@@ -26,10 +26,14 @@ func _run() -> void:
 	check(path.size() > 0 and not inside,
 		"fence blocks outside-in path (ends at %s)" % [path[-1] if path.size() > 0 else "none"])
 
-	# Guard spots and shoots the player inside the fence.
+	# Security holds fire until the site alarm, then a guard shoots the player.
 	var hits := [0]
 	player.health_changed.connect(func(_h: float, _m: float) -> void: hits[0] += 1)
 	player.global_position = Vector3(-18, 0.2, -28)
+	await seconds(2.0)
+	check(hits[0] == 0 and not Game.alarm, "site security ignores a player who hasn't attacked")
+	(level.get_node("FenceFront/Panel3") as Destructible).apply_damage(1.0, player.global_position, &"bullet")
+	check(Game.alarm, "hitting the fence raises the site alarm")
 	await seconds(3.0)
 	check(hits[0] > 0, "guard shot the player (%d hits)" % hits[0])
 

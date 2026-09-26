@@ -39,6 +39,9 @@ const MAX_LIVE_DEBRIS := 400
 @export var surface_kind: StringName = &"rough"
 ## Below 1 renders see-through (glass).
 @export_range(0.05, 1.0) var opacity := 1.0
+## Part of the corporate site (fence, walls, turbines, cooling): any hit, even
+## one below the damage threshold, raises the site alarm (group "site_alarm").
+@export var site_property := false
 ## Name shown in HUD prompts, e.g. "Cooling unit".
 @export var label := ""
 
@@ -58,7 +61,11 @@ func _ready() -> void:
 
 
 func apply_damage(amount: float, from: Vector3, _kind: StringName = &"generic") -> void:
-	if Engine.is_editor_hint() or is_destroyed or amount < damage_threshold:
+	if Engine.is_editor_hint() or is_destroyed:
+		return
+	if site_property and amount > 0.0:
+		get_tree().call_group(&"site_alarm", &"raise_alarm", label)
+	if amount < damage_threshold:
 		return
 	health -= amount
 	damaged.emit(amount, health)

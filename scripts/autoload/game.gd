@@ -32,6 +32,9 @@ var stats := {}
 ## Settings menu toggle. Tips already shown stay hidden for the whole session.
 var show_tips := true
 var _tips_seen := {}
+## The datacenter's security is on alert (the player attacked the site).
+## Units with Enemy.site_security stay passive until this is set.
+var alarm := false
 ## Radians per pixel of mouse motion (settings menu).
 var mouse_sensitivity := DEFAULT_SENSITIVITY
 var fullscreen := false
@@ -76,6 +79,7 @@ func reset() -> void:
 	cash = 0
 	bribes.clear()
 	stats = {}
+	alarm = false
 	district = DistrictState.new()
 	cash_changed.emit(cash)
 	for key in ["deeds", "boss", "wave", "core", "build", "bribe", "notice"]:
