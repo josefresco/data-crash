@@ -21,3 +21,6 @@ tests/output/
 
 # Temporary, written by tools/run_windowed.ps1
 override.cfg
+
+# Throwaway probes
+tests/tmp/

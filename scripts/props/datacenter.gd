@@ -64,10 +64,31 @@ func _ready() -> void:
 	_build_interior()
 	_build_cooling_units()
 	_build_turbines()
+	if not Engine.is_editor_hint():
+		_batch_details()
 	if site_id != &"":
 		for node in find_children("*", "", true, false):
 			if node is Destructible:
 				(node as Destructible).site_id = site_id
+
+
+## Draw calls: bakes each wall, roof tile, and rack run's static decoration
+## into a few merged meshes (fans and blinking lights stay separate).
+func _batch_details() -> void:
+	var keep: Array = _fans + _blinkers
+	for piece: Destructible in _structure + _roof + _racks:
+		Models.merge_static(piece, keep, [piece.get("_mesh")])
+	Models.merge_static(self, keep)
+	for unit in _cooling_units_list():
+		Models.merge_static(unit, keep, [unit.get("_mesh")])
+
+
+func _cooling_units_list() -> Array[Destructible]:
+	var units: Array[Destructible] = []
+	for child in get_children():
+		if child is Destructible and child.is_in_group("cooling_units"):
+			units.append(child)
+	return units
 
 
 ## Where the front doorway is, in this node's space (the lobby is just inside).

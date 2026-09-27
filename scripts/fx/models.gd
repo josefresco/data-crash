@@ -394,6 +394,71 @@ static func cull_small(node: GeometryInstance3D, extent: float) -> void:
 	node.visibility_range_end_margin = 4.0
 
 
+## Draw-call batching: bakes the static decoration meshes under `root` into
+## one MeshInstance3D per shadow setting, with one surface per material
+## (a rack run's 40 dividers and LEDs become 4 surfaces). Skips `keep` nodes
+## and their subtrees (animated fans, blinking lights), scripted nodes, and
+## `skip` meshes (a Destructible's own box). Emptied leaf nodes are freed.
+## Returns how many meshes were merged. Call after decorating, at runtime.
+static func merge_static(root: Node3D, keep: Array = [], skip: Array = []) -> int:
+	var groups := {}  # [material, casts shadows] -> Array of [mesh, transform]
+	var merged: Array[MeshInstance3D] = []
+	for child in root.get_children():
+		_collect_static(child as Node3D, Transform3D.IDENTITY, keep, skip, groups, merged)
+	if merged.size() < 2:
+		return 0
+	for shadows in [true, false]:
+		var mesh := ArrayMesh.new()
+		for key: Array in groups:
+			if key[1] != shadows:
+				continue
+			var tool := SurfaceTool.new()
+			for entry: Array in groups[key]:
+				tool.append_from(entry[0] as Mesh, entry[1], entry[2])
+			tool.commit(mesh)
+			mesh.surface_set_material(mesh.get_surface_count() - 1, key[0])
+		if mesh.get_surface_count() == 0:
+			continue
+		var node := MeshInstance3D.new()
+		node.name = "MergedDetail"
+		node.set_meta(&"generated", true)  # builders that rebuild clear it
+		node.mesh = mesh
+		if not shadows:
+			node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		root.add_child(node)
+	for part in merged:
+		part.mesh = null
+	for part in merged:
+		if part.get_child_count() == 0:
+			part.queue_free()
+	return merged.size()
+
+
+static func _collect_static(node: Node3D, parent_xform: Transform3D, keep: Array, skip: Array,
+		groups: Dictionary, merged: Array[MeshInstance3D]) -> void:
+	if node == null or node in keep or node.get_script() != null or not node.visible:
+		return
+	var xform := parent_xform * node.transform
+	if node.get_class() == "Node3D":
+		# Plain grouping nodes (imported model roots): look inside, keep the node.
+		for child in node.get_children():
+			_collect_static(child as Node3D, xform, keep, skip, groups, merged)
+		return
+	if not (node is MeshInstance3D):
+		return  # lights, labels, bodies, particles stay as they are
+	var part := node as MeshInstance3D
+	if part.mesh and not part in skip and (part.mesh is PrimitiveMesh or part.mesh is ArrayMesh):
+		var shadows := part.cast_shadow != GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		for s in part.mesh.get_surface_count():
+			var key := [part.get_active_material(s), shadows]
+			if not groups.has(key):
+				groups[key] = []
+			groups[key].append([part.mesh, s, xform])
+		merged.append(part)
+	for child in part.get_children():
+		_collect_static(child as Node3D, xform, keep, skip, groups, merged)
+
+
 static func box(parent: Node3D, size: Vector3, at: Vector3, material: Material) -> MeshInstance3D:
 	var mesh := BoxMesh.new()
 	mesh.size = size

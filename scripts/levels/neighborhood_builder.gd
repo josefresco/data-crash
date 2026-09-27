@@ -167,6 +167,18 @@ func build() -> void:
 		for x in range(-70, 71, 16):
 			if absf(x) > 8.0:
 				_add_tree(Vector3(x, 0.0, z), _rng.randf_range(4.5, 6.0))
+	if not Engine.is_editor_hint():
+		_batch_details()
+
+
+## Draw calls: each house, store, and tree lot (a static body) bakes its
+## model, path, bushes, and flowers into a few meshes; roads, markings,
+## mailboxes, and streetlight poles merge into the builder's own mesh.
+func _batch_details() -> void:
+	for child in get_children():
+		if child is StaticBody3D and child.get_script() == null:
+			Models.merge_static(child as Node3D)
+	Models.merge_static(self)
 
 
 func _store_at(at: Vector3) -> Array:

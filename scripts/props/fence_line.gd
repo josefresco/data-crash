@@ -58,6 +58,8 @@ func _rebuild() -> void:
 		post.set_meta(&"generated", true)
 		if not Engine.is_editor_hint():
 			panel.destroyed.connect(_on_panel_destroyed)
+	if not Engine.is_editor_hint():
+		Models.merge_static(self)  # the posts: one mesh instead of one per panel
 
 
 func _on_panel_destroyed(_panel: Destructible) -> void:
