@@ -16,8 +16,10 @@ const MUZZLE_TEXTURES: Array[String] = ["muzzle_01_alpha.png", "muzzle_02_alpha.
 	"muzzle_04_alpha.png", "muzzle_05_alpha.png"]
 
 static var _quads := {}
-static var _scorches: Array[Decal] = []
-static var _holes: Array[Decal] = []
+## Capped decals, by instance id: static arrays holding node references
+## crashed the engine at exit (the same as the old skid-mark list).
+static var _scorches: Array[int] = []
+static var _holes: Array[int] = []
 static var _flame_mats := {}
 
 
@@ -158,10 +160,10 @@ static func bullet_hole(host: Node, at: Vector3, normal: Vector3) -> void:
 	var up := normal.normalized()
 	var side := up.cross(Vector3.FORWARD if absf(up.dot(Vector3.FORWARD)) < 0.9 else Vector3.RIGHT).normalized()
 	decal.global_transform = Transform3D(Basis(side, up, side.cross(up)), at)
-	_holes.append(decal)
-	_holes = _holes.filter(func(d: Variant) -> bool: return is_instance_valid(d))
+	_holes.append(decal.get_instance_id())
+	_holes = _live(_holes)
 	if _holes.size() > MAX_BULLET_HOLES:
-		(_holes.pop_front() as Decal).queue_free()
+		(instance_from_id(_holes.pop_front()) as Decal).queue_free()
 	var tween := decal.create_tween()
 	tween.tween_interval(40.0)
 	tween.tween_property(decal, "modulate:a", 0.0, 3.0)
@@ -432,11 +434,10 @@ static func scorch(parent: Node, at: Vector3, radius := 2.0) -> void:
 	parent.add_child(decal)
 	decal.global_position = at
 	decal.rotation.y = randf() * TAU
-	_scorches.append(decal)
-	_scorches = _scorches.filter(func(d: Variant) -> bool: return is_instance_valid(d))
+	_scorches.append(decal.get_instance_id())
+	_scorches = _live(_scorches)
 	if _scorches.size() > MAX_SCORCHES:
-		var oldest := _scorches.pop_front() as Decal
-		oldest.queue_free()
+		(instance_from_id(_scorches.pop_front()) as Decal).queue_free()
 	var tween := decal.create_tween()
 	tween.tween_interval(25.0)
 	tween.tween_property(decal, "modulate:a", 0.0, 5.0)
@@ -534,3 +535,12 @@ static func _curve(values: Array[float]) -> CurveTexture:
 	var texture := CurveTexture.new()
 	texture.curve = curve
 	return texture
+
+
+## The ids in `ids` whose nodes still exist.
+static func _live(ids: Array[int]) -> Array[int]:
+	var alive: Array[int] = []
+	for id in ids:
+		if is_instance_id_valid(id):
+			alive.append(id)
+	return alive

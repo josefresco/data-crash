@@ -53,12 +53,13 @@ func _run() -> void:
 
 	var core := level.get("core") as GreenCore
 	print("\nstart cash $%d, townspeople %d, Canadians %d" % [Game.cash, get_tree().get_nodes_in_group("townspeople").size(), _canadians])
-	print("wave | core hp | built | cash after | crew | trust | seconds | canucks")
+	print("wave | core hp | built | lost | cash after | crew | trust | seconds | canucks")
 	var survived := 0
 	for wave in spawner.total_waves():
 		var built := _answer_breach(level, build, core.global_position)
 		built += _build_what_we_can(build, core.global_position)
 		_recruit(level, core.global_position)
+		var standing := get_tree().get_nodes_in_group("structures").size()
 		var started := Time.get_ticks_msec()
 		var game_time := 0.0
 		level.call("start_next_wave")
@@ -66,8 +67,9 @@ func _run() -> void:
 			await seconds(0.5)
 			game_time += 0.5
 		var alive := is_instance_valid(core) and not core.is_destroyed
-		print("%4d | %7s | %5d | %10d | %4d | %5.2f | %7.0f | %7d%s" % [wave + 1,
-			str(ceili(core.health)) if alive else "LOST", built, Game.cash,
+		var lost := standing - get_tree().get_nodes_in_group("structures").size()
+		print("%4d | %7s | %5d | %4d | %10d | %4d | %5.2f | %7.0f | %7d%s" % [wave + 1,
+			str(ceili(core.health)) if alive else "LOST", built, lost, Game.cash,
 			get_tree().get_nodes_in_group("townspeople").size(), Game.district.trust, game_time,
 			_squad.filter(func(c: Variant) -> bool: return is_instance_valid(c) and (c as Canuck).is_alive()).size(), "  (timeout)" if game_time >= WAVE_TIMEOUT else ""])
 		if not alive or spawner.wave_active:

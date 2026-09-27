@@ -34,6 +34,7 @@ func _run() -> void:
 	await _test_hit_feedback()
 	await _test_hoses()
 	await _test_drone()
+	await _test_drone_recon()
 
 
 func _select(weapon_name: String) -> void:
@@ -189,6 +190,35 @@ func _test_drone() -> void:
 	if is_instance_valid(guard):
 		guard.queue_free()
 	_select("Pistol")
+
+
+## Drone over the quiet Felsa compound: first sightings of site security pay,
+## and spotting most of it completes a recon that marks the cooling units.
+func _test_drone_recon() -> void:
+	player.global_position = Vector3(-6, 0.2, 2)
+	player.heal(9999.0)
+	player.set("_drone_cooldown", 0.0)
+	await seconds(0.3)
+	check(not Game.is_alarmed(&"felsa"), "Felsa is still quiet")
+	var cash := Game.cash
+	var drone := player.launch_drone()
+	drone.global_position = Vector3(0, 38, -42)  # over the middle of the compound
+	drone.set("_pitch", -1.2)
+	for i in 16:
+		drone.set_heading(TAU * i / 16.0)
+		drone.battery_left = drone.battery
+		await seconds(0.3)
+		if ReconDrone.recon_done(&"felsa"):
+			break
+	check(Game.cash > cash, "spotting quiet site security pays (+$%d)" % (Game.cash - cash))
+	check(ReconDrone.recon_done(&"felsa"), "circling over Felsa completes its recon")
+	var marked := get_tree().get_nodes_in_group("cooling_units").filter(func(u: Node) -> bool:
+		return (u as Destructible).site_id == &"felsa" and u.has_meta(&"marked")).size()
+	check(marked >= 3, "the recon marks Felsa's cooling units (%d)" % marked)
+	check(not Game.is_alarmed(&"felsa"), "the recon doesn't tip them off")
+	if is_instance_valid(drone):
+		drone.recall()
+	await seconds(0.2)
 
 
 func _dummy(unit: Enemy, at: Vector3, frozen := true) -> Enemy:

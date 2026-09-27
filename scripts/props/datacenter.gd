@@ -76,6 +76,8 @@ func _ready() -> void:
 ## into a few merged meshes (fans and blinking lights stay separate).
 func _batch_details() -> void:
 	var keep: Array = _fans + _blinkers
+	for blades: Node3D in _fans:
+		Models.merge_static(blades)  # a fan's blades spin as one mesh
 	for piece: Destructible in _structure + _roof + _racks:
 		Models.merge_static(piece, keep, [piece.get("_mesh")])
 	Models.merge_static(self, keep)
@@ -171,6 +173,7 @@ func _make_segment(seg_size: Vector3, seg_color: Color, seg_chunks: Vector3i,
 	piece.label = "Datacenter wall"
 	piece.rubble_share = 0.35
 	piece.debris_lifetime = 6.0
+	piece.batched = not Engine.is_editor_hint()  # one draw call per identical set
 	add_child(piece)
 	return piece
 

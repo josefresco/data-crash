@@ -352,6 +352,76 @@ func _ready() -> void:
 		drone.recall()
 		guard.queue_free()
 		side.queue_free()
+	if _want("cover"):
+		# A guard crouched behind a wall, the player out in the open.
+		var wall := StaticBody3D.new()
+		var shape := BoxShape3D.new()
+		shape.size = Vector3(6.0, 1.7, 0.6)
+		var collider := CollisionShape3D.new()
+		collider.shape = shape
+		collider.position.y = 0.85
+		wall.add_child(collider)
+		Models.box(wall, Vector3(6.0, 1.7, 0.6), Vector3(0.0, 0.85, 0.0), Models.mat(Color(0.6, 0.6, 0.58), &"concrete"))
+		level.add_child(wall)
+		wall.global_position = Vector3(-84, 0, 60)
+		var baker := level.get_node("NavBaker") as NavBaker
+		var bakes := baker.bake_count
+		get_tree().call_group(&"nav_baker", &"request_rebake")
+		for i in 120:
+			if baker.bake_count > bakes:
+				break
+			await _wait(0.25)
+		await _wait(0.5)
+		player.global_position = Vector3(-84, 0.2, 72)
+		player.set_physics_process(false)
+		var guard := SecurityGuard.new()
+		guard.position = Vector3(-84, 0.1, 65)
+		level.add_child(guard)
+		for i in 40:
+			await _wait(0.25)
+			player.heal(9999.0)
+			var model := guard.get("_rig") as CharacterModel
+			if model and model.stance_clip() == &"crouch_idle":
+				break
+		await _wait(0.5)
+		var side := Camera3D.new()
+		level.add_child(side)
+		side.global_position = guard.global_position + Vector3(5.0, 2.5, -3.0)
+		side.look_at(guard.global_position + Vector3.UP * 0.6)
+		side.make_current()
+		await _wait(0.05)
+		await RenderingServer.frame_post_draw
+		get_viewport().get_texture().get_image().save_png("res://tests/output/gallery_cover.png")
+		print("saved cover (stance %s)" % (guard.get("_rig") as CharacterModel).stance_clip())
+		side.queue_free()
+		guard.queue_free()
+		wall.queue_free()
+		player.set_physics_process(true)
+	if _want("batch"):
+		# Batched walls: shatter two front wall segments and a fence panel; the
+		# holes must show (their MultiMesh instances collapse).
+		var felsa := level.get_node("FelsaSite") as DatacenterSite
+		var walls: Array = felsa.datacenter.get("_structure")
+		var cam := Camera3D.new()
+		level.add_child(cam)
+		var front := felsa.datacenter.global_position + Vector3(0, 0, 11)
+		cam.global_position = front + Vector3(-6, 6, 22)
+		cam.look_at(front + Vector3(-6, 4, 0))
+		cam.make_current()
+		await _wait(0.5)
+		await RenderingServer.frame_post_draw
+		get_viewport().get_texture().get_image().save_png("res://tests/output/gallery_batch_before.png")
+		var hit := 0
+		for piece: Destructible in walls:
+			if is_instance_valid(piece) and not piece.is_destroyed and piece.global_position.z > front.z - 1.0 					and absf(piece.global_position.x - (front.x - 6.0)) < 5.0 and hit < 2:
+				piece.shatter(piece.global_position + Vector3(0, 3, 5), 40.0)
+				hit += 1
+		(felsa.get_node("FenceFront/Panel4") as Destructible).shatter(Vector3.ZERO, 30.0)
+		await _wait(1.0)
+		await RenderingServer.frame_post_draw
+		get_viewport().get_texture().get_image().save_png("res://tests/output/gallery_batch_after.png")
+		print("saved batch (%d walls)" % hit)
+		cam.queue_free()
 	if _want("stores"):
 		await _shot("store_hardware", Vector3(-8, 0.2, 31), Vector3(-14, 2.0, 21))
 		await _shot("store_row", Vector3(6, 0.2, 34), Vector3(-26, 4.0, 18))
@@ -386,7 +456,7 @@ func _ready() -> void:
 	if _want("cache"):
 		await _shot("cache", Vector3(-14, 0.2, -40), Vector3(-18, 0.8, -44))
 	if not only.is_empty() and not _want("rest"):
-		get_tree().quit()
+		Game.quit_cleanly()
 		return
 
 	# Car kit lineup (labels above), each turned to show its +Z side to the camera.
@@ -447,7 +517,7 @@ func _ready() -> void:
 	harry.set_physics_process(false)
 	await _wait(1.0)
 	await _shot("boss_harry", Vector3(10, 0.2, 90), Vector3(18, 1.5, 97))
-	get_tree().quit()
+	Game.quit_cleanly()
 
 
 func _want(section: String) -> bool:

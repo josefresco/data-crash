@@ -88,7 +88,7 @@ func _ready() -> void:
 	for unit in cast:
 		unit._visual.rotation.y = PI * 0.9  # face the camera
 	await _save("cast")
-	get_tree().quit()
+	Game.quit_cleanly()
 
 
 func _find(kind: GDScript) -> Node3D:

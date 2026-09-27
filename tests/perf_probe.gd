@@ -31,7 +31,7 @@ func _ready() -> void:
 	player.global_position = Vector3(0, 0.2, -8)
 	player.aim_at(Vector3(0, 1.0, -30))
 	await _sample_all("wave 4 (%d units)" % get_tree().get_nodes_in_group("hostiles").size())
-	get_tree().quit()
+	Game.quit_cleanly()
 
 
 func _sample_all(label: String) -> void:

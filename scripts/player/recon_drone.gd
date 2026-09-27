@@ -16,6 +16,11 @@ const SPOT_INTERVAL := 0.25
 const SIGHT_MASK := 1 | 16
 ## Highest it flies (world y).
 const CEILING := 45.0
+## Recon pay: each site unit first spotted before its alarm, and a full
+## recon (RECON_SHARE of a quiet site's security spotted) of a site.
+const SPOT_BOUNTY := 5
+const RECON_BONUS := 60
+const RECON_SHARE := 0.7
 
 @export var speed := 12.0
 @export var climb_speed := 6.0
@@ -176,6 +181,44 @@ func _spot() -> void:
 			continue
 		if unit.spot(spot_seconds):
 			spotted_count += 1
+		if unit.site != &"" and unit.is_dormant() and not unit.has_meta(&"recon"):
+			unit.set_meta(&"recon", true)
+			Game.add_cash(SPOT_BOUNTY)
+			_check_recon(unit.site)
+
+
+## A quiet site with most of its security spotted: recon complete, once per
+## site. Pays a bonus and marks its cooling units.
+func _check_recon(site: StringName) -> void:
+	if site == &"police" or Game.recons.has(site):
+		return
+	var total := 0
+	var seen := 0
+	for node in get_tree().get_nodes_in_group("hostiles"):
+		var unit := node as Enemy
+		if unit == null or not unit.is_alive() or unit.site != site or not unit.boss_name.is_empty():
+			continue
+		total += 1
+		if unit.has_meta(&"recon"):
+			seen += 1
+	if total == 0 or float(seen) / total < RECON_SHARE:
+		return
+	Game.recons[site] = true
+	Game.add_cash(RECON_BONUS)
+	Game.count("recons")
+	var marked := ScoutPoint.mark_cooling_units(get_tree(), site)
+	var site_name := String(site).capitalize()
+	for node in get_tree().get_nodes_in_group("datacenter_sites"):
+		if (node as DatacenterSite).site_id == site:
+			site_name = (node as DatacenterSite).display_name
+	Game.notify("Recon of %s complete: security mapped%s. (+$%d)" % [site_name,
+		", cooling units marked" if marked > 0 else "", RECON_BONUS], 4.0)
+	Sfx.ui(&"jingle_clear", -8.0)
+
+
+## Sites this drone (or any) has fully scouted (tests read it).
+static func recon_done(site: StringName) -> bool:
+	return Game.recons.has(site)
 
 
 func _update_hud() -> void:

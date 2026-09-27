@@ -25,6 +25,7 @@ func _run() -> void:
 	await _test_repairs()
 	await _test_guard_cover()
 	await _test_guard_flank()
+	await _test_shield_wall()
 	await _test_canadian_post()
 
 
@@ -60,6 +61,9 @@ func _watch_guard(guard: SecurityGuard, duration: float) -> Array:
 		if not is_instance_valid(guard) or not guard.is_alive():
 			break
 		seen[guard.tactic] = true
+		var model := guard.get("_rig") as CharacterModel
+		if model and model.stance_clip() == &"crouch_idle":
+			seen["crouched"] = true
 		if player.health < player.max_health:
 			hits += 1
 			player.heal(9999.0)
@@ -99,6 +103,7 @@ func _test_guard_cover() -> void:
 	var seen: Dictionary = result[2]
 	check(seen.has(SecurityGuard.Tactic.COVER), "a guard in the open runs for cover")
 	check(result[1] >= 4, "the guard spends time out of sight behind the wall (%d samples)" % result[1])
+	check(seen.has("crouched"), "the guard crouches while in cover")
 	check(seen.has(SecurityGuard.Tactic.PEEK) and result[0] >= 1, "…and pops out to shoot (hit %d times)" % result[0])
 	guard.apply_damage(9999.0, Vector3.ZERO)
 	wall.queue_free()
@@ -138,6 +143,50 @@ func _test_guard_flank() -> void:
 	for guard in guards:
 		if is_instance_valid(guard):
 			guard.apply_damage(9999.0, Vector3.ZERO)
+	player.set_physics_process(true)
+	player.global_position = Vector3(-85, 0.2, 100)
+	await seconds(0.5)
+
+
+func _test_shield_wall() -> void:
+	player.global_position = Vector3(-84, 0.2, 40)
+	player.heal(9999.0)
+	player.set_physics_process(false)
+	var cops: Array[Police] = []
+	for at: Vector3 in [Vector3(-88, 0.1, 20), Vector3(-84, 0.1, 25), Vector3(-80, 0.1, 22)]:
+		cops.append(_spawn(Police.new(), at) as Police)
+	var lined := 0
+	var facing_ok := 0
+	var facing_all := 0
+	var worst_spread := 0.0
+	for i in 32:
+		await seconds(0.25)
+		player.heal(9999.0)
+		var depths: Array[float] = []
+		for cop in cops:
+			if not is_instance_valid(cop) or not cop.is_alive():
+				continue
+			var to_player := player.global_position - cop.global_position
+			to_player.y = 0.0
+			if cop.in_line:
+				lined += 1
+				if cop.velocity.length() > 0.5:
+					facing_all += 1
+					var facing := -cop._visual.global_basis.z
+					facing.y = 0.0
+					if facing.normalized().dot(to_player.normalized()) > 0.8:
+						facing_ok += 1
+			depths.append(to_player.length())
+		if i >= 12 and depths.size() == 3:
+			worst_spread = maxf(worst_spread, depths.max() - depths.min())
+	check(lined > 30, "police on the player form a shield line (%d samples)" % lined)
+	check(facing_all > 0 and facing_ok >= facing_all * 0.8, "shields stay toward the player while advancing (%d/%d)" % [facing_ok, facing_all])
+	check(worst_spread < 3.5, "the line keeps together (worst depth spread %.1f m)" % worst_spread)
+	var close := cops.filter(func(c: Variant) -> bool: return is_instance_valid(c) and (c as Police).global_position.distance_to(player.global_position) < 7.5).size()
+	check(close == 3, "the line reaches the player (%d of 3)" % close)
+	for cop in cops:
+		if is_instance_valid(cop):
+			cop.apply_damage(9999.0, cop.global_position + Vector3.UP, &"explosive")
 	player.set_physics_process(true)
 	player.global_position = Vector3(-85, 0.2, 100)
 	await seconds(0.5)

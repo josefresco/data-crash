@@ -23,6 +23,8 @@ const FIGHT_LINES := [
 const THANKS := "Thanks a bunch, eh! We'll help you out. Sorry in advance!"
 
 @export var stick_damage := 14.0
+## The Mountie's revolver round.
+@export var revolver_damage := 12.0
 @export var patience := 150.0
 ## During the defense, with the player farther than this from the core,
 ## recruited Canadians hold the core instead of tagging along.
@@ -30,6 +32,15 @@ const THANKS := "Thanks a bunch, eh! We'll help you out. Sorry in advance!"
 ## While holding the core they only take on hostiles this close to it, under
 ## the turrets' cover (chasing farther out got them picked off).
 @export var post_radius := 14.0
+## Holding a post, they fall back to the core below this share of health,
+## fight only in self-defense, and recover `recover_rate` hp/s until
+## `rejoin_share`, then go back out.
+@export var fall_back_share := 0.35
+@export var rejoin_share := 0.8
+@export var recover_rate := 3.0
+
+## Falling back from the post to recover (tests read it).
+var falling_back := false
 
 var state := State.LOST
 var mountie := false
@@ -55,6 +66,10 @@ func _init() -> void:
 func setup(is_mountie: bool) -> void:
 	mountie = is_mountie
 	outfit = "mountie" if is_mountie else ["canuck_a", "canuck_b"].pick_random()
+	if mountie:
+		# The Mountie carries a service revolver: the group's ranged member.
+		attack_range = 13.0
+		attack_interval = 1.1
 
 
 func _ready() -> void:
@@ -116,6 +131,8 @@ func _process(delta: float) -> void:
 	super(delta)
 	if _is_dead:
 		return
+	if falling_back and not _is_valid(target):
+		health = minf(health + recover_rate * delta, max_health)
 	if _speech_left > 0.0:
 		_speech_left -= delta
 		if _speech_left <= 0.0:
@@ -130,6 +147,13 @@ func _process(delta: float) -> void:
 func _pick_target() -> Node3D:
 	if state != State.ALLY:
 		return null
+	if health < max_health * fall_back_share and _defense_post() != null:
+		if not falling_back:
+			speak(["Sorry, I'm hurt! Falling back, eh!", "Need a Timbit break, sorry!"].pick_random())
+			_speech_left = 2.5
+		falling_back = true
+	elif falling_back and (health >= max_health * rejoin_share or _defense_post() == null):
+		falling_back = false
 	return super()
 
 
@@ -140,7 +164,10 @@ func _candidates() -> Array[Node3D]:
 		return list
 	var near: Array[Node3D] = []
 	for node in list:
-		if node.global_position.distance_to(post as Vector3) <= post_radius:
+		if falling_back:
+			if node.global_position.distance_to(global_position) <= 4.0:
+				near.append(node)  # self-defense only
+		elif node.global_position.distance_to(post as Vector3) <= post_radius:
 			near.append(node)
 	return near
 
@@ -181,7 +208,9 @@ func _idle() -> void:
 			super()
 
 
-## The core, when the defense is on and the player is away from it.
+## Where to stand guard when the defense is on and the player is away from
+## the core: the level's ally post (a fence breach or the core), or the core
+## itself while falling back.
 func _defense_post() -> Variant:
 	var level := get_tree().get_first_node_in_group("level")
 	if level == null or not level.has_method("ally_post"):
@@ -189,6 +218,10 @@ func _defense_post() -> Variant:
 	var post: Variant = level.call(&"ally_post")
 	if post == null:
 		return null
+	if falling_back:
+		var core := level.get("core") as Node3D
+		if core and is_instance_valid(core):
+			post = core.global_position
 	var player := get_tree().get_first_node_in_group("player") as Node3D
 	if player and player.is_visible_in_tree() and player.global_position.distance_to(post as Vector3) <= post_leash:
 		return null
@@ -197,6 +230,9 @@ func _defense_post() -> Variant:
 
 func _attack(victim: Node3D) -> void:
 	if _is_friend(victim):
+		return
+	if mountie:
+		_shoot(victim)
 		return
 	_act(&"swing")
 	if victim.has_method("apply_damage"):
@@ -209,6 +245,36 @@ func _attack(victim: Node3D) -> void:
 	if randf() < 0.35:
 		speak(FIGHT_LINES.pick_random())
 		_speech_left = 2.0
+
+
+## The Mountie's revolver: one hitscan round, less accurate far off.
+func _shoot(victim: Node3D) -> void:
+	_act(&"pistol_shoot")
+	var from := muzzle_point()
+	var aim := _aim_point_of(victim)
+	if randf() > lerpf(0.85, 0.5, clampf(_distance_to(victim) / attack_range, 0.0, 1.0)):
+		aim += Vector3(randf_range(-1.2, 1.2), randf_range(-0.5, 0.8), randf_range(-1.2, 1.2))
+	var query := PhysicsRayQueryParameters3D.create(from, from + (aim - from).normalized() * (attack_range + 4.0),
+		SecurityGuard.SHOT_MASK, [get_rid()])
+	var hit := get_world_3d().direct_space_state.intersect_ray(query)
+	var to := from + (aim - from).normalized() * (attack_range + 4.0)
+	Vfx.muzzle(get_parent(), from, Color(1.0, 0.8, 0.45), (aim - from).normalized(), 0.8)
+	Sfx.play(&"guard_gun", from, -6.0, 0.9)
+	if not hit.is_empty():
+		to = hit["position"]
+		var struck := hit["collider"] as Node
+		if struck and struck.has_method("apply_damage") and not _is_friend(struck) and not struck is Player:
+			struck.call(&"apply_damage", revolver_damage, from, &"bullet")
+	Fx.tracer(get_parent(), from, to, Color(1.0, 0.85, 0.5))
+	if randf() < 0.25:
+		speak(["Stop in the name of the Crown, eh!", "Sorry, bud! Warning shot!", "Royal Canadian apology incoming!"].pick_random())
+		_speech_left = 2.0
+
+
+func _upper_pose() -> StringName:
+	if mountie and state == State.ALLY:
+		return &"pistol_aim" if _is_valid(target) and _has_los else &"pistol_idle"
+	return &""
 
 
 func _on_death() -> void:
@@ -225,6 +291,9 @@ func _decorate(_visual_root: Node3D) -> void:
 	else:
 		Models.hat(_anchor(&"head"), &"toque", [Color(0.8, 0.1, 0.1), Color(0.95, 0.95, 0.92)].pick_random(),
 			_head_top(), s, Color(0.8, 0.1, 0.1))
+	if mountie:
+		_hold_weapon(&"pistol", Color(0.25, 0.22, 0.2))
+		return
 	# Hockey stick held low: a wood shaft with a taped grip, down and forward
 	# from the hand, ending in a flat blade that curves off to the side.
 	var hand := _anchor(&"hand_r")

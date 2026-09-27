@@ -52,7 +52,30 @@ var pending_intro := false
 var pending_save := {}
 
 
+## Quits after freeing the running scene and letting a few frames pass.
+## Tearing a live level (physics bodies, ragdoll joints, audio loops) down
+## inside the engine's own shutdown segfaulted now and then; freeing it
+## while the tree still runs normally doesn't. Tests, the title's Quit, and
+## the window's close button all come through here.
+func quit_cleanly(code := 0) -> void:
+	if _quitting:
+		return
+	_quitting = true
+	var scene := get_tree().current_scene
+	if scene:
+		scene.queue_free()
+	for i in 3:
+		await get_tree().process_frame
+	get_tree().quit(code)
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST:
+		quit_cleanly()
+
+
 func _ready() -> void:
+	get_tree().auto_accept_quit = false  # the close button goes through quit_cleanly()
 	_register_input_actions()
 	load_settings()
 
@@ -101,14 +124,20 @@ func wave_size_scale() -> float:
 
 
 ## Fresh state for a (re)loaded level.
+var _quitting := false
+## Sites fully scouted by the recon drone (site id -> true); per level.
+var recons := {}
+
+
 func reset() -> void:
 	cash = 0
 	bribes.clear()
+	recons.clear()
 	stats = {}
 	alarms = {}
 	district = DistrictState.new()
 	cash_changed.emit(cash)
-	for key in ["sites", "deeds", "boss", "wave", "core", "build", "bribe", "shop", "notice"]:
+	for key in ["sites", "deeds", "boss", "wave", "core", "build", "bribe", "shop", "notice", "drone"]:
 		set_info(key, "")
 	for key in ["sites", "deeds"]:
 		set_checklist(key, "", [])

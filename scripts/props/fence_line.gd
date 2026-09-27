@@ -51,6 +51,7 @@ func _rebuild() -> void:
 		panel.label = "Fence"
 		panel.surface_kind = &"chainlink"  # alpha-cutout wire mesh
 		panel.position = Vector3((i + 0.5) * width, 0.0, 0.0)
+		panel.batched = not Engine.is_editor_hint()  # one draw call per fence line
 		add_child(panel)
 		# Posts stay standing when the mesh is torn out.
 		var post := Models.cylinder(self, 0.06, height + 0.2, Vector3(i * width, (height + 0.2) * 0.5, 0.0),

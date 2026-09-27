@@ -26,6 +26,8 @@ var _peek := Vector3.INF
 var _flank := Vector3.INF
 var _tactic_left := 0.0
 var _search_left := 0.0
+## In COVER and at the spot: crouched down.
+var _settled := false
 
 
 func _init() -> void:
@@ -99,6 +101,9 @@ func _run_tactics() -> void:
 			# In place, or as close as the navmesh gets it.
 			var settled := _flat(global_position).distance_to(_flat(_cover)) < 0.9 \
 				or (_nav.is_navigation_finished() and _flat(global_position).distance_to(_flat(_cover)) < 2.0)
+			if settled and not _settled:
+				_tactic_left = maxf(_tactic_left, randf_range(1.0, 1.6))  # just got here: stay down a moment
+			_settled = settled
 			if settled and _tactic_left <= 0.0:
 				tactic = Tactic.PEEK
 				_tactic_left = randf_range(1.8, 2.8)
@@ -220,6 +225,11 @@ func _flank_point(foe: Player) -> Vector3:
 
 static func _flat(v: Vector3) -> Vector3:
 	return Vector3(v.x, 0.0, v.z)
+
+
+func _stance() -> StringName:
+	var hiding := tactic == Tactic.COVER and _settled and velocity.length_squared() < 0.5
+	return &"crouch_idle" if hiding else &""
 
 
 func _upper_pose() -> StringName:

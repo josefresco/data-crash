@@ -49,4 +49,4 @@ func finish() -> void:
 	for error in _log.errors.slice(0, 10):
 		print("    ", error)
 	print("\n%d failure(s)" % _failures.size())
-	get_tree().quit(1 if _failures.size() > 0 else 0)
+	Game.quit_cleanly(1 if _failures.size() > 0 else 0)

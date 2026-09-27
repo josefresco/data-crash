@@ -50,7 +50,7 @@ func _ready() -> void:
 	end.show_result(true, 5, 5)
 	await _wait(0.5)
 	await _shot("end")
-	get_tree().quit()
+	Game.quit_cleanly()
 
 
 func _shot(label: String) -> void:

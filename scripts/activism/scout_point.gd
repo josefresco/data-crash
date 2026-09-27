@@ -94,10 +94,20 @@ func _complete() -> void:
 	if _beacon_mat:
 		_beacon_mat.albedo_color = Color(0.3, 0.9, 0.4)
 		_beacon_mat.emission = Color(0.3, 0.9, 0.4)
-	for node in get_tree().get_nodes_in_group("cooling_units"):
+	mark_cooling_units(get_tree(), site_id)
+	scouted.emit(self)
+
+
+## Puts a see-through "COOLING UNIT" marker over each of the site's cooling
+## units (once; scout perches and drone recon both use it). Returns how many
+## got a new marker.
+static func mark_cooling_units(tree: SceneTree, site: StringName) -> int:
+	var marked := 0
+	for node in tree.get_nodes_in_group("cooling_units"):
 		var unit := node as Destructible
-		if unit == null or unit.site_id != site_id:
+		if unit == null or unit.site_id != site or unit.has_meta(&"marked"):
 			continue
+		unit.set_meta(&"marked", true)
 		var marker := Label3D.new()
 		marker.text = "v COOLING UNIT v"
 		marker.billboard = BaseMaterial3D.BILLBOARD_ENABLED
@@ -107,7 +117,8 @@ func _complete() -> void:
 		marker.modulate = Color(1.0, 0.35, 0.3)
 		marker.position.y = 5.0
 		unit.add_child(marker)
-	scouted.emit(self)
+		marked += 1
+	return marked
 
 
 func _site_name() -> String:

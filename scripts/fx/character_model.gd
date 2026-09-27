@@ -8,6 +8,8 @@ extends Node3D
 ## baked onto this rig by tools/retarget (assets/quaternius/ual_kenney.res),
 ## through an AnimationTree built in code:
 ## - legs: idle / walk / jog / sprint blended by speed (set_motion)
+## - stance: a looping full-body pose under everything else (set_stance:
+##   crouching in cover); held poses and actions still play over it
 ## - upper body: a held pose over the legs (set_upper: pistol aim, phone, ...)
 ## - one-shots: upper-body actions (play_action: shoot, punch, swing, throw)
 ##   and full-body ones (play_action(clip, true): jump, hit knockback)
@@ -55,6 +57,9 @@ var _upper_target := 0.0
 var _upper_weight := 0.0
 var _air_target := 0.0
 var _air_weight := 0.0
+var _stance_clip: AnimationNodeAnimation
+var _stance_target := 0.0
+var _stance_weight := 0.0
 ## Animation LOD: advance the tree every `_step` frames (1 = every frame).
 var _step := 1
 var _step_count := 0
@@ -87,6 +92,24 @@ func set_upper(clip: StringName, weight := 1.0) -> void:
 	if _upper_clip.animation != full:
 		_upper_clip.animation = full
 	_upper_target = weight
+
+
+## Holds a looping full-body `clip` in place of the locomotion (&"" stands
+## back up). Upper-body poses and actions still layer on top.
+func set_stance(clip: StringName) -> void:
+	if _tree == null:
+		return
+	if clip == &"":
+		_stance_target = 0.0
+		return
+	var full := &"ual/" + clip
+	if _stance_clip.animation != full:
+		_stance_clip.animation = full
+	_stance_target = 1.0
+
+
+func stance_clip() -> StringName:
+	return String(_stance_clip.animation).trim_prefix("ual/") if _tree and _stance_target > 0.0 else &""
 
 
 func upper_clip() -> StringName:
@@ -134,6 +157,9 @@ func _process(delta: float) -> void:
 	if not is_equal_approx(_air_weight, _air_target):
 		_air_weight = move_toward(_air_weight, _air_target, delta * 6.0)
 		_tree.set(&"parameters/air/blend_amount", _air_weight)
+	if not is_equal_approx(_stance_weight, _stance_target):
+		_stance_weight = move_toward(_stance_weight, _stance_target, delta * 4.0)
+		_tree.set(&"parameters/stance/blend_amount", _stance_weight)
 	if is_equal_approx(_upper_weight, _upper_target):
 		return
 	_upper_weight = move_toward(_upper_weight, _upper_target, delta * 5.0)
@@ -208,7 +234,8 @@ func _build(height: float, tone: int) -> void:
 	_tree.active = true
 
 
-## loco (BlendSpace1D) -> upper (Blend2, upper-body filter) -> action
+## loco (BlendSpace1D) -> stance (Blend2 to a held full-body loop) ->
+## upper (Blend2, upper-body filter) -> action
 ## (OneShot, upper-body filter) -> full (OneShot) -> air (Blend2 to the
 ## jump loop while airborne) -> output.
 func _build_tree() -> AnimationNodeBlendTree:
@@ -243,7 +270,14 @@ func _build_tree() -> AnimationNodeBlendTree:
 	full.fadein_time = 0.1
 	full.fadeout_time = 0.25
 	root.add_node(&"full", full, Vector2(750, 0))
-	root.connect_node(&"upper", 0, &"loco")
+	# Stance: a full-body loop (crouch) in place of the legs.
+	_stance_clip = AnimationNodeAnimation.new()
+	_stance_clip.animation = &"ual/crouch_idle"
+	root.add_node(&"stance_clip", _stance_clip, Vector2(0, 400))
+	root.add_node(&"stance", AnimationNodeBlend2.new(), Vector2(125, 0))
+	root.connect_node(&"stance", 0, &"loco")
+	root.connect_node(&"stance", 1, &"stance_clip")
+	root.connect_node(&"upper", 0, &"stance")
 	root.connect_node(&"upper", 1, &"upper_clip")
 	root.connect_node(&"action", 0, &"upper")
 	root.connect_node(&"action", 1, &"action_clip")

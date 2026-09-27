@@ -33,11 +33,23 @@ func _run() -> void:
 	check(datacenter.get("_racks").size() >= 4, "server racks inside")
 	check(felsa.worker != null and felsa.truck != null, "a worker inside and a cargo truck out back")
 
+	# Batched drawing: the fence panels draw as one MultiMesh per fence line.
+	var batches: Array = fence.get_meta(&"destructible_batches", {}).values()
+	var drawn := func() -> int:
+		var total := 0
+		for b: DestructibleBatch in batches:
+			total += b.visible_count()
+		return total
+	var panels_before: int = drawn.call()
+	check(batches.size() <= 2 and panels_before > 10, "fence panels draw as one batch (%d instances)" % panels_before)
+
 	# 1. Ram the fence beside the gate: aim the car at it from a few meters out at speed.
 	car.global_transform = Transform3D(Basis(Vector3.UP, PI), Vector3(12.0, 0.8, -6.0))
 	car.linear_velocity = Vector3(0.0, 0.0, -14.0)
 	await seconds(1.5)
 	check(breached[0], "car ram breached the front fence")
+	var panels_after: int = drawn.call()
+	check(panels_after < panels_before, "rammed panels drop out of the batch (%d -> %d)" % [panels_before, panels_after])
 	check(Game.is_alarmed(&"felsa") and not Game.is_alarmed(&"scgrewgle"), "only Felsa's alarm went off")
 
 	# 1b. Scgrewgle's gas turbines: shrug off pistols, blow up under heavy fire, cut power.

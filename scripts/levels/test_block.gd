@@ -87,6 +87,8 @@ var sites: Array[DatacenterSite] = []
 var _felsa: DatacenterSite
 var _auto_wave_left := -1.0
 var _planned_breach: Array[Destructible] = []
+## Where this wave's fence breach was cut (Vector3.INF = none): allies hold it.
+var _breach_hold := Vector3.INF
 var _breach_side := ""
 var _breach_flare: Node3D
 var _boss_bar_shown := false
@@ -251,12 +253,20 @@ func start_defense() -> void:
 ## then the nearest good deed, then the nearest standing datacenter (or its
 ## loose boss), then the green core.
 ## Where recruited allies hold when the player is off elsewhere during the
-## defense: the green core. Null outside BUILD/WAVE, or with no core.
+## defense: just inside the fence breach (announced or cut this wave), else
+## the green core. Null outside BUILD/WAVE, or with no core.
 func ally_post() -> Variant:
 	if phase != Phase.BUILD and phase != Phase.WAVE:
 		return null
 	if core == null or not is_instance_valid(core) or core.is_destroyed:
 		return null
+	var gap := _breach_hold
+	if phase == Phase.BUILD and has_planned_breach():
+		gap = next_breach_point()
+	if gap != Vector3.INF:
+		var inward := core.global_position - gap
+		inward.y = 0.0
+		return gap + inward.normalized() * minf(4.0, inward.length())
 	return core.global_position
 
 
@@ -1128,6 +1138,7 @@ func _on_wave_started(number: int, total: int) -> void:
 
 
 func _on_wave_cleared(number: int, total: int) -> void:
+	_breach_hold = Vector3.INF
 	if phase == Phase.LOST:
 		return
 	_waves_cleared = number
@@ -1191,6 +1202,7 @@ func _plan_breach() -> void:
 
 
 func _execute_breach() -> void:
+	_breach_hold = next_breach_point()
 	for panel in _planned_breach:
 		if is_instance_valid(panel) and not panel.is_destroyed:
 			panel.shatter(panel.global_position + Vector3.UP, 80.0)

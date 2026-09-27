@@ -32,7 +32,7 @@ func _ready() -> void:
 	_menu.add_child(UiTheme.label("Sabotage the server farm. Save the suburb.", 24, UiTheme.ACCENT))
 	_menu.add_child(Control.new())
 	var entries := [["Play", _play], ["Settings", _show_panel.bind(SettingsPanel)],
-			["Controls", _show_panel.bind(ControlsPanel)], ["Quit", func() -> void: get_tree().quit()]]
+			["Controls", _show_panel.bind(ControlsPanel)], ["Quit", func() -> void: Game.quit_cleanly()]]
 	var save := SaveGame.read()
 	if not save.is_empty():
 		entries.insert(0, ["Continue (wave %d of 5)" % (int(save.get("waves_cleared", 0)) + 1), _continue.bind(save)])

@@ -30,4 +30,4 @@ func _ready() -> void:
 		n.set_physics_process(false)
 		n.set_process(false)
 	await _measure("hostiles frozen")
-	get_tree().quit()
+	Game.quit_cleanly()

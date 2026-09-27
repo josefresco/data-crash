@@ -1,7 +1,15 @@
 class_name Police
 extends Enemy
 ## Local Police: riot shield blocks most frontal bullet damage; taser slows.
+## Two or more officers with shields up on the player advance as a shield
+## wall: a line across the player's approach, shields toward the player,
+## with anyone ahead of the line slowing so they arrive together.
 ## Counters: flank them, use explosives, or stun them (EMP drops the shield).
+
+## Gap between officers in a shield line, and how far ahead of the line's
+## average an officer may get before slowing down.
+const LINE_SPACING := 1.3
+const LINE_SLACK := 1.5
 
 @export var taser_damage := 5.0
 @export var taser_slow := 0.25
@@ -13,6 +21,8 @@ extends Enemy
 
 var _shield: MeshInstance3D
 var _shield_down_left := 0.0
+## In a shield wall right now (tests read it).
+var in_line := false
 
 
 func _init() -> void:
@@ -45,6 +55,56 @@ func _physics_process(delta: float) -> void:
 		if _shield_down_left <= 0.0:
 			_shield.visible = true
 	super(delta)
+
+
+func _think() -> void:
+	super()
+	_hold_the_line()
+
+
+## Shield wall against the player on foot: slot into a line across the
+## approach, facing the player, pacing to the line's slowest member.
+func _hold_the_line() -> void:
+	in_line = false
+	speed_scale = 1.0
+	var foe := target as Player
+	if foe == null or not is_shield_up() or rushing or _distance_to(foe) <= attack_range:
+		return
+	var line: Array[Police] = []
+	for node in get_tree().get_nodes_in_group("hostiles"):
+		var cop := node as Police
+		if cop and cop.is_alive() and cop.target == foe and cop.is_shield_up() \
+				and cop.global_position.distance_to(global_position) < 20.0:
+			line.append(cop)
+	if line.size() < 2:
+		return
+	var center := Vector3.ZERO
+	for cop in line:
+		center += cop.global_position
+	center /= line.size()
+	var toward := foe.global_position - center
+	toward.y = 0.0
+	toward = toward.normalized()
+	var side := toward.cross(Vector3.UP)
+	# Order along the line by where each officer already stands.
+	line.sort_custom(func(a: Police, b: Police) -> bool:
+		return a.global_position.dot(side) < b.global_position.dot(side))
+	var slot := line.find(self) - (line.size() - 1) * 0.5
+	var stop := foe.global_position - toward * (attack_range - 1.0)
+	_nav.target_position = stop + side * slot * LINE_SPACING
+	# Hold back when ahead of the line.
+	var ahead := (global_position - center).dot(toward)
+	if ahead > LINE_SLACK:
+		speed_scale = 0.35
+	elif ahead > 0.5:
+		speed_scale = 0.7
+	in_line = true
+
+
+func _look_while_moving() -> Variant:
+	if in_line and _is_valid(target):
+		return (target as Node3D).global_position
+	return null
 
 
 func _modify_damage(amount: float, from: Vector3, kind: StringName) -> float:

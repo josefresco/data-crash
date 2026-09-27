@@ -97,6 +97,8 @@ var _knock_left := 0.0
 var _investigate_left := 0.0
 var _sidestep_left := 0.0
 var _sidestep := Vector3.ZERO
+## Multiplies move_speed (formations hold back their fastest members).
+var speed_scale := 1.0
 ## Seconds left marked by the player's recon drone (HUD shows it through walls).
 var spotted_left := 0.0
 var _gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
@@ -180,6 +182,12 @@ const MAX_TALKERS := 3
 const TALK_RANGE := 35.0
 const TALK_STACK := 0.6
 static var _talkers: Array = []
+
+
+## Leaving the tree: drop out of the static talker list (a static array
+## still holding freed nodes at engine exit is a crash risk).
+func _exit_tree() -> void:
+	_talkers.erase(self)
 
 
 ## Speech bubble above the head (bosses taunt with this).
@@ -327,6 +335,7 @@ func _physics_process(delta: float) -> void:
 			_think()
 			if _rig is CharacterModel and not _lod_far:
 				(_rig as CharacterModel).set_upper(_upper_pose())
+				(_rig as CharacterModel).set_stance(_stance())
 
 		if _is_valid(target) and _has_los and _distance_to(target) <= _engage_range(target):
 			_face(target.global_position, delta)
@@ -340,10 +349,11 @@ func _physics_process(delta: float) -> void:
 	if _knock_left > 0.0:
 		_knock_left -= delta
 		weight *= 0.08
-	velocity.x = lerpf(velocity.x, move_dir.x * move_speed, weight)
-	velocity.z = lerpf(velocity.z, move_dir.z * move_speed, weight)
+	velocity.x = lerpf(velocity.x, move_dir.x * move_speed * speed_scale, weight)
+	velocity.z = lerpf(velocity.z, move_dir.z * move_speed * speed_scale, weight)
 	if move_dir != Vector3.ZERO:
-		_face(global_position + move_dir, delta)
+		var look: Variant = _look_while_moving()
+		_face(look as Vector3 if look != null else global_position + move_dir, delta)
 	# Standing still on the floor: skip the physics move and the animation
 	# update (most site security and townsfolk idle most of the time).
 	if is_resting(move_dir):
@@ -417,6 +427,18 @@ func muzzle_point() -> Vector3:
 ## Override: the clip held on the upper body right now (&"" = none), e.g.
 ## a raised shield or a phone. Checked on each think tick.
 func _upper_pose() -> StringName:
+	return &""
+
+
+## Override: a world point to keep facing while walking (a shield toward
+## the enemy); null faces the way it walks.
+func _look_while_moving() -> Variant:
+	return null
+
+
+## Override: a full-body loop held in place of walking (&"" = none), e.g.
+## crouching in cover. Checked on each think tick.
+func _stance() -> StringName:
 	return &""
 
 

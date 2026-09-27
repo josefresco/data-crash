@@ -54,6 +54,10 @@ const SHARD_VARIANTS := 4
 @export_range(0.0, 1.0) var rubble_share := 0.0
 ## Electronics: hits throw sparks, and the wreck keeps sparking for a while.
 @export var sparks := false
+## Draw through a shared DestructibleBatch (one MultiMesh per identical set
+## under the same parent) instead of an own mesh. Only for plain boxes that
+## never move (datacenter walls, roof tiles, racks, fence panels). Runtime only.
+@export var batched := false
 
 var health: float
 var is_destroyed := false
@@ -61,6 +65,7 @@ var is_destroyed := false
 var _mesh: MeshInstance3D
 var _shape: CollisionShape3D
 var _material: StandardMaterial3D
+var _batch: DestructibleBatch
 
 
 func _ready() -> void:
@@ -94,7 +99,7 @@ func repair(amount: float) -> float:
 	if restored <= 0.0:
 		return 0.0
 	health += restored
-	_material.albedo_color = _damage_color()
+	_set_tint(_damage_color())
 	repaired.emit(restored, health)
 	return restored
 
@@ -108,6 +113,8 @@ func shatter(from: Vector3, force: float) -> void:
 	if is_destroyed:
 		return
 	is_destroyed = true
+	if _batch and is_instance_valid(_batch):
+		_batch.remove(self)
 	if not Engine.is_editor_hint():
 		var cue := &"break_rock"
 		if opacity < 0.99:
@@ -152,6 +159,12 @@ func _build() -> void:
 	else:
 		Models.surface(_material, surface_kind)
 	_mesh.material_override = _material
+	if batched and custom == null and _batch == null and not Engine.is_editor_hint() and get_parent():
+		_mesh.visible = false
+		_batch = DestructibleBatch.join(self, _mesh.mesh, _material)
+		tree_exiting.connect(func() -> void:
+			if is_instance_valid(_batch):
+				_batch.remove(self))
 
 	var box_shape := BoxShape3D.new()
 	box_shape.size = size
@@ -168,9 +181,19 @@ func _visual_mesh() -> Mesh:
 func _show_damage() -> void:
 	# Darken with damage, plus a brief bright flash on each hit.
 	var damaged_color := _damage_color()
-	_material.albedo_color = damaged_color.lightened(0.6)
 	var tween := create_tween()
-	tween.tween_property(_material, "albedo_color", damaged_color, 0.15)
+	tween.tween_method(_set_tint, damaged_color.lightened(0.6), damaged_color, 0.15)
+
+
+## Current color (the batch reads it for this piece's instance).
+func tint() -> Color:
+	return _material.albedo_color if _material else Color(color, opacity)
+
+
+func _set_tint(value: Color) -> void:
+	_material.albedo_color = value
+	if _batch and is_instance_valid(_batch):
+		_batch.tint(self, value)
 
 
 func _damage_color() -> Color:
