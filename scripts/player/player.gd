@@ -63,6 +63,8 @@ var _held_scale := 1.0
 var _aim_pose: AimModifier
 ## Seconds the aim pose stays up after the last shot.
 var _aim_hold := 0.0
+## Alternates jab and cross for bare-handed punches.
+var _punch_left := false
 ## Right mouse held (not in build mode or a car): zoomed, steadier aim.
 var aiming := false
 ## Mouse sensitivity multiplier while aiming.
@@ -468,6 +470,8 @@ func held_model() -> Node3D:
 ## short arc in front, plus the first prop along the aim (Grock cameras, fences).
 func _melee(weapon: Weapon) -> void:
 	_swing = 1.0
+	_punch_left = not _punch_left
+	_rig.play_action(&"swing" if weapon.reach > 2.0 else (&"punch_jab" if _punch_left else &"punch_cross"))
 	Sfx.play(&"throw", global_position + Vector3.UP * 1.2, -4.0, 0.8)
 	var facing := _aim_direction()
 	facing.y = 0.0
@@ -638,6 +642,7 @@ func _fire_pellet(weapon: Weapon, effects := true) -> void:
 
 
 func _throw(weapon: Weapon) -> void:
+	_rig.play_action(&"throw")
 	var thrown := Throwable.new()
 	thrown.kind = weapon.throw_kind
 	thrown.damage = weapon.damage

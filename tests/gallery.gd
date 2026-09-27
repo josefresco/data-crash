@@ -111,6 +111,38 @@ func _ready() -> void:
 		await _wait(2.0)
 		await _shot("deaths_down", Vector3(-84, 1.8, 67), Vector3(-84, 0.3, 54))
 		await _shot("deaths_close", Vector3(-86.5, 1.6, 61.5), Vector3(-87.5, 0.2, 57.5))
+	if _want("anims"):
+		# Retargeted Quaternius clips on the Kenney rig, each frozen mid-clip.
+		var lib := load("res://assets/quaternius/ual_kenney.res") as AnimationLibrary
+		var clips := [&"walk", &"pistol_aim", &"punch_cross", &"swing", &"throw", &"phone", &"zombie_walk", &"fix", &"shield_idle", &"watering"]
+		var models: Array[CharacterModel] = []
+		for i in clips.size():
+			var model := CharacterModel.create(["guard", "police", "resident_a", "canuck_a", "reply_guy"][i % 5], 1.8)
+			model.position = Vector3(-93.0 + i * 2.0, 0.05, 58.0)
+			model.rotation.y = PI
+			level.add_child(model)
+			models.append(model)
+		await _wait(0.3)
+		for i in clips.size():
+			var player := models[i].find_children("*", "AnimationPlayer", true, false)[0] as AnimationPlayer
+			if not player.has_animation_library(&"ual"):
+				player.add_animation_library(&"ual", lib)
+			player.play(&"ual/" + clips[i], 0.0)
+			player.seek(lib.get_animation(clips[i]).length * 0.45, true)
+			player.speed_scale = 0.0
+		await _wait(0.3)
+		await _shot("anims", Vector3(-84, 1.4, 66), Vector3(-84, 1.0, 58))
+		var idler := CharacterModel.create("guard", 1.8)
+		idler.position = Vector3(-84.0, 0.05, 50.0)
+		idler.rotation.y = PI * 0.5
+		level.add_child(idler)
+		await _wait(0.6)
+		await _shot("anims_idle", Vector3(-84.0, 1.0, 53.2), Vector3(-84.0, 0.9, 50.0))
+		idler.queue_free()
+		await _shot("anims_a", Vector3(-89, 1.3, 63.2), Vector3(-89, 0.9, 58))
+		await _shot("anims_b", Vector3(-79, 1.3, 63.2), Vector3(-79, 0.9, 58))
+		for model in models:
+			model.queue_free()
 	if _want("parked"):
 		await _shot("parked", Vector3(-30, 0.2, 21), Vector3(-22, 0.8, 26.5))
 		await _shot("parked2", Vector3(46, 0.2, 21), Vector3(54, 0.8, 26.5))

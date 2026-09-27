@@ -24,3 +24,6 @@ override.cfg
 
 # Throwaway probes
 tests/tmp/
+
+# Downloaded source archives (the used files are extracted under assets/quaternius/)
+assets/*.zip

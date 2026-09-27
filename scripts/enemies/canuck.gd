@@ -157,6 +157,7 @@ func _idle() -> void:
 func _attack(victim: Node3D) -> void:
 	if _is_friend(victim):
 		return
+	_act(&"swing")
 	if victim.has_method("apply_damage"):
 		victim.call(&"apply_damage", stick_damage, global_position, &"melee")
 	if victim.has_method("apply_knockback"):

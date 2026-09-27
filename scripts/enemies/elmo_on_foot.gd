@@ -70,6 +70,12 @@ func _ready() -> void:
 	_speech.position.y = body_height + 1.0
 	add_child(_speech)
 	_speech.text = TAUNTS[0]
+	if _rig is CharacterModel:
+		(_rig as CharacterModel).set_upper(&"phone")  # always on Twatter
+
+
+func _upper_pose() -> StringName:
+	return &"phone"
 
 
 func _physics_process(delta: float) -> void:

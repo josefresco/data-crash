@@ -65,9 +65,14 @@ func _modify_damage(amount: float, _from: Vector3, kind: StringName) -> float:
 	return amount * bullet_armor if kind == &"bullet" else amount
 
 
+func _upper_pose() -> StringName:
+	return &"carry_walk" if captive != null and is_instance_valid(captive) else &""
+
+
 func _attack(victim: Node3D) -> void:
 	if _is_friend(victim):
 		return
+	_act(&"interact")
 	var person := victim as Townsperson
 	if person and not person.is_captured():
 		captive = person

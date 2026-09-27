@@ -99,6 +99,7 @@ func _idle() -> void:
 
 
 func _attack(victim: Node3D) -> void:
+	_act(&"interact")
 	var structure := victim as Destructible
 	if structure:
 		if not _is_safe(structure):

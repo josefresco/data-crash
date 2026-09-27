@@ -161,6 +161,8 @@ func apply_damage(amount: float, from: Vector3, kind: StringName = &"generic") -
 		return
 	if _flinch and not _lod_far and from != Vector3.ZERO:
 		_flinch.hit(global_position - from, clampf(amount / 30.0, 0.25, 1.0))
+	if amount >= 15.0:
+		_act(&"hit_head" if randf() < 0.3 else &"hit_chest")
 	elif not _is_valid(target) and _nav:
 		# Getting hit reveals roughly where the attacker is: go look.
 		_nav.target_position = from
@@ -307,6 +309,8 @@ func _physics_process(delta: float) -> void:
 		if _think_timer <= 0.0:
 			_think_timer = THINK_INTERVAL * (2.0 if _lod_far else 1.0)
 			_think()
+			if _rig is CharacterModel and not _lod_far:
+				(_rig as CharacterModel).set_upper(_upper_pose())
 
 		if _is_valid(target) and _has_los and _distance_to(target) <= _engage_range(target):
 			_face(target.global_position, delta)
@@ -357,7 +361,24 @@ func _update_lod() -> void:
 		and camera.global_position.distance_squared_to(global_position) > LOD_DISTANCE * LOD_DISTANCE
 	_lod_far = far
 	if _rig is CharacterModel:
-		(_rig as CharacterModel).set_animation_active(not far)
+		var model := _rig as CharacterModel
+		model.set_animation_active(not far)
+		if camera and not far and boss_name.is_empty():
+			var distance := camera.global_position.distance_to(global_position)
+			model.set_update_step(1 if distance < 25.0 else (2 if distance < 40.0 else 3))
+
+
+## Override: the clip held on the upper body right now (&"" = none), e.g.
+## a raised shield or a phone. Checked on each think tick.
+func _upper_pose() -> StringName:
+	return &""
+
+
+## Plays a one-shot animation clip (see CharacterModel.play_action) on
+## character models near the camera.
+func _act(clip: StringName, full_body := false) -> void:
+	if _rig is CharacterModel and not _lod_far and not _is_dead:
+		(_rig as CharacterModel).play_action(clip, full_body)
 
 
 ## How hard the killing blow throws the body (N*s, for a ~70 kg ragdoll).

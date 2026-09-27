@@ -28,7 +28,14 @@ func _decorate(_visual_root: Node3D) -> void:
 	_add_box(_anchor(&"hand_r"), Vector3(0.08, 0.1, 0.75), Vector3(0.0, -0.04, -0.28), dark)  # rifle
 
 
+func _upper_pose() -> StringName:
+	if is_dormant():
+		return &"fold_arms" if velocity.length_squared() < 0.25 else &""
+	return &"pistol_aim" if _is_valid(target) and _has_los else &"pistol_idle"
+
+
 func _attack(victim: Node3D) -> void:
+	_act(&"pistol_shoot")
 	var from := global_position + Vector3.UP * body_height * 0.75
 	var aim := _aim_point_of(victim)
 	var accuracy := lerpf(close_accuracy, far_accuracy, clampf(_distance_to(victim) / sight_range, 0.0, 1.0))

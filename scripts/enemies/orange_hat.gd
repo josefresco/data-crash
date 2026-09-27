@@ -28,6 +28,10 @@ func _init() -> void:
 
 
 ## True while actively picketing (refreshed each attack tick).
+func _upper_pose() -> StringName:
+	return &"no" if is_protesting() else &""
+
+
 func is_protesting() -> bool:
 	return _protest_left > 0.0 and is_alive() and not persuaded
 

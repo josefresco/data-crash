@@ -185,6 +185,17 @@ func _guitar(chest: Node3D, s: float) -> void:
 	Models.box(root, Vector3(0.1, 0.03, 0.02), Vector3(0.0, -0.2, -0.06), dark)  # bridge
 
 
+func _upper_pose() -> StringName:
+	match role:
+		&"gardener":
+			return &"watering" if _nav.is_navigation_finished() else &""
+		&"mail_carrier":
+			return &"carry_walk"
+		&"busker":
+			return &"talk"
+	return &""
+
+
 func _danger_nearby() -> bool:
 	for node in get_tree().get_nodes_in_group("hostiles"):
 		var unit := node as Enemy

@@ -84,9 +84,14 @@ func _decorate(_visual_root: Node3D) -> void:
 	Models.box(_anchor(&"hand_l"), Vector3(0.09, 0.16, 0.025), Vector3(0.0, 0.06, -0.08), Models.glow(Color(0.55, 0.75, 1.0), 1.5))
 
 
+func _upper_pose() -> StringName:
+	return &"zombie_walk"
+
+
 func _attack(victim: Node3D) -> void:
 	if _is_friend(victim):
 		return
+	_act(&"zombie_scratch")
 	if victim.has_method("apply_damage"):
 		victim.call(&"apply_damage", slap_damage, global_position, &"melee")
 	Sfx.play(&"hit_soft", victim.global_position, -4.0)

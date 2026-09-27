@@ -58,6 +58,7 @@ func _run() -> void:
 	hud.call("_unhandled_input", press)
 	await _test_hud_overlay(hud, hardware)
 	await _test_hud_layout(hud)
+	await _test_animation_layers()
 	check(Sfx.music_track == &"calm", "calm music plays in the neighborhood (%s)" % Sfx.music_track)
 	await _test_aim_hold()
 	await _test_pickups()
@@ -236,6 +237,35 @@ func _test_aim_hold() -> void:
 		player.weapons[i].owned = saved[i][0]
 		player.weapons[i].ammo = saved[i][1]
 	player.select_weapon(index)
+
+
+## Held upper-body poses and ragdoll deaths (Quaternius clips on the Kenney rig).
+func _test_animation_layers() -> void:
+	var spot := player.global_position + Vector3(0.0, 0.1, -8.0)
+	var cop := Police.new()
+	cop.position = spot + Vector3(-2.0, 0.0, 0.0)
+	cop.site = &"police"  # dormant: stands still, shield up
+	level.add_child(cop)
+	var fan := ReplyGuy.new()
+	fan.position = spot + Vector3(2.0, 0.0, 0.0)
+	level.add_child(fan)
+	await seconds(0.8)
+	check((cop.get("_rig") as CharacterModel).upper_clip() == &"shield_idle", "riot police hold their shields up")
+	check((fan.get("_rig") as CharacterModel).upper_clip() == &"zombie_walk", "reply guys shamble with zombie arms")
+	var guard := SecurityGuard.new()
+	guard.position = spot + Vector3(0.0, 0.0, -4.0)
+	level.add_child(guard)
+	await seconds(1.0)
+	var pose := (guard.get("_rig") as CharacterModel).upper_clip()
+	check(pose == &"pistol_aim" or pose == &"pistol_idle", "guards carry and aim their pistols (%s)" % pose)
+	var before := Ragdoll.active
+	guard.apply_damage(9999.0, player.global_position, &"bullet")
+	await seconds(0.2)
+	check(Ragdoll.active > before, "a guard killed near the camera goes limp (ragdoll)")
+	fan.log_off()
+	cop.queue_free()
+	player.heal(9999.0)
+	await seconds(0.5)
 
 
 func _test_hud_layout(hud: Hud) -> void:

@@ -68,9 +68,14 @@ func _decorate(_visual_root: Node3D) -> void:
 	Models.hat(_anchor(&"head"), &"police", navy.albedo_color, top, body_height / 1.8)
 
 
+func _upper_pose() -> StringName:
+	return &"shield_idle" if is_shield_up() else &""
+
+
 func _attack(victim: Node3D) -> void:
 	if _is_friend(victim):
 		return
+	_act(&"punch_jab")
 	var from := global_position + Vector3.UP * 1.2
 	if victim.has_method("apply_damage"):
 		victim.call(&"apply_damage", taser_damage, from, &"taser")
