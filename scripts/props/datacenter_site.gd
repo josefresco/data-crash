@@ -37,6 +37,8 @@ enum Boss { NONE, ELMO, CRAPYA, SHAM }
 @export var trust_share := 0.1
 @export var cash_reward := 300
 @export var patrol_cyberdouche := false
+## The level's scout perch for this site is a railed rooftop (else a treehouse).
+@export var scout_rooftop := false
 
 const CAR_SCENE := preload("res://scenes/vehicles/car.tscn")
 const CAR_MODELS: Array[String] = ["sedan", "suv", "hatchback-sports", "taxi", "van", "suv-luxury"]

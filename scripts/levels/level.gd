@@ -1,12 +1,16 @@
+class_name Level
 extends Node3D
-## Vertical-slice test level: one suburb, three corporate datacenters.
+## One district: a neighborhood, three corporate datacenters, and the
+## defense. Everything map-specific is an export (group "District") or a
+## node in the district's scene, so each district is a scene using this
+## script. District 1 is scenes/levels/test_block.tscn (the defaults below).
 ## Phase 1 (ACTIVISM): optional good deeds for cash and trust; attacking any
 ## site (or breaching a fence) ends it.
 ## Phase 2 (ASSAULT): take down Felsa Cloud (north, Elmo inside, his
 ## Cyberdouche at the dock), Scgrewgle (west, Crapya's control room), and
 ## ForProfitSI (east, Sham Crapman), in any order. Each DatacenterSite is
 ## cleared when its building collapses and its boss is down.
-## Phase 3 (BUILD / WAVE): the green datacenter goes up on the Felsa lot; defend it.
+## Phase 3 (BUILD / WAVE): the green datacenter goes up on the `defense_site` lot; defend it.
 ## (BOSS is unused, kept so saved references and tests keep their values.)
 
 enum Phase { ACTIVISM, ASSAULT, BOSS, BUILD, WAVE, WON, LOST }
@@ -74,6 +78,28 @@ enum Phase { ACTIVISM, ASSAULT, BOSS, BUILD, WAVE, WON, LOST }
 ## First wave that opens a new lane. Announced (with a flare) a build phase ahead.
 @export var breach_from_wave := 3
 
+@export_group("District")
+## The site whose lot the green datacenter goes up on in Phase 3.
+@export var defense_site_id := &"felsa"
+## The opening objective line.
+@export_multiline var intro_objective := "Three datacenters are draining the block: Felsa Cloud (north), Scgrewgle (west), and ForProfitSI (east), each with a boss inside. Help the neighbors first (optional), then hit them."
+## The patrol cruiser's loop, and the street (z) it starts on by the station.
+@export var police_patrol: Array[Vector3] = [Vector3(2.5, 0.2, -2), Vector3(2.5, 0.2, 28), Vector3(62, 0.2, 28),
+	Vector3(62, 0.2, 32), Vector3(-62, 0.2, 32), Vector3(-62, 0.2, 28), Vector3(-2.5, 0.2, 28)]
+@export var police_street_z := 28.0
+## road_route(): the cross street (z) cruisers take, the main road's lanes
+## (x = +-route_main_x), and |x| beyond which a site is reached along the
+## cross street instead of up the main road.
+@export var route_street_z := 30.0
+@export var route_main_x := 2.5
+@export var route_far_x := 90.0
+## Where the tourists' camper enters and leaves the map.
+@export var tourist_entry := Vector3(2.5, 0.2, 165.0)
+@export var tourist_exit := Vector3(2.5, 0.2, 170.0)
+## Park spots residents stroll to.
+@export var park_spots: Array[Vector3] = [Vector3(-50, 0.2, 60), Vector3(-36, 0.2, 60), Vector3(-24, 0.2, 60)]
+@export_group("")
+
 var phase := Phase.ACTIVISM:
 	set(value):
 		if value != phase:
@@ -84,7 +110,7 @@ var core: GreenCore
 var _fence_breached := false
 ## The three DatacenterSites; the green core goes up on the Felsa lot.
 var sites: Array[DatacenterSite] = []
-var _felsa: DatacenterSite
+var _defense_site: DatacenterSite
 var _auto_wave_left := -1.0
 var _planned_breach: Array[Destructible] = []
 ## Where this wave's fence breach was cut (Vector3.INF = none): allies hold it.
@@ -140,22 +166,37 @@ func _ready() -> void:
 	for node in get_tree().get_nodes_in_group("datacenter_sites"):
 		var site := node as DatacenterSite
 		sites.append(site)
-		if site.site_id == &"felsa":
-			_felsa = site
+		if site.site_id == defense_site_id:
+			_defense_site = site
 		_connect_site(site)
 	_spawner.wave_started.connect(_on_wave_started)
 	_spawner.wave_cleared.connect(_on_wave_cleared)
 	_spawner.all_waves_cleared.connect(_on_all_waves_cleared)
 
-	($WaterMain as WaterMain).fixed.connect(func(_m: WaterMain) -> void:
-		_complete_deed("water", 100, 0.1, "Hydrant capped. The Hendersons have water pressure again. (+$100)")
-		_give_fire_hose())
+	var water_main := get_node_or_null("WaterMain") as WaterMain
+	if water_main:
+		water_main.fixed.connect(func(_m: WaterMain) -> void:
+			_complete_deed("water", 100, 0.1, "Hydrant capped. The Hendersons have water pressure again. (+$100)")
+			_give_fire_hose())
+	else:
+		_deeds.erase("water")
 	_place_scout_points()
-	($SupplyVan as Enemy).died.connect(func(_v: Enemy) -> void:
-		_complete_deed("van", 0, 0.05, "Supply van intercepted. Cargo seized. (+$150)"))
+	if get_tree().get_nodes_in_group("scout_points").is_empty():
+		_deeds.erase("scout")
+	var van := get_node_or_null("SupplyVan") as Enemy
+	if van:
+		van.died.connect(func(_v: Enemy) -> void:
+			_complete_deed("van", 0, 0.05, "Supply van intercepted. Cargo seized. (+$150)"))
+	else:
+		_deeds.erase("van")
+	var strays := 0
 	for dog_name in ["StrayDog1", "StrayDog2"]:
-		var dog := get_node(dog_name) as Dog
-		dog.defeated.connect(_on_stray_dog_defeated)
+		var dog := get_node_or_null(dog_name) as Dog
+		if dog:
+			dog.defeated.connect(_on_stray_dog_defeated)
+			strays += 1
+	if strays < 2:
+		_deeds.erase("dogs")
 	($BribeMenu as BribeMenu).bribe_bought.connect(_on_bribe_bought)
 	_spawn_grock_cameras()
 	_spawn_pickups()
@@ -177,7 +218,11 @@ func _ready() -> void:
 	_update_deeds()
 	_update_sites()
 
-	Game.set_objective("Three datacenters are draining the block: Felsa Cloud (north), Scgrewgle (west), and ForProfitSI (east), each with a boss inside. Help the neighbors first (optional), then hit them.")
+	if old_lady_spots.is_empty():
+		_deeds.erase("ladies")
+	if litter_spots.is_empty():
+		_deeds.erase("litter")
+	Game.set_objective(intro_objective)
 
 
 func _process(delta: float) -> void:
@@ -345,18 +390,23 @@ func _send_canadians_home() -> void:
 
 
 ## One vantage point per datacenter, just outside its front-left fence
-## corner: the scene's ScoutPoint (a tree) for Felsa, a rooftop for
-## Scgrewgle, and another tree for ForProfitSI. All three scouted completes
-## the deed; each pays on its own.
+## corner: any ScoutPoint placed in the scene (District 1: Felsa's tree),
+## else a tree, or a rooftop for sites with `scout_rooftop`. All of them
+## scouted completes the deed; each pays on its own.
 func _place_scout_points() -> void:
-	var points: Array[ScoutPoint] = [$ScoutPoint as ScoutPoint]
+	var points: Array[ScoutPoint] = []
+	var covered := {}
+	for child in get_children():
+		if child is ScoutPoint:
+			points.append(child as ScoutPoint)
+			covered[(child as ScoutPoint).site_id] = true
 	for site_node in sites:
-		if site_node.site_id == &"felsa":
+		if covered.has(site_node.site_id):
 			continue
 		var point := ScoutPoint.new()
 		point.name = "ScoutPoint_%s" % site_node.site_id
 		point.site_id = site_node.site_id
-		point.style = ScoutPoint.Style.ROOFTOP if site_node.site_id == &"scgrewgle" else ScoutPoint.Style.TREE
+		point.style = ScoutPoint.Style.ROOFTOP if site_node.scout_rooftop else ScoutPoint.Style.TREE
 		var half := site_node.compound * 0.5
 		add_child(point)
 		point.global_position = site_node.at(Vector3(-(half.x - 4.0), 0.0, half.y + 4.0))
@@ -507,11 +557,24 @@ func _clear_rubble_near(center: Vector3, radius: float) -> void:
 			node.queue_free()
 
 
-## Where Phase 3 is built: the Felsa lot (remembered if the site is gone).
+## Where Phase 3 is built: the defense site's lot (remembered if the site is gone).
 func _defense_lot() -> Vector3:
 	if _lot_override != Vector3.INF:
 		return _lot_override
-	return _felsa.datacenter.global_position if _felsa and is_instance_valid(_felsa) else Vector3.ZERO
+	return _defense_site.datacenter.global_position if _defense_site and is_instance_valid(_defense_site) else Vector3.ZERO
+
+
+## Name of the site the defense happens on (end screen, tips).
+func defense_site_name() -> String:
+	return _defense_site.display_name if _defense_site and is_instance_valid(_defense_site) else "the datacenter"
+
+
+## The site whose boss is `boss` (Elmo's truck and the on-foot fight).
+func _boss_site(boss: DatacenterSite.Boss) -> DatacenterSite:
+	for site_node in sites:
+		if is_instance_valid(site_node) and site_node.boss == boss:
+			return site_node
+	return null
 
 
 ## Player-built pieces (not the core or the auto solar field), for saving.
@@ -553,7 +616,7 @@ func _resume(save: Dictionary) -> void:
 	for site_node in sites:
 		site_node.queue_free()
 	sites.clear()
-	_felsa = null
+	_defense_site = null
 	for node in get_tree().get_nodes_in_group("hostiles"):
 		var unit := node as Enemy
 		if unit and unit.site != &"police":
@@ -625,9 +688,10 @@ func _announce_phase() -> void:
 			Game.show_banner("CORE LOST", "The datacenters win this round")
 
 
-## Debug and tests: sets off the Felsa alarm (Elmo runs for his truck).
+## Debug and tests: sets off Elmo's site alarm (he runs for his truck).
 func start_boss() -> void:
-	raise_alarm(&"felsa", "test")
+	var home := _boss_site(DatacenterSite.Boss.ELMO)
+	raise_alarm(home.site_id if home else defense_site_id, "test")
 
 
 func has_planned_breach() -> bool:
@@ -737,10 +801,10 @@ func _update_sites() -> void:
 
 func _on_truck_wrecked(truck: ElmoTruck) -> void:
 	var wreck := truck.global_position
-	var felsa := site(&"felsa")
+	var home := _boss_site(DatacenterSite.Boss.ELMO)
 	# Wrecked before he got in: the Elmo inside is the on-foot fight.
-	if felsa and is_instance_valid(felsa.elmo) and felsa.elmo.is_alive():
-		felsa.elmo.ride = null
+	if home and is_instance_valid(home.elmo) and home.elmo.is_alive():
+		home.elmo.ride = null
 		Game.set_objective("His Cyberdouche is scrap. Elmo's on foot, flamethrower in one hand, phone in the other. Hit him while he Twats!")
 		return
 	Game.set_objective("The Cyberdouche is scrap. Elmo climbs out, flamethrower in one hand, phone in the other. Hit him while he Twats!")
@@ -757,9 +821,9 @@ func _on_boss_defeated(_elmo: Enemy) -> void:
 	get_tree().call_group(&"reply_guys", &"log_off")
 	Game.district.trust += 0.15
 	Game.set_objective("Elmo is out, logged off for good.")
-	var felsa := site(&"felsa")
-	if felsa:
-		felsa.mark_boss_defeated()
+	var home := _boss_site(DatacenterSite.Boss.ELMO)
+	if home:
+		home.mark_boss_defeated()
 
 
 ## Shows the first live member of group "bosses" (any node with boss_name,
@@ -952,15 +1016,14 @@ func _spawn_police() -> void:
 	var door := ($Neighborhood as NeighborhoodBuilder).store_door("POLICE")
 	if door == Vector3.ZERO:
 		return
-	var loop: Array[Vector3] = [Vector3(2.5, 0.2, -2), Vector3(2.5, 0.2, 28), Vector3(62, 0.2, 28), Vector3(62, 0.2, 32),
-		Vector3(-62, 0.2, 32), Vector3(-62, 0.2, 28), Vector3(-2.5, 0.2, 28)]
+	var loop := police_patrol
 	for i in 1:
 		var cruiser := PoliceCruiser.new()
 		cruiser.name = "PoliceCruiser%d" % (i + 1)
 		cruiser.site = &"police"
 		cruiser.route = loop.duplicate()
 		cruiser.set("_leg", 1 + i * 3)
-		cruiser.position = Vector3(door.x + 4.0 * i, 0.2, 28.0)
+		cruiser.position = Vector3(door.x + 4.0 * i, 0.2, police_street_z)
 		cruiser.rotation.y = -PI * 0.5
 		add_child(cruiser)
 	for side in [-1.0, 1.0]:
@@ -984,7 +1047,7 @@ func _dispatch_police(site_node: DatacenterSite) -> void:
 		var door := ($Neighborhood as NeighborhoodBuilder).store_door("POLICE")
 		best = PoliceCruiser.new()
 		best.site = &"police"
-		best.position = Vector3(door.x, 0.2, 28.0)
+		best.position = Vector3(door.x, 0.2, police_street_z)
 		add_child(best)
 	best.dispatch(road_route(best.global_position, gate), site_node.site_id)
 
@@ -992,16 +1055,17 @@ func _dispatch_police(site_node: DatacenterSite) -> void:
 ## Waypoints along the roads from `from` to `to`: over to the first street,
 ## along it to the main road or the access road, then up to the destination.
 func road_route(from: Vector3, to: Vector3) -> Array[Vector3]:
-	var street := 30.0
+	var street := route_street_z
+	var lane := route_main_x
 	var points: Array[Vector3] = []
 	if absf(from.z - street) > 6.0:
-		points.append(Vector3(2.5 if from.x >= 0.0 else -2.5, 0.2, from.z))
+		points.append(Vector3(lane if from.x >= 0.0 else -lane, 0.2, from.z))
 	points.append(Vector3(points[-1].x if not points.is_empty() else from.x, 0.2, street - 2.0))
-	if absf(to.x) > 90.0:
+	if absf(to.x) > route_far_x:
 		points.append(Vector3(signf(to.x) * (absf(to.x) - 4.0), 0.2, street - 2.0))
 	else:
-		points.append(Vector3(2.5, 0.2, street - 2.0))
-		points.append(Vector3(2.5, 0.2, to.z + 4.0))
+		points.append(Vector3(lane, 0.2, street - 2.0))
+		points.append(Vector3(lane, 0.2, to.z + 4.0))
 	points.append(to)
 	return points
 
@@ -1012,9 +1076,9 @@ func spawn_tourists() -> TouristRV:
 	var rv := TouristRV.new()
 	rv.name = "TouristRV%d" % (_tourists_sent + 1)
 	rv.stop_point = tourist_stops[_tourists_sent % tourist_stops.size()]
-	rv.exit_point = Vector3(2.5, 0.2, 170.0)
+	rv.exit_point = tourist_exit
 	rv.with_mountie = _tourists_sent % 3 == 1
-	rv.position = Vector3(2.5 if rv.stop_point.x > 0.0 else -2.5, 0.2, 165.0)
+	rv.position = Vector3(absf(tourist_entry.x) * (1.0 if rv.stop_point.x > 0.0 else -1.0), tourist_entry.y, tourist_entry.z)
 	rv.rotation.y = 0.0  # nose (-Z) up the main road
 	_tourists_sent += 1
 	add_child(rv)
@@ -1029,8 +1093,8 @@ func spawn_tourists() -> TouristRV:
 func _spawn_residents(count: int) -> void:
 	var destinations: Array[Vector3] = ($Neighborhood as NeighborhoodBuilder).door_positions().duplicate()
 	destinations.append(market_position + Vector3(0.0, 0.2, 3.5))
-	for x in [-50.0, -36.0, -24.0]:
-		destinations.append(Vector3(x, 0.2, 60.0))
+	for spot in park_spots:
+		destinations.append(spot)
 	var doors := ($Neighborhood as NeighborhoodBuilder).door_positions()
 	# Mostly strollers, with joggers, dog walkers, kids, gardeners, and the mail.
 	var roles: Array[StringName] = [&"walker", &"walker", &"walker", &"jogger", &"jogger", &"dog_walker", &"dog_walker",
@@ -1085,19 +1149,23 @@ func _update_deeds() -> void:
 	if phase != Phase.ACTIVISM:
 		Game.set_checklist("deeds", "", [])
 		return
-	var done := func(key: String) -> StringName: return &"done" if _deeds[key] else &"todo"
 	var cams := &"done" if _cameras_smashed >= _cameras_total else &"info"
-	Game.set_checklist("deeds", "GOOD DEEDS", [
-		["Cap the burst hydrant [F]", done.call("water")],
-		["Stop the supply van", done.call("van")],
-		["Tame strays %d/2 [T]" % mini(_dogs_tamed, 2), done.call("dogs")],
-		["Scout the datacenters %d/%d" % [scouted_count(), get_tree().get_nodes_in_group("scout_points").size()], done.call("scout")],
-		["Help grandmas %d/%d [E]" % [_ladies_helped, _ladies_total], done.call("ladies")],
-		["Paint a house [F]", done.call("paint")],
-		["Litter %d/%d" % [_litter_total - _litter_left, _litter_total], done.call("litter")],
-		["Grock cams %d/%d" % [_cameras_smashed, _cameras_total], cams],
-		["Irrigation off %d/%d" % irrigation_status(), &"done" if irrigation_status()[0] >= irrigation_status()[1] else &"info"],
-	])
+	var labels := {
+		"water": "Cap the burst hydrant [F]",
+		"van": "Stop the supply van",
+		"dogs": "Tame strays %d/2 [T]" % mini(_dogs_tamed, 2),
+		"scout": "Scout the datacenters %d/%d" % [scouted_count(), get_tree().get_nodes_in_group("scout_points").size()],
+		"ladies": "Help grandmas %d/%d [E]" % [_ladies_helped, _ladies_total],
+		"paint": "Paint a house [F]",
+		"litter": "Litter %d/%d" % [_litter_total - _litter_left, _litter_total],
+	}
+	var rows := []
+	for key: String in ["water", "van", "dogs", "scout", "ladies", "paint", "litter"]:
+		if _deeds.has(key):
+			rows.append([labels[key], &"done" if _deeds[key] else &"todo"])
+	rows.append(["Grock cams %d/%d" % [_cameras_smashed, _cameras_total], cams])
+	rows.append(["Irrigation off %d/%d" % irrigation_status(), &"done" if irrigation_status()[0] >= irrigation_status()[1] else &"info"])
+	Game.set_checklist("deeds", "GOOD DEEDS", rows)
 
 
 func _on_bribe_bought(key: String) -> void:

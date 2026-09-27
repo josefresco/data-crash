@@ -1,6 +1,6 @@
 [gd_scene format=3]
 
-[ext_resource type="Script" path="res://scripts/levels/test_block.gd" id="1_level"]
+[ext_resource type="Script" path="res://scripts/levels/level.gd" id="1_level"]
 [ext_resource type="Script" path="res://scripts/district/environment_driver.gd" id="2_env"]
 [ext_resource type="PackedScene" path="res://scenes/player/player.tscn" id="3_player"]
 [ext_resource type="PackedScene" path="res://scenes/vehicles/car.tscn" id="4_car"]
@@ -103,6 +103,7 @@ patrol_cyberdouche = true
 transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -150, 0, 30)
 script = ExtResource("27_site")
 site_id = &"scgrewgle"
+scout_rooftop = true
 display_name = "Scgrewgle"
 brand_name = "SCGREWGLE"
 brand_tagline = "DON'T BE EVIL (TERMS MAY CHANGE)  //  YOUR DATA, OUR WATER"

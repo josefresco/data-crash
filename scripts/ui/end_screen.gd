@@ -25,7 +25,7 @@ func show_result(won: bool, waves_cleared: int, total_waves: int) -> void:
 	body.add_child(UiTheme.label("DISTRICT RESTORED" if won else "THE GREEN CORE FELL", 40,
 		UiTheme.ACCENT if won else Color(1.0, 0.45, 0.35)))
 	body.add_child(UiTheme.label("Water is flowing, the air is clear, and the block is yours." if won
-		else "Felsa Cloud's crews are pouring concrete. The neighbors will remember you tried.", 18, UiTheme.MUTED))
+		else "%s's crews are pouring concrete. The neighbors will remember you tried." % _site_name(), 18, UiTheme.MUTED))
 
 	var minutes := int(Game.stat("time")) / 60
 	var seconds := int(Game.stat("time")) % 60
@@ -60,3 +60,9 @@ func show_result(won: bool, waves_cleared: int, total_waves: int) -> void:
 	buttons.add_child(UiTheme.button("Title screen", func() -> void: get_tree().change_scene_to_file(TITLE_SCENE), 220.0))
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	Sfx.ui(&"jingle_win" if won else &"jingle_lose", 0.0, "Music")
+
+
+## The lot the defense was on (the level knows; District 1's is Felsa Cloud).
+func _site_name() -> String:
+	var level := get_tree().get_first_node_in_group("level")
+	return level.call(&"defense_site_name") if level and level.has_method("defense_site_name") else "Felsa Cloud"

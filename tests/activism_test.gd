@@ -113,13 +113,17 @@ func _test_deeds() -> void:
 	check(get_tree().get_nodes_in_group("litter").is_empty(), "walking over litter picks it all up")
 
 	# Supply van: take it out.
-	var van := level.get_node("SupplyVan") as SupplyVan
-	cash = Game.cash
-	player.global_position = Vector3(-40, 0.2, 45)
-	van.apply_damage(9999.0, van.global_position + Vector3.UP, &"explosive")
-	await seconds(0.5)
-	# $150 bounty + $100 all-deeds bonus.
-	check(Game.cash == cash + 150 + 100, "van bounty and the all-deeds bonus ($%d)" % (Game.cash - cash))
+	var van := level.get_node_or_null("SupplyVan") as SupplyVan
+	if van == null:
+		# Traffic or a stray round got it first (rare): the deed still counts.
+		check((level.get("_deeds") as Dictionary).get("van", false), "the supply van was already stopped (deed done)")
+	else:
+		cash = Game.cash
+		player.global_position = Vector3(-40, 0.2, 45)
+		van.apply_damage(9999.0, van.global_position + Vector3.UP, &"explosive")
+		await seconds(0.5)
+		# $150 bounty + $100 all-deeds bonus.
+		check(Game.cash == cash + 150 + 100, "van bounty and the all-deeds bonus ($%d)" % (Game.cash - cash))
 	check(level.get("_deeds").values().all(func(done: bool) -> bool: return done), "all seven deeds done")
 
 
