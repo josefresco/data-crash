@@ -141,7 +141,8 @@ func _poi(at: Vector3, letter: String, color: Color) -> void:
 
 func _draw_points_of_interest() -> void:
 	if _hood:
-		for spec in [["DUECE HARDWARE", "H", Color(1.0, 0.35, 0.3)], ["POLICE", "P", Color(0.45, 0.6, 1.0)]]:
+		for spec in [["DUECE HARDWARE", "H", Color(1.0, 0.35, 0.3)], ["POLICE", "P", Color(0.45, 0.6, 1.0)],
+				["TOWN HALL", "T", Color(0.95, 0.82, 0.4)]]:
 			var door := _hood.store_door(spec[0])
 			if door != Vector3.ZERO:
 				_poi(door, spec[1], spec[2])
@@ -214,7 +215,7 @@ func _draw_legend() -> void:
 	var font := ThemeDB.fallback_font
 	var rows := [["Objective", Color(1.0, 0.85, 0.15)], ["Hostile", Color(1.0, 0.15, 0.1)], ["Security (quiet)", Color(0.8, 0.5, 0.45)],
 		["Police", Color(0.5, 0.65, 1.0)], ["Friendly dog", Color(0.4, 1.0, 0.5)], ["H Hardware (free)", Color(1.0, 0.35, 0.3)],
-		["M Market", Color(0.45, 0.9, 0.45)], ["C Lost Canadians", Color(1.0, 0.3, 0.3)], ["G Grandma  W Water main", Color(0.95, 0.75, 0.95)], ["Grock camera", Color(1.0, 0.3, 0.8)]]
+		["M Market", Color(0.45, 0.9, 0.45)], ["C Lost Canadians", Color(1.0, 0.3, 0.3)], ["T Town Hall (bribes)", Color(0.95, 0.82, 0.4)], ["G Grandma  W Water main", Color(0.95, 0.75, 0.95)], ["Grock camera", Color(1.0, 0.3, 0.8)]]
 	var at := Vector2(14.0, size.y - rows.size() * 18.0 - 10.0)
 	draw_rect(Rect2(at - Vector2(6, 14), Vector2(220, rows.size() * 18.0 + 8.0)), Color(0, 0, 0, 0.55))
 	for row: Array in rows:

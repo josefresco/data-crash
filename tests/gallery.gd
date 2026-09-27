@@ -143,6 +143,28 @@ func _ready() -> void:
 		await _shot("anims_b", Vector3(-79, 1.3, 63.2), Vector3(-79, 0.9, 58))
 		for model in models:
 			model.queue_free()
+	if _want("police"):
+		# Live riot officers (shield pose) and one walking, front and side.
+		var officers: Array[Enemy] = []
+		for i in 3:
+			var cop := Police.new()
+			cop.site = &"portrait"  # never alarmed: stands still with the shield up
+			cop.position = Vector3(-88.0 + i * 3.0, 0.1, 58.0)
+			level.add_child(cop)
+			officers.append(cop)
+		await _wait(1.5)
+		for cop in officers:
+			cop.set_physics_process(false)
+			(cop.get("_visual") as Node3D).look_at(Vector3(-86.0, 1.0, 66.0), Vector3.UP)
+			(cop.get("_visual") as Node3D).rotation.x = 0.0
+		await _wait(0.2)
+		await _shot("police_front", Vector3(-85.0, 1.5, 62.5), Vector3(-85.0, 1.0, 58.0))
+		await _shot("police_side", Vector3(-80.5, 1.4, 58.2), Vector3(-85.0, 1.0, 58.0))
+		for cop in officers:
+			cop.queue_free()
+	if _want("townhall"):
+		var hall: Vector3 = Game.get_meta(&"town_hall_door", Vector3.ZERO)
+		await _shot("townhall", hall + Vector3(3.0, 1.0, -7.0), hall + Vector3(0.0, 3.5, 5.0))
 	if _want("parked"):
 		await _shot("parked", Vector3(-30, 0.2, 21), Vector3(-22, 0.8, 26.5))
 		await _shot("parked2", Vector3(46, 0.2, 21), Vector3(54, 0.8, 26.5))

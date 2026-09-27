@@ -27,6 +27,7 @@ extends Node3D
 	[Vector3(30.0, 0.0, 16.0), "c", "CORNER PHARMACY", Color(0.3, 0.85, 0.45)],
 	[Vector3(-14.0, 0.0, 44.0), "a", "SUDS LAUNDROMAT", Color(0.5, 0.8, 1.0)],
 	[Vector3(14.0, 0.0, 44.0), "d", "SLICE OF LIFE PIZZA", Color(1.0, 0.6, 0.15)],
+	[Vector3(-30.0, 0.0, 44.0), "l", "TOWN HALL", Color(0.95, 0.82, 0.4)],
 ]
 ## Kenney commercial kit: about 1 unit per floor width.
 const STORE_SCALE := 9.0
@@ -220,6 +221,32 @@ func _add_store(at: Vector3, facing_side: float, lot: Array) -> void:
 	var door := at + Vector3(0.0, 0.0, front + 3.0).rotated(Vector3.UP, body.rotation.y) + Vector3.UP * 0.2
 	_doors.append(door)
 	_store_doors[lot[2]] = door
+	if lot[2] == "TOWN HALL":
+		_dress_town_hall(body, bounds)
+
+
+## Civic front for the Town Hall: white columns under a pediment, steps, and
+## a flagpole, so it reads apart from the shops.
+func _dress_town_hall(body: Node3D, bounds: AABB) -> void:
+	var front := bounds.end.z
+	var marble := Models.mat(Color(0.93, 0.92, 0.88), &"concrete")
+	var width := minf(bounds.size.x * 0.8, 11.0)
+	for k in 6:
+		var x := -width * 0.5 + 0.4 + k * (width - 0.8) / 5.0
+		Models.cylinder(body, 0.28, 3.6, Vector3(x, 1.9, front + 1.4), marble, 12)
+	Models.box(body, Vector3(width + 0.6, 0.5, 2.2), Vector3(0.0, 3.95, front + 1.1), marble)
+	var pediment := Models.extrude(body, PackedVector2Array([Vector2(-1.1, 0.0), Vector2(1.1, 0.0), Vector2(0.0, 1.2)]),
+		width + 0.6, marble, Vector3(0.0, 4.2, front + 1.1))
+	pediment.rotation.y = PI * 0.5
+	pediment.scale = Vector3(1.0, 1.0, 1.0)
+	for step in 3:
+		Models.box(body, Vector3(width + 0.4 - step * 0.4, 0.15, 2.6 - step * 0.5),
+			Vector3(0.0, 0.075 + step * 0.15, front + 1.3 - step * 0.1), marble)
+	Models.collider(body, Vector3(width + 0.6, 4.2, 2.2), Vector3(0.0, 2.1, front + 1.1))
+	var pole := Vector3(width * 0.5 + 2.0, 0.0, front + 3.0)
+	Models.cylinder(body, 0.07, 8.0, pole + Vector3.UP * 4.0, Models.mat(Color(0.8, 0.8, 0.82), &"metal"), 8)
+	Models.collider(body, Vector3(0.25, 8.0, 0.25), pole + Vector3.UP * 4.0)
+	Models.box(body, Vector3(1.6, 1.0, 0.04), pole + Vector3(0.85, 7.3, 0.0), Models.mat(Color(0.25, 0.6, 0.35), &"cloth"))
 
 
 func _add_house(at: Vector3, facing_side: float) -> void:

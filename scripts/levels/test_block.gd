@@ -50,6 +50,8 @@ enum Phase { ACTIVISM, ASSAULT, BOSS, BUILD, WAVE, WON, LOST }
 @export var tourist_interval := 240.0
 @export var tourist_groups := 3
 ## Where the RVs pull over (main-road shoulder), in rotation.
+## Seconds between a datacenter alarm and the police cruiser being sent.
+@export var police_response_delay := 30.0
 ## Most recruited Canadians with you at once: a new RV (up to 3 aboard)
 ## only comes while that still fits.
 @export var tourist_ally_cap := 5
@@ -159,6 +161,7 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	_tick_police_calls(delta)
 	if phase != Phase.WON and phase != Phase.LOST:
 		Game.count("time", delta)
 	if phase in [Phase.ACTIVISM, Phase.ASSAULT, Phase.BUILD] and _tourists_sent < tourist_groups:
@@ -301,6 +304,26 @@ func _send_canadians_home() -> void:
 		Game.notify("The Canadians head home after the wave. \"Sorry we can't stay, eh!\"", 5.0)
 
 
+## Datacenter alarms waiting for a cruiser: site id -> seconds until dispatch.
+var _police_calls := {}
+
+
+func _tick_police_calls(delta: float) -> void:
+	for id: StringName in _police_calls.keys():
+		_police_calls[id] -= delta
+		if _police_calls[id] > 0.0:
+			continue
+		_police_calls.erase(id)
+		var site_node := site(id)
+		if site_node and Game.is_alarmed(id):
+			_dispatch_police(site_node)
+
+
+## Seconds until the police arrive for `id` (-1 if none is pending). Tests.
+func police_eta(id: StringName) -> float:
+	return _police_calls.get(id, -1.0)
+
+
 ## Knocked out: like losing your wanted level. Alarms clear, security and
 ## police stop pursuing and go back to their posts, dispatched cruisers go
 ## back on patrol. Damage stays. Sites whose building is already down (boss
@@ -317,6 +340,7 @@ func _on_player_respawned() -> void:
 		cooled.append(id)
 	for id in cooled:
 		Game.alarms.erase(id)
+		_police_calls.erase(id)
 	if cooled.is_empty():
 		return
 	for node in get_tree().get_nodes_in_group("hostiles"):
@@ -568,7 +592,10 @@ func raise_alarm(site_id: StringName, reason := "") -> void:
 		elif site_node.boss == DatacenterSite.Boss.ELMO:
 			Game.tip("alarm_elmo", "Elmo's making a run for his Cyberdouche at the back dock. Catch him first, or wreck the truck.")
 	if site_node:
-		_dispatch_police(site_node)
+		# Someone calls it in; the nearest cruiser rolls after a delay.
+		_police_calls[site_id] = police_response_delay
+		Game.notify("Someone called the cops. Police are on their way to %s (about %ds)." % [
+			site_node.display_name, int(police_response_delay)], 5.0)
 	elif site_id == &"police":
 		Game.notify("You attacked the police! Every cop in town is after you now.", 6.0)
 	_start_assault()
@@ -654,6 +681,9 @@ func _spawn_hardware_store() -> void:
 		pickup.add_to_group("hardware_store")
 		add_child(pickup)
 	Game.set_meta(&"hardware_door", door)
+	var hall := ($Neighborhood as NeighborhoodBuilder).store_door("TOWN HALL")
+	if hall != Vector3.ZERO:
+		Game.set_meta(&"town_hall_door", hall)
 
 
 ## Two patrol cars loop the first street and the main road, and two officers
@@ -677,7 +707,7 @@ func _spawn_police() -> void:
 	for side in [-1.0, 1.0]:
 		var officer := Police.new()
 		officer.site = &"police"
-		officer.position = door + Vector3(side * 2.0, 0.0, 0.5)
+		officer.position = door + Vector3(side * 2.2, 0.1, 0.0)  # beside the door, not inside the station
 		add_child(officer)
 
 

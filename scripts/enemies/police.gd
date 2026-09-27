@@ -24,6 +24,9 @@ func _init() -> void:
 	attack_interval = 1.2
 	bounty = 20
 	body_color = Color(0.12, 0.2, 0.45)
+	# Wide enough to include the riot shield: officers can't stand inside
+	# each other's shields.
+	body_radius = 0.5
 
 
 func is_shield_up() -> bool:
@@ -62,7 +65,7 @@ func _decorate(_visual_root: Node3D) -> void:
 	var shield_mat := StandardMaterial3D.new()
 	shield_mat.albedo_color = Color(0.7, 0.8, 0.9, 0.55)
 	shield_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	_shield = _add_box(_anchor(&"chest"), Vector3(0.9, 1.3, 0.08), Vector3(-0.1, -0.35, -0.4), shield_mat)
+	_shield = _add_box(_anchor(&"chest"), Vector3(0.8, 1.1, 0.06), Vector3(-0.1, -0.28, -0.5), shield_mat)
 	var navy := _solid(Color(0.05, 0.08, 0.2))
 	var top := _head_top()
 	Models.hat(_anchor(&"head"), &"police", navy.albedo_color, top, body_height / 1.8)

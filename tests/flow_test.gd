@@ -78,6 +78,7 @@ func _run() -> void:
 	await _test_vehicles()
 	await _test_reply_guys()
 	await _test_site_life()
+	await _test_town_hall()
 	await _test_solid_props()
 	await _test_heat_reset()
 	await _test_pause_and_end()
@@ -418,6 +419,12 @@ func _test_site_life() -> void:
 	level.call("raise_alarm", &"forprofit", "test")
 	await seconds(1.0)
 	check(worker.fled, "the tech flees when the alarm goes off")
+	var eta: float = level.call("police_eta", &"forprofit")
+	check(eta > 20.0, "police take a while to respond (%.0f s)" % eta)
+	var early := get_tree().get_nodes_in_group("hostiles").any(func(n: Node) -> bool:
+		return n is PoliceCruiser and (n as PoliceCruiser).respond_site == &"forprofit")
+	check(not early, "no cruiser is sent right away")
+	level.call("_tick_police_calls", eta + 0.1)  # skip the wait
 	var cruiser: PoliceCruiser = null
 	for node in get_tree().get_nodes_in_group("hostiles"):
 		if node is PoliceCruiser and (node as PoliceCruiser).respond_site == &"forprofit":
@@ -435,6 +442,29 @@ func _test_site_life() -> void:
 
 
 ## Market stalls and park benches are solid (people and the player used to clip through).
+## Bribes happen at the Town Hall only.
+func _test_town_hall() -> void:
+	var menu := get_tree().get_first_node_in_group("bribe_menu") as BribeMenu
+	var hall: Vector3 = Game.get_meta(&"town_hall_door", Vector3.ZERO)
+	check(hall != Vector3.ZERO, "the neighborhood has a Town Hall")
+	player.global_position = hall + Vector3(0.0, 0.0, 30.0)
+	await seconds(0.4)
+	check(not menu.near_town_hall(), "away from the Town Hall, no bribe option")
+	var press := InputEventAction.new()
+	press.action = &"bribe_menu"
+	press.pressed = true
+	menu.call("_unhandled_input", press)
+	check(not menu.is_open, "[V] does nothing away from the Town Hall")
+	player.global_position = hall
+	await seconds(0.4)
+	check(menu.near_town_hall(), "at the Town Hall door, bribes are on offer")
+	menu.call("_unhandled_input", press)
+	check(menu.is_open, "[V] opens the bribe menu at the Town Hall")
+	player.global_position = hall + Vector3(0.0, 0.0, 30.0)
+	await seconds(0.5)
+	check(not menu.is_open, "walking away closes the bribe menu")
+
+
 func _test_solid_props() -> void:
 	var market := get_tree().get_first_node_in_group("markets") as Node3D
 	var stall := market.global_transform * Vector3(-7.5, 1.0, 0.0)

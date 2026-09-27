@@ -9,8 +9,8 @@ extends VehicleBody3D
 @export var steer_speed := 3.0
 @export var ram_min_speed := 4.0
 @export var ram_damage_per_mps := 9.0
-## 0 = no limit. The bulldozer tops out slow.
-@export var max_speed := 0.0
+## Top speed in m/s (x1.4 on turbo); 0 = no limit. The bulldozer tops out slow.
+@export var max_speed := 18.0
 ## Neighborhood trust needed before the owner hands over the keys.
 @export var required_trust := 0.0
 ## Optional imported model (Kenney Car Kit, faces +Z like this body). When
@@ -26,6 +26,13 @@ extends VehicleBody3D
 @export var fit_to_model := false
 ## Looping engine sound cue (see Sfx) while someone is driving.
 @export var engine_cue := &"engine_loop"
+@export_group("Stability")
+## Arcade handling: the fastest the car may pitch or roll (rad/s) and how fast
+## those rates die out. Yaw stays free, so spinouts still happen.
+@export var max_tip_rate := 1.1
+@export var tip_damping := 4.0
+## Upward speed cap (m/s): crashes shove cars sideways instead of launching them.
+@export var max_rise_speed := 2.0
 @export_group("Turbo")
 ## [Shift] while driving: engine force x turbo_force for up to turbo_seconds,
 ## then it recharges over turbo_recharge seconds.
@@ -158,6 +165,7 @@ func exit() -> void:
 
 func _physics_process(delta: float) -> void:
 	_update_camera(delta)
+	_stabilize(delta)
 	_stay_upright(delta)
 	var speed := linear_velocity.length()
 	if _engine and _engine.playing:
@@ -209,6 +217,18 @@ func _physics_process(delta: float) -> void:
 		turbo_left = minf(turbo_left + delta * turbo_seconds / turbo_recharge, turbo_seconds)
 
 	_last_speed = speed
+
+
+## Clamps and damps pitch/roll spin and caps upward speed (car-on-car
+## crashes at speed used to flip and launch cars).
+func _stabilize(delta: float) -> void:
+	var local := global_basis.inverse() * angular_velocity
+	var keep := exp(-tip_damping * delta)
+	local.x = clampf(local.x, -max_tip_rate, max_tip_rate) * keep
+	local.z = clampf(local.z, -max_tip_rate, max_tip_rate) * keep
+	angular_velocity = global_basis * local
+	if linear_velocity.y > max_rise_speed:
+		linear_velocity.y = max_rise_speed
 
 
 ## Anti-roll torque while tilted, and a reset onto the wheels if the car

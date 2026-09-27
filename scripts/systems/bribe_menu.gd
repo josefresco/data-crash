@@ -1,6 +1,8 @@
 class_name BribeMenu
 extends Node
-## [V] opens the bribe menu; [1-3] buys. Bribes are one-shot favors stored in
+## At the Town Hall (within TOWN_HALL_RANGE of its door, Game meta
+## "town_hall_door"), [V] opens the bribe menu; [1-3] buys. Walking away
+## closes it; elsewhere the HUD line and [V] are off. Bribes are one-shot favors stored in
 ## Game.bribes and consumed by the systems they affect:
 ## - municipal_delay: next wave arrives without police or FROST (WaveSpawner)
 ## - supply_blockade: next wave is 30% smaller (WaveSpawner)
@@ -17,6 +19,8 @@ const OFFERS := [
 		"blurb": "pre-built walls around the green datacenter"},
 ]
 
+const TOWN_HALL_RANGE := 9.0
+
 var is_open := false
 
 var _refresh_left := 0.0
@@ -30,8 +34,20 @@ func _process(delta: float) -> void:
 	# Pending bribes get consumed elsewhere (wave start), so refresh the line.
 	_refresh_left -= delta
 	if _refresh_left <= 0.0:
-		_refresh_left = 0.5
+		_refresh_left = 0.25
+		if is_open and not near_town_hall():
+			set_open(false)
+		if near_town_hall():
+			Game.tip("town_hall", "The Town Hall. Officials here accept \"donations\": [V] opens the bribe menu.")
 		_update_info()
+
+
+## True when the player is at the Town Hall (the only place bribes happen).
+func near_town_hall() -> bool:
+	if not Game.has_meta(&"town_hall_door"):
+		return false
+	var player := get_tree().get_first_node_in_group("player") as Node3D
+	return player != null and player.global_position.distance_to(Game.get_meta(&"town_hall_door")) <= TOWN_HALL_RANGE
 
 
 func set_open(value: bool) -> void:
@@ -62,6 +78,8 @@ func buy(index: int) -> bool:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("bribe_menu"):
+		if not is_open and not near_town_hall():
+			return
 		set_open(not is_open)
 		Sfx.ui(&"open" if is_open else &"close", -4.0)
 		get_viewport().set_input_as_handled()
@@ -78,13 +96,16 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _update_info() -> void:
+	if not is_open and not near_town_hall():
+		Game.set_info("bribe", "")
+		return
 	if not is_open:
 		var pending: PackedStringArray = []
 		for offer: Dictionary in OFFERS:
 			if Game.has_bribe(offer["key"]):
 				pending.append(offer["name"])
 		var suffix := "   (pending: %s)" % ", ".join(pending) if not pending.is_empty() else ""
-		Game.set_info("bribe", "[V] Bribe officials" + suffix)
+		Game.set_info("bribe", "TOWN HALL   [V] Bribe officials" + suffix)
 		return
 	var parts: PackedStringArray = []
 	for i in OFFERS.size():
