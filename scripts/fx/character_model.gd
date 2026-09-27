@@ -53,6 +53,8 @@ var _action_clip: AnimationNodeAnimation
 var _full_clip: AnimationNodeAnimation
 var _upper_target := 0.0
 var _upper_weight := 0.0
+var _air_target := 0.0
+var _air_weight := 0.0
 ## Animation LOD: advance the tree every `_step` frames (1 = every frame).
 var _step := 1
 var _step_count := 0
@@ -129,6 +131,9 @@ func _process(delta: float) -> void:
 			_tree.advance(_step_delta)
 			_step_delta = 0.0
 			_step_count = 0
+	if not is_equal_approx(_air_weight, _air_target):
+		_air_weight = move_toward(_air_weight, _air_target, delta * 6.0)
+		_tree.set(&"parameters/air/blend_amount", _air_weight)
 	if is_equal_approx(_upper_weight, _upper_target):
 		return
 	_upper_weight = move_toward(_upper_weight, _upper_target, delta * 5.0)
@@ -141,6 +146,11 @@ func skeleton() -> Skeleton3D:
 
 func play_jump() -> void:
 	play_action(&"jump", true)
+
+
+## Holds the mid-air pose (full body) while `on`; blends back when landing.
+func set_airborne(on: bool) -> void:
+	_air_target = 1.0 if on else 0.0
 
 
 ## A node that follows `name`'s bone (see BONES), in meters and unscaled.
@@ -199,7 +209,8 @@ func _build(height: float, tone: int) -> void:
 
 
 ## loco (BlendSpace1D) -> upper (Blend2, upper-body filter) -> action
-## (OneShot, upper-body filter) -> full (OneShot) -> output.
+## (OneShot, upper-body filter) -> full (OneShot) -> air (Blend2 to the
+## jump loop while airborne) -> output.
 func _build_tree() -> AnimationNodeBlendTree:
 	var root := AnimationNodeBlendTree.new()
 	var loco := AnimationNodeBlendSpace1D.new()
@@ -236,9 +247,16 @@ func _build_tree() -> AnimationNodeBlendTree:
 	root.connect_node(&"upper", 1, &"upper_clip")
 	root.connect_node(&"action", 0, &"upper")
 	root.connect_node(&"action", 1, &"action_clip")
+	# Mid-air: a full-body blend to the jump loop while airborne.
+	var air_clip := AnimationNodeAnimation.new()
+	air_clip.animation = &"ual/jump_loop"
+	root.add_node(&"air_clip", air_clip, Vector2(750, 200))
+	root.add_node(&"air", AnimationNodeBlend2.new(), Vector2(1000, 0))
 	root.connect_node(&"full", 0, &"action")
 	root.connect_node(&"full", 1, &"full_clip")
-	root.connect_node(&"output", 0, &"full")
+	root.connect_node(&"air", 0, &"full")
+	root.connect_node(&"air", 1, &"air_clip")
+	root.connect_node(&"output", 0, &"air")
 	return root
 
 

@@ -338,7 +338,7 @@ func _burn(delta: float) -> void:
 	get_parent().add_child(blast)
 	blast.global_position = global_position + Vector3.UP * 0.8
 	blast.detonate.call_deferred()
-	apply_central_impulse(Vector3.UP * mass * 4.0)
+	apply_central_impulse(Vector3.UP * mass * 1.5)
 	# Char everything and douse the lights.
 	for mesh in find_children("*", "MeshInstance3D", true, false):
 		var burnt := StandardMaterial3D.new()

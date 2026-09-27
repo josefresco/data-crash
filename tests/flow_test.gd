@@ -79,6 +79,7 @@ func _run() -> void:
 	check(level.call("canadian_allies") == 0 and get_tree().get_nodes_in_group("canadians").all(
 		func(n: Node) -> bool: return not n.is_in_group("allies")), "after a wave the Canadians say goodbye and head home")
 	await _test_vehicles()
+	await _test_traffic_dogs_bubbles()
 	await _test_reply_guys()
 	await _test_site_life()
 	await _test_town_hall()
@@ -300,6 +301,53 @@ func _test_hud_layout(hud: Hud) -> void:
 	for r in crowd:
 		r.speak("")
 		r.queue_free()
+
+
+## Traffic stops for people; the patrol has no electric whine; tamed dogs
+## only defend; speech bubbles don't show through walls.
+func _test_traffic_dogs_bubbles() -> void:
+	var van := SupplyVan.new()
+	van.route = [Vector3(-84, 0.2, 90), Vector3(-84, 0.2, 20)] as Array[Vector3]
+	van.position = Vector3(-84, 0.2, 20)
+	level.add_child(van)
+	var walker := Resident.new()
+	walker.position = Vector3(-84, 0.1, 42)
+	level.add_child(walker)
+	walker.set_physics_process(false)
+	var closest := [INF]
+	for i in 40:
+		await seconds(0.2)
+		closest[0] = minf(closest[0], van.global_position.distance_to(walker.global_position))
+	check(walker.is_alive() and walker.health >= walker.max_health, "traffic stops for a neighbor in the road (closest %.1f m)" % closest[0])
+	van.queue_free()
+	walker.queue_free()
+	var cruiser: PoliceCruiser = null
+	for node in get_tree().get_nodes_in_group("hostiles"):
+		if node is PoliceCruiser:
+			cruiser = node
+	check(cruiser != null and cruiser.motor_cue == &"engine_loop", "police cruisers have an engine, not an electric whine")
+
+	var dog := Dog.new()
+	dog.position = player.global_position + Vector3(2, 0.1, 0)
+	level.add_child(dog)
+	await seconds(0.3)
+	dog.befriend()
+	var decoy := Barricade.new()
+	decoy.position = player.global_position + Vector3(9, 0, 0)
+	level.add_child(decoy)
+	var guard := SecurityGuard.new()
+	guard.position = player.global_position + Vector3(7, 0.1, 3)
+	level.add_child(guard)
+	guard.set_physics_process(false)
+	guard.target = decoy
+	await seconds(1.0)
+	check(dog.target != guard, "a tamed dog ignores a hostile that isn't after you")
+	guard.target = player
+	await seconds(1.0)
+	check(dog.target == guard, "…and goes for one that is")
+	guard.queue_free()
+	decoy.queue_free()
+	dog.queue_free()
 
 
 func _test_hud_overlay(hud: Hud, hardware: Vector3) -> void:

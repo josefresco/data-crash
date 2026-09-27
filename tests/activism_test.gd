@@ -43,14 +43,26 @@ func _test_deeds() -> void:
 	check(is_equal_approx(Game.district.trust, trust + 0.1 * 0.5),
 		"noise halves the trust reward (%.3f)" % (Game.district.trust - trust))
 
-	# Scout: stand in the ring.
-	var scout := level.get_node("ScoutPoint") as ScoutPoint
-	player.global_position = scout.global_position + Vector3(0, 0.2, 0)
-	for i in 20:
-		if scout.is_scouted:
-			break
-		await seconds(0.25)
-	check(scout.is_scouted, "standing in the ring scouts the datacenter")
+	# Scout: climb each perch ([E] at the ladder), stay a moment, climb down.
+	var perches := get_tree().get_nodes_in_group("scout_points")
+	check(perches.size() == 3, "one scout perch per datacenter (%d)" % perches.size())
+	for node in perches:
+		var perch := node as ScoutPoint
+		player.global_position = perch.base_spot() + Vector3(0, 0.2, 0)
+		await seconds(0.2)
+		check(perch.in_reach(player), "the %s ladder is in reach" % perch.site_id)
+		perch.interact(player)
+		await seconds(0.2)
+		check(perch.on_perch(player), "[E] climbs up onto the %s perch" % perch.site_id)
+		for i in 20:
+			if perch.is_scouted:
+				break
+			await seconds(0.25)
+		perch.interact(player)
+		await seconds(0.2)
+	var scouted := perches.filter(func(n: Node) -> bool: return (n as ScoutPoint).is_scouted).size()
+	check(scouted == 3, "staying on each perch scouts its datacenter (%d/3)" % scouted)
+	check(not (perches[0] as ScoutPoint).on_perch(player), "[E] climbs back down")
 	var marked := 0
 	for unit in get_tree().get_nodes_in_group("cooling_units"):
 		for child in unit.get_children():

@@ -70,6 +70,8 @@ var _aim_hold := 0.0
 ## Alternates jab and cross for bare-handed punches.
 var _punch_left := false
 var _protected_left := 0.0
+## Seconds since leaving the ground (0 while grounded).
+var _air_time := 0.0
 ## Right mouse held (not in build mode or a car): zoomed, steadier aim.
 var aiming := false
 ## Mouse sensitivity multiplier while aiming.
@@ -260,10 +262,18 @@ func _repair(delta: float) -> void:
 ## Members of group "interactables" implement in_reach(player),
 ## offer_text(player), and interact(player).
 func nearest_interactable() -> Node3D:
+	# Closest one in reach: shop stands sit close enough for reaches to overlap.
+	var best: Node3D = null
+	var best_distance := INF
 	for node in get_tree().get_nodes_in_group("interactables"):
-		if node.call(&"in_reach", self):
-			return node as Node3D
-	return null
+		var other := node as Node3D
+		if other == null or not node.call(&"in_reach", self):
+			continue
+		var distance := global_position.distance_to(other.global_position)
+		if distance < best_distance:
+			best = other
+			best_distance = distance
+	return best
 
 
 func _nearest_in_group(group: String, max_distance: float) -> Node3D:
@@ -333,10 +343,18 @@ func _move(delta: float) -> void:
 
 	move_and_slide()
 	var ground_speed := Vector2(velocity.x, velocity.z).length()
+	# Takeoff once, hold the mid-air pose, land (after a real fall).
 	if is_on_floor():
+		if _air_time > 0.35:
+			_rig.play_action(&"jump_land", true)
+		_air_time = 0.0
+		_rig.set_airborne(false)
 		_rig.set_motion(ground_speed / Enemy.RUN_CLIP_SPEED)
 	else:
-		_rig.play_jump()
+		if _air_time == 0.0 and velocity.y > 0.5:
+			_rig.play_jump()
+		_air_time += get_physics_process_delta_time()
+		_rig.set_airborne(_air_time > 0.25)
 
 
 ## Ray from the screen center along the camera view.

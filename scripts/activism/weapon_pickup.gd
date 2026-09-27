@@ -37,6 +37,7 @@ func _ready() -> void:
 			respawn = 0.0
 			var table := Models.box(_visual, Vector3(1.4, 0.8, 0.7), Vector3(0.0, 0.4, 0.0), Models.mat(Color(0.55, 0.4, 0.25)))
 			table.name = "Table"
+			Models.collider(_visual, Vector3(1.4, 0.8, 0.7), Vector3(0.0, 0.4, 0.0))
 			var model := WeaponModels.build(_weapon_model())
 			if model:
 				model.position = Vector3(0.0, 0.86, 0.0)
@@ -45,6 +46,7 @@ func _ready() -> void:
 		&"ammo":
 			var box := Models.box(_visual, Vector3(1.0, 0.55, 0.6), Vector3(0.0, 0.28, 0.0), Models.mat(Color(0.3, 0.36, 0.22), &"paint"))
 			Models.box(box, Vector3(0.7, 0.12, 0.02), Vector3(0.0, 0.05, 0.31), Models.mat(Color(0.95, 0.8, 0.2)))
+			Models.collider(_visual, Vector3(1.0, 0.55, 0.6), Vector3(0.0, 0.28, 0.0))
 		&"molotovs":
 			var crate := Models.box(_visual, Vector3(0.8, 0.4, 0.55), Vector3(0.0, 0.2, 0.0), Models.mat(Color(0.5, 0.36, 0.22)))
 			for i in 3:
@@ -53,6 +55,7 @@ func _ready() -> void:
 				_visual.add_child(bottle)
 			Models.box(_visual, Vector3(0.35, 0.45, 0.2), Vector3(0.65, 0.22, 0.0), Models.mat(Color(0.8, 0.12, 0.1), &"paint")).name = "GasCan"
 			crate.name = "Crate"
+			Models.collider(_visual, Vector3(1.2, 0.45, 0.6), Vector3(0.15, 0.22, 0.0))
 		_:
 			var stone := Models.mat(Color(0.52, 0.5, 0.47), &"rough")
 			for i in 6:
@@ -64,7 +67,8 @@ func _ready() -> void:
 	tag.pixel_size = 0.005
 	tag.outline_size = 8
 	tag.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	tag.position.y = 0.9
+	# Above whatever it labels (tables are 0.8 m with the gun on top).
+	tag.position.y = 1.45 if kind == &"weapon" else 1.0
 	_visual.add_child(tag)
 
 

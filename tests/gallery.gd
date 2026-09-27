@@ -220,6 +220,15 @@ func _ready() -> void:
 		await _shot("hydrant", main.global_position + Vector3(-3.0, 1.2, 5.0), main.global_position + Vector3(0.0, 0.6, 0.0))
 		for neighbor in talkers:
 			neighbor.queue_free()
+	if _want("hardware"):
+		var door: Vector3 = Game.get_meta(&"hardware_door", Vector3.ZERO)
+		await _shot("hardware", door + Vector3(2.0, 1.6, 7.0), door + Vector3(0.0, 0.6, -1.0))
+	if _want("scout"):
+		for node in get_tree().get_nodes_in_group("scout_points"):
+			var perch := node as ScoutPoint
+			var base := perch.base_spot()
+			var away := (base - perch.global_position).normalized()
+			await _shot("scout_%s" % perch.site_id, base + away * 8.0 + Vector3.UP * 1.5, perch.global_position + Vector3.UP * 4.0)
 	if _want("parked"):
 		await _shot("parked", Vector3(-30, 0.2, 21), Vector3(-22, 0.8, 26.5))
 		await _shot("parked2", Vector3(46, 0.2, 21), Vector3(54, 0.8, 26.5))

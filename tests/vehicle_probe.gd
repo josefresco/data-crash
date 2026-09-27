@@ -36,6 +36,8 @@ func _run() -> void:
 		if maneuver != "curb crossing":
 			worst_air = maxf(worst_air, result[1])
 	check(car.skid_mark_count() > 0, "hard driving leaves skid marks (%d)" % car.skid_mark_count())
+	await _parked_cars_drive()
+	await _exit_behavior()
 	await _collisions()
 	await _damage()
 	check(worst_flips == 0, "no flips in normal driving")
@@ -223,3 +225,57 @@ func _damage() -> void:
 	await seconds(5.0)
 	check(car.wrecked and car.driver == null and not car.can_enter(), "it explodes into a wreck, throws the driver out, and can't be driven")
 	check(player.visible, "the driver is back on foot")
+
+
+## Parked neighborhood and lot cars (fit_to_model) must drive like the SUV.
+func _parked_cars_drive() -> void:
+	print("
+PARKED CARS (drive 4 s from rest)")
+	var tested := 0
+	var worst := INF
+	for node in level.get_node("Neighborhood").get_children() + level.get_node("FelsaSite").get_children():
+		if not node is Car or tested >= 4:
+			continue
+		var other := node as Car
+		tested += 1
+		other.global_transform = Transform3D(Basis.looking_at(Vector3.FORWARD, Vector3.UP), STRIP + Vector3(6.0 * tested, 0.2, 0))
+		other.linear_velocity = Vector3.ZERO
+		other.angular_velocity = Vector3.ZERO
+		await seconds(0.8)
+		var wheels := other.find_children("*", "VehicleWheel3D", false, false)
+		var touching := wheels.filter(func(w: VehicleWheel3D) -> bool: return w.is_in_contact()).size()
+		player.global_position = other.global_position + Vector3(3.0, 0.2, 0.0)
+		await seconds(0.1)
+		other.enter(player)
+		Input.action_press("move_forward")
+		var start := other.global_position
+		await seconds(4.0)
+		Input.action_release("move_forward")
+		var moved := other.global_position.distance_to(start)
+		worst = minf(worst, moved)
+		print("  %-22s wheels on ground %d/%d  moved %.1f m  speed %.1f" % [String(other.get("model_path")).get_file(), touching, wheels.size(), moved, other.linear_velocity.length()])
+		other.exit()
+		await seconds(0.3)
+	check(worst > 20.0, "parked cars actually drive (worst moved %.1f m in 4 s)" % worst)
+
+
+## Getting out, at rest and at speed: the car mustn't be launched or blow up.
+func _exit_behavior() -> void:
+	for speed_case in [0.0, 1.0]:
+		await _place(STRIP, Vector3.BACK)
+		if speed_case > 0.0:
+			Input.action_press("move_forward")
+			await seconds(2.5)
+			Input.action_release("move_forward")
+		var health := car.health
+		car.exit()
+		var peak := 0.0
+		for i in 120:
+			await get_tree().physics_frame
+			peak = maxf(peak, car.linear_velocity.length())
+		print("  exit %s: peak speed after exit %.1f m/s, health %.0f -> %.0f, player %.1f m away" % [
+			"moving" if speed_case > 0.0 else "parked", peak, health, car.health, player.global_position.distance_to(car.global_position)])
+		if speed_case == 0.0:
+			check(peak < 2.0 and car.health >= health, "getting out of a parked car doesn't launch it (peak %.1f m/s)" % peak)
+		else:
+			check(car.health > 0.0 and not car.wrecked, "bailing out at speed doesn't blow the car up")

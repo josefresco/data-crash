@@ -122,9 +122,15 @@ func _scan() -> void:
 	if _engaged.size() > 400:
 		_engaged.clear()
 	_speakers.clear()
+	var space := camera.get_world_3d().direct_space_state
 	for node in get_tree().get_nodes_in_group(&"speech"):
 		var label := node as Label3D
-		if label and not label.text.is_empty() and label.is_inside_tree() 				and label.global_position.distance_to(eye) < BUBBLE_RANGE:
+		if label == null or label.text.is_empty() or not label.is_inside_tree() 				or label.global_position.distance_to(eye) >= BUBBLE_RANGE:
+			continue
+		# Hidden behind a building or prop: no bubble through the wall.
+		var head := label.global_position + Vector3.DOWN * 0.8
+		var ray := PhysicsRayQueryParameters3D.create(eye, head, 1 | 16)
+		if space.intersect_ray(ray).is_empty():
 			_speakers.append(label)
 
 

@@ -68,6 +68,8 @@ func _faction_group() -> String:
 
 func _candidates() -> Array[Node3D]:
 	var list := super()
+	if faction == Faction.ALLY:
+		return _defending(list)
 	if faction != Faction.HOSTILE:
 		return list
 	if stray:
@@ -79,6 +81,25 @@ func _candidates() -> Array[Node3D]:
 		if in_territory(node.global_position):
 			inside.append(node)
 	return inside
+
+
+## A tamed dog is a bodyguard, not an attack dog: it only goes for hostiles
+## that are after the player (or their car) or after the dog itself, and
+## only near the player.
+func _defending(list: Array[Node3D]) -> Array[Node3D]:
+	var player := get_tree().get_first_node_in_group("player") as Player
+	if player == null:
+		return []
+	var guarded: Array[Node3D] = [player, self]
+	if player.vehicle:
+		guarded.append(player.vehicle)
+	var near := player.vehicle.global_position if player.vehicle else player.global_position
+	var threats: Array[Node3D] = []
+	for node in list:
+		var unit := node as Enemy
+		if unit and unit.target in guarded and unit.global_position.distance_to(near) < 20.0:
+			threats.append(unit)
+	return threats
 
 
 func in_territory(point: Vector3) -> bool:

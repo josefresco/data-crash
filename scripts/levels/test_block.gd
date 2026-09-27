@@ -147,8 +147,7 @@ func _ready() -> void:
 
 	($WaterMain as WaterMain).fixed.connect(func(_m: WaterMain) -> void:
 		_complete_deed("water", 100, 0.1, "Hydrant capped. The Hendersons have water pressure again. (+$100)"))
-	($ScoutPoint as ScoutPoint).scouted.connect(func(_p: ScoutPoint) -> void:
-		_complete_deed("scout", 50, 0.05, "Datacenter scouted: cooling units marked. (+$50)"))
+	_place_scout_points()
 	($SupplyVan as Enemy).died.connect(func(_v: Enemy) -> void:
 		_complete_deed("van", 0, 0.05, "Supply van intercepted. Cargo seized. (+$150)"))
 	for dog_name in ["StrayDog1", "StrayDog2"]:
@@ -324,6 +323,38 @@ func _send_canadians_home() -> void:
 		Game.notify("The Canadians head home after the wave. \"Sorry we can't stay, eh!\"", 5.0)
 
 
+## One vantage point per datacenter, just outside its front-left fence
+## corner: the scene's ScoutPoint (a tree) for Felsa, a rooftop for
+## Scgrewgle, and another tree for ForProfitSI. All three scouted completes
+## the deed; each pays on its own.
+func _place_scout_points() -> void:
+	var points: Array[ScoutPoint] = [$ScoutPoint as ScoutPoint]
+	for site_node in sites:
+		if site_node.site_id == &"felsa":
+			continue
+		var point := ScoutPoint.new()
+		point.name = "ScoutPoint_%s" % site_node.site_id
+		point.site_id = site_node.site_id
+		point.style = ScoutPoint.Style.ROOFTOP if site_node.site_id == &"scgrewgle" else ScoutPoint.Style.TREE
+		var half := site_node.compound * 0.5
+		add_child(point)
+		point.global_position = site_node.at(Vector3(-(half.x - 4.0), 0.0, half.y + 4.0))
+		point.global_rotation.y = site_node.global_rotation.y
+		points.append(point)
+	for point in points:
+		point.scouted.connect(func(scouted_point: ScoutPoint) -> void:
+			var done := get_tree().get_nodes_in_group("scout_points").filter(func(n: Node) -> bool:
+				return (n as ScoutPoint).is_scouted).size()
+			var total := get_tree().get_nodes_in_group("scout_points").size()
+			Game.add_cash(50)
+			if done >= total:
+				_complete_deed("scout", 50, 0.05, "Every datacenter scouted: all cooling units marked. (+$100)")
+			else:
+				Game.notify("%s scouted: its cooling units are marked. (+$50, %d/%d)" % [
+					scouted_point.call("_site_name"), done, total], 4.0)
+			_update_deeds())
+
+
 ## Spawn at home: the player's front walk, facing the street, with a HOME
 ## sign on the lawn (Game meta "home", minimap icon).
 func _move_in() -> void:
@@ -356,6 +387,10 @@ func _move_in() -> void:
 	text.rotation.y = PI
 	Models.fit_label(text, Vector2(1.4, 0.6))
 	board.add_child(text)
+
+
+func scouted_count() -> int:
+	return get_tree().get_nodes_in_group("scout_points").filter(func(n: Node) -> bool: return (n as ScoutPoint).is_scouted).size()
 
 
 ## An irrigation part broke or shut off: refresh the deeds line.
@@ -855,7 +890,8 @@ func _spawn_hardware_store() -> void:
 		pickup.kind = stock[i][0]
 		pickup.gun_name = stock[i][1]
 		pickup.respawn = 20.0
-		pickup.position = Vector3(door.x - 9.6 + i * 2.4, 0.0, door.z - 0.6)
+		# One tidy row centered on the door, a pace apart.
+		pickup.position = Vector3(door.x - 7.6 + i * 1.9, 0.0, door.z - 0.9)
 		pickup.add_to_group("hardware_store")
 		add_child(pickup)
 	Game.set_meta(&"hardware_door", door)
@@ -1011,7 +1047,7 @@ func _update_deeds() -> void:
 		["Cap the burst hydrant [F]", done.call("water")],
 		["Stop the supply van", done.call("van")],
 		["Tame strays %d/2 [T]" % mini(_dogs_tamed, 2), done.call("dogs")],
-		["Scout the datacenter", done.call("scout")],
+		["Scout the datacenters %d/%d" % [scouted_count(), get_tree().get_nodes_in_group("scout_points").size()], done.call("scout")],
 		["Help grandmas %d/%d [E]" % [_ladies_helped, _ladies_total], done.call("ladies")],
 		["Paint a house [F]", done.call("paint")],
 		["Litter %d/%d" % [_litter_total - _litter_left, _litter_total], done.call("litter")],

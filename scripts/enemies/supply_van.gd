@@ -10,6 +10,8 @@ var _leg := 0
 
 func _init() -> void:
 	bullet_factor = 1.0  # plain panels / boss balance: full bullet damage
+	obeys_traffic = true
+	motor_cue = &"engine_loop"
 	max_health = 120.0
 	top_speed = 7.0
 	wobble = 0.0

@@ -28,6 +28,7 @@ func _init() -> void:
 	model_path = "res://assets/kenney/cars/police.glb"
 	model_scale = 1.45
 	thermal_runaway = false
+	motor_cue = &"engine_loop"
 	bullet_factor = 1.0
 	explosion_damage = 50.0
 
@@ -59,6 +60,10 @@ func recall() -> void:
 	if _siren:
 		_siren.queue_free()
 		_siren = null
+
+
+func in_traffic_mode() -> bool:
+	return not is_pursuing() and super()
 
 
 ## Lights and siren only while there's a call: dispatched to a site, or

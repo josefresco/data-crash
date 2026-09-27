@@ -31,6 +31,15 @@ const WEDGE_HEIGHT := 1.9
 @export var turn_rate := 2.2
 @export var wobble := 0.25
 @export var ram_min_speed := 4.0
+@export_group("Traffic")
+## Off the hunt, AI vehicles drive like traffic: at most `traffic_speed`,
+## braking for people, cars, and the player ahead, slowing into turns, and
+## easing around anything that stays in the way.
+@export var obeys_traffic := false
+@export var traffic_speed := 7.5
+## Engine sound: the Cyberdouche's electric whine, or a plain engine.
+@export var motor_cue := &"ev_loop"
+@export_group("")
 @export var ram_damage_per_mps := 3.0
 @export var body_size := Vector3(2.0, 1.4, 4.8)
 @export var explosion_radius := 5.0
@@ -54,6 +63,12 @@ var _fire_light: OmniLight3D
 var _clock := 0.0
 var _reversals: Array[float] = []
 var _motor: AudioStreamPlayer3D
+## Traffic: seconds spent waiting behind something, and a sideways dodge.
+var _blocked_left := 0.0
+var _waited := 0.0
+var _dodge := 0.0
+var _sense_left := 0.0
+const SENSE_MASK := 2 | 4 | 32  # player, vehicles, units
 
 
 func _init() -> void:
@@ -135,13 +150,26 @@ func _drive(delta: float) -> void:
 	if to_goal.length() < 1.5 and at_end:
 		speed = move_toward(speed, 0.0, acceleration * delta)
 		return
+	var in_traffic := in_traffic_mode()
+	if in_traffic:
+		_sense_traffic(delta)
+		if _blocked_left > 0.0:
+			# Something's ahead: stop and wait (then ease around it).
+			speed = move_toward(speed, 0.0, acceleration * 2.5 * delta)
+			return
 	var sway := sin(Time.get_ticks_msec() / 1000.0 * 1.7 + _wobble_phase) * wobble
-	var desired := atan2(-to_goal.x, -to_goal.z) + sway
+	var desired := atan2(-to_goal.x, -to_goal.z) + sway + _dodge
 	# World yaw (the car may be parented under a rotated DatacenterSite).
 	var diff := wrapf(desired - global_rotation.y, -PI, PI)
 	global_rotation.y += clampf(diff, -turn_rate * delta, turn_rate * delta)
 	# Brake into sharp turns so it doesn't orbit its target forever.
-	var target_speed := top_speed * clampf(1.0 - absf(diff) / PI * 1.2, 0.3, 1.0)
+	var limit := minf(top_speed, traffic_speed) if in_traffic else top_speed
+	var target_speed := limit * clampf(1.0 - absf(diff) / PI * 1.2, 0.3, 1.0)
+	if in_traffic:
+		# Slow for the corner coming up, so the turn stays on the road.
+		var ahead := to_goal.length()
+		if absf(diff) > 0.35 or ahead < 8.0:
+			target_speed = minf(target_speed, lerpf(3.0, limit, clampf(ahead / 14.0, 0.0, 1.0)))
 	speed = move_toward(speed, target_speed, acceleration * delta)
 
 	var real := get_real_velocity()
@@ -153,6 +181,49 @@ func _drive(delta: float) -> void:
 		_begin_reverse()
 
 
+## Driving like traffic (not hunting a target it can see).
+func in_traffic_mode() -> bool:
+	if rushing or (_is_valid(target) and _has_los):
+		return false
+	return obeys_traffic or is_dormant()
+
+
+## Looks ahead (three rays across the bumper, reach grows with speed) for
+## people, cars, or the player; holds `_blocked_left` while anything's there.
+## After waiting a few seconds behind the same thing, steers around it.
+func _sense_traffic(delta: float) -> void:
+	_blocked_left = maxf(_blocked_left - delta, 0.0)
+	_dodge = move_toward(_dodge, 0.0, delta * 0.2)
+	_sense_left -= delta
+	if _sense_left > 0.0:
+		return
+	_sense_left = 0.1
+	var forward := -global_basis.z
+	forward.y = 0.0
+	forward = forward.normalized()
+	var side := forward.cross(Vector3.UP)
+	var reach := 3.5 + absf(speed) * 0.9
+	var nose := global_position + Vector3.UP * (CLEARANCE + 0.8) + forward * (body_size.z * 0.5 + 0.2)
+	var space := get_world_3d().direct_space_state
+	var seen := false
+	for offset in [-body_size.x * 0.4, 0.0, body_size.x * 0.4]:
+		var from: Vector3 = nose + side * offset
+		var query := PhysicsRayQueryParameters3D.create(from, from + forward * reach, SENSE_MASK, [get_rid()])
+		if not space.intersect_ray(query).is_empty():
+			seen = true
+			break
+	if seen:
+		_blocked_left = 0.3
+		_waited += 0.1
+		if _waited > 3.0:
+			# Still stuck behind it: nudge out and around.
+			_dodge = 0.5 if randf() < 0.5 else -0.5
+			_blocked_left = 0.0
+			_waited = 0.0
+	else:
+		_waited = maxf(_waited - 0.2, 0.0)
+
+
 ## The bumper touched a unit: shove it; ram it for real when hunting.
 func _bump(unit: Enemy) -> void:
 	if absf(speed) < 1.5:
@@ -160,7 +231,8 @@ func _bump(unit: Enemy) -> void:
 	var away := unit.global_position - global_position
 	away.y = 0.0
 	unit.apply_knockback(away.normalized() * minf(absf(speed), 10.0) + Vector3.UP * 2.0)
-	if is_dormant() or _is_friend(unit) or absf(speed) < ram_min_speed:
+	# Only what it's hunting takes damage: traffic just nudges pedestrians.
+	if is_dormant() or _is_friend(unit) or absf(speed) < ram_min_speed or in_traffic_mode():
 		return
 	unit.apply_damage(absf(speed) * ram_damage_per_mps, global_position, &"impact")
 
@@ -274,7 +346,7 @@ func _build_body() -> void:
 		_build_cyberdouche()
 	_decorate(_visual)
 	Models.set_gi_mode(_visual, GeometryInstance3D.GI_MODE_DYNAMIC)
-	_motor = Sfx.loop(self, &"ev_loop", -10.0)
+	_motor = Sfx.loop(self, motor_cue, -10.0 if motor_cue == &"ev_loop" else -14.0)
 	# A crowd can't wedge it: no physical contact with units, a bumper instead.
 	collision_layer = Game.LAYER_VEHICLES
 	collision_mask = Game.LAYER_WORLD | Game.LAYER_PLAYER | Game.LAYER_VEHICLES | Game.LAYER_DESTRUCTIBLE

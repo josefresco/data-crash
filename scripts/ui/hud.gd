@@ -45,6 +45,7 @@ var _tip_queue: Array[String] = []
 var _tip_left := 0.0
 var _health: HudBar
 var _turbo: HudBar
+var _car_health: HudBar
 var _kit: Label
 var _weapon_name: Label
 var _ammo: Label
@@ -182,6 +183,14 @@ func _ready() -> void:
 	_turbo.text_size = 12
 	_turbo.visible = false
 	vitals.add_child(_turbo)
+	_car_health = HudBar.new()
+	_car_health.icon = &"turbo"
+	_car_health.icon_color = Color(0.8, 0.85, 0.9)
+	_car_health.fill_color = Color(0.55, 0.7, 0.85)
+	_car_health.custom_minimum_size = Vector2(380, 18)
+	_car_health.text_size = 12
+	_car_health.visible = false
+	vitals.add_child(_car_health)
 	var kit := HBoxContainer.new()
 	kit.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	kit.add_theme_constant_override("separation", 8)
@@ -293,7 +302,13 @@ func _process(delta: float) -> void:
 	if _player and is_instance_valid(_player):
 		var driving := _player.vehicle != null
 		_turbo.visible = driving
+		_car_health.visible = driving
 		if driving:
+			var car := _player.vehicle
+			var ratio := clampf(car.health / car.max_health, 0.0, 1.0)
+			_car_health.value = ratio
+			_car_health.fill_color = Color(0.9, 0.25, 0.15) if ratio < 0.4 else Color(0.55, 0.7, 0.85)
+			_car_health.text = "CAR ON FIRE: GET OUT" if ratio < 0.15 else ("CAR %d%%" % roundi(ratio * 100.0))
 			_turbo.value = _player.vehicle.turbo_ratio()
 			_turbo.text = "TURBO  [Shift]" if _turbo.value > 0.05 else "TURBO recharging"
 		# Red vignette: flash on damage, pulse when low.
