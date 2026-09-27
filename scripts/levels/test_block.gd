@@ -50,7 +50,7 @@ enum Phase { ACTIVISM, ASSAULT, BOSS, BUILD, WAVE, WON, LOST }
 @export var tourist_interval := 240.0
 @export var tourist_groups := 3
 ## Where the RVs pull over (main-road shoulder), in rotation.
-@export var tourist_stops: Array[Vector3] = [Vector3(2.8, 0.2, 92.0), Vector3(-2.8, 0.2, 52.0), Vector3(2.8, 0.2, 122.0)]
+@export var tourist_stops: Array[Vector3] = [Vector3(3.8, 0.2, 92.0), Vector3(-3.8, 0.2, 52.0), Vector3(3.8, 0.2, 122.0)]
 ## The farmer's market stalls in the park (where the gun show used to be).
 @export var market_position := Vector3(-24.0, 0.0, 58.0)
 ## [kind, position] of the weapon pickups (WeaponPickup) around the block.
@@ -227,7 +227,14 @@ func guidance_point() -> Variant:
 		return null
 	var here := player.global_position
 	match phase:
-		Phase.BUILD, Phase.WAVE:
+		Phase.WAVE:
+			# The last few hostiles: point at the nearest so the wave can end.
+			if _spawner.remaining <= 3 and _spawner.queue_empty():
+				var last: Variant = _spawner.nearest_remaining(here)
+				if last != null:
+					return last
+			return core.global_position if is_instance_valid(core) else null
+		Phase.BUILD:
 			return core.global_position if is_instance_valid(core) else null
 		Phase.WON, Phase.LOST:
 			return null
@@ -269,6 +276,9 @@ func guidance_point() -> Variant:
 
 ## Title card on each phase change.
 func _announce_phase() -> void:
+	# Checklists only belong to their phases.
+	_update_sites()
+	_update_deeds()
 	match phase:
 		Phase.ASSAULT:
 			Game.show_banner("THE ASSAULT", "Wreck the cooling units to bring the datacenter down")
@@ -375,19 +385,19 @@ func _on_site_cleared(site_node: DatacenterSite) -> void:
 
 func _update_sites() -> void:
 	if phase != Phase.ACTIVISM and phase != Phase.ASSAULT:
-		Game.set_info("sites", "")
+		Game.set_checklist("sites", "", [])
 		return
-	var parts: Array[String] = []
+	var rows: Array = []
 	for site_node in sites:
-		var status := "quiet"
+		var row := [site_node.display_name + "   quiet", &"todo"]
 		if site_node.is_cleared:
-			status = "DOWN"
+			row = [site_node.display_name + "   DOWN", &"done"]
 		elif site_node.is_neutralized:
-			status = "boss loose"
+			row = [site_node.display_name + "   boss loose", &"alert"]
 		elif site_node.is_alarmed():
-			status = "ALARM"
-		parts.append("%s: %s" % [site_node.display_name, status])
-	Game.set_info("sites", "Datacenters   " + "   ".join(parts))
+			row = [site_node.display_name + "   ALARM", &"alert"]
+		rows.append(row)
+	Game.set_checklist("sites", "DATACENTERS", rows)
 
 
 func _on_truck_wrecked(truck: ElmoTruck) -> void:
@@ -725,14 +735,20 @@ func _on_grock_camera_smashed(camera: GrockCamera) -> void:
 
 func _update_deeds() -> void:
 	if phase != Phase.ACTIVISM:
-		Game.set_info("deeds", "")
+		Game.set_checklist("deeds", "", [])
 		return
-	var marks := {}
-	for key: String in _deeds:
-		marks[key] = "x" if _deeds[key] else " "
-	Game.set_info("deeds", "Deeds:  [%s] Water main [F]   [%s] Supply van   [%s] Strays %d/2 [T]   [%s] Scout the datacenter   [%s] Grandmas %d/%d [E]   [%s] Paint a house [F]   [%s] Litter %d/%d   Grock cams %d/%d"
-		% [marks["water"], marks["van"], marks["dogs"], mini(_dogs_tamed, 2), marks["scout"], marks["ladies"], _ladies_helped,
-			_ladies_total, marks["paint"], marks["litter"], _litter_total - _litter_left, _litter_total, _cameras_smashed, _cameras_total])
+	var done := func(key: String) -> StringName: return &"done" if _deeds[key] else &"todo"
+	var cams := &"done" if _cameras_smashed >= _cameras_total else &"info"
+	Game.set_checklist("deeds", "GOOD DEEDS", [
+		["Fix the water main [F]", done.call("water")],
+		["Stop the supply van", done.call("van")],
+		["Tame strays %d/2 [T]" % mini(_dogs_tamed, 2), done.call("dogs")],
+		["Scout the datacenter", done.call("scout")],
+		["Help grandmas %d/%d [E]" % [_ladies_helped, _ladies_total], done.call("ladies")],
+		["Paint a house [F]", done.call("paint")],
+		["Litter %d/%d" % [_litter_total - _litter_left, _litter_total], done.call("litter")],
+		["Grock cams %d/%d" % [_cameras_smashed, _cameras_total], cams],
+	])
 
 
 func _on_bribe_bought(key: String) -> void:

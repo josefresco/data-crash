@@ -125,3 +125,16 @@ func _run() -> void:
 		% (str(ceili(core.health)) if is_instance_valid(core) else "gone"))
 	check(level.phase == level.Phase.BUILD, "back to build phase")
 
+	# Stuck failsafe: a targetless unit that never moves gets nudged, then withdraws.
+	var stuck := SecurityGuard.new()
+	stuck.position = Vector3(-84, 0.1, 40)
+	level.add_child(stuck)
+	stuck.set_physics_process(false)
+	(spawner.get("_spawned") as Array).append(stuck)
+	check(spawner.nearest_remaining(Vector3(-84, 0, 0)) != null, "the spawner can point at the last hostiles")
+	for i in 30:
+		if not is_instance_valid(stuck):
+			break
+		spawner.call("_check_stuck")
+	check(not is_instance_valid(stuck) or stuck.is_queued_for_deletion(), "a unit stuck with no target withdraws so the wave can end")
+

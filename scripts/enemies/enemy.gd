@@ -147,8 +147,52 @@ func apply_damage(amount: float, from: Vector3, kind: StringName = &"generic") -
 		_nav.target_position = from
 
 
+## Speech bubbles: at most MAX_TALKERS flavor lines at once, only within
+## TALK_RANGE of the camera; the nearest win and bubbles that would overlap
+## stack upward. Bosses always talk.
+const MAX_TALKERS := 3
+const TALK_RANGE := 35.0
+const TALK_STACK := 0.6
+static var _talkers: Array = []
+
+
 ## Speech bubble above the head (bosses taunt with this).
 func speak(text: String, height := -1.0) -> void:
+	var base_height := (body_height + 1.0) if height < 0.0 else height
+	if text.is_empty():
+		if _speech_label:
+			_speech_label.text = ""
+		_talkers.erase(self)
+		return
+	var boss := not boss_name.is_empty()
+	var camera := get_viewport().get_camera_3d() if is_inside_tree() else null
+	var eye := camera.global_position if camera else global_position
+	var distance := eye.distance_to(global_position)
+	_talkers = _talkers.filter(func(t: Variant) -> bool:
+		return is_instance_valid(t) and t != self and (t as Enemy)._speech_label != null \
+			and not (t as Enemy)._speech_label.text.is_empty())
+	if not boss:
+		if distance > TALK_RANGE:
+			return
+		var others := _talkers.filter(func(t: Variant) -> bool: return (t as Enemy).boss_name.is_empty())
+		if others.size() >= MAX_TALKERS:
+			others.sort_custom(func(a: Variant, b: Variant) -> bool:
+				return eye.distance_to((a as Node3D).global_position) > eye.distance_to((b as Node3D).global_position))
+			var farthest := others[0] as Enemy
+			if eye.distance_to(farthest.global_position) <= distance:
+				return  # everyone talking is closer: this line goes unsaid
+			farthest.speak("")
+	_talkers.append(self)
+	var stack := 0
+	for t: Variant in _talkers:
+		var other := t as Enemy
+		if other == self or other._speech_label == null or other._speech_label.text.is_empty():
+			continue
+		var gap := other.global_position - global_position
+		gap.y = 0.0
+		if gap.length() < 3.0:
+			stack += 1
+	height = base_height + stack * TALK_STACK
 	if _speech_label == null:
 		_speech_label = Label3D.new()
 		_speech_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
@@ -156,10 +200,10 @@ func speak(text: String, height := -1.0) -> void:
 		_speech_label.font_size = 40
 		_speech_label.outline_size = 10
 		_speech_label.no_depth_test = true
-		_speech_label.width = 900.0
+		_speech_label.width = 560.0
 		_speech_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		add_child(_speech_label)
-	_speech_label.position.y = (body_height + 1.0) if height < 0.0 else height
+	_speech_label.position.y = height
 	if text != _speech_label.text and not text.is_empty():
 		_babble()
 	_speech_label.text = text
@@ -277,6 +321,31 @@ func _modify_damage(amount: float, _from: Vector3, _kind: StringName) -> float:
 ## Override: extra consequences of dying (trust penalties, dropping captives).
 func _on_death() -> void:
 	pass
+
+
+func is_defeated() -> bool:
+	return _defeated_emitted
+
+
+## Stuck failsafe: hop to the nearest navmesh point and head for `goal`.
+func renavigate(goal: Variant) -> void:
+	var map := get_world_3d().navigation_map
+	var snapped := NavigationServer3D.map_get_closest_point(map, global_position)
+	if snapped != Vector3.ZERO and snapped.distance_to(global_position) < 12.0:
+		global_position = snapped + Vector3.UP * 0.1
+	velocity = Vector3.ZERO
+	if is_instance_valid(goal):
+		objective = goal as Node3D
+		_nav.target_position = objective.global_position
+
+
+## Stuck failsafe, second strike: leaves the fight (counts as defeated).
+func give_up() -> void:
+	if _is_dead:
+		return
+	_emit_defeated()
+	Vfx.dust(get_parent(), global_position)
+	queue_free()
 
 
 ## Marks this unit as no longer part of the fight (wave bookkeeping). Idempotent.

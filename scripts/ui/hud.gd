@@ -2,8 +2,9 @@ class_name Hud
 extends CanvasLayer
 ## In-game HUD, built in code:
 ## - top-left: circular minimap ([M] toggles a full map), district meters
-## - top-center: objective and keyed info lines (sites, deeds, boss, wave, ...)
-## - top-right: cash, then feedback toasts
+## - top-center: objective (two lines max) and status lines (boss, wave, core)
+## - top-right column: cash, checklists (datacenters, good deeds), then toasts
+## - bottom-center: key menus (build, bribes, market) above the [E]/[F] prompt
 ## - bottom-left: health bar (flashes on damage), turbo bar while driving,
 ##   C4 and treat counts; the tip panel sits above it
 ## - bottom-right: weapon and ammo
@@ -12,7 +13,12 @@ extends CanvasLayer
 ## - CameraFx: FOV kick, explosion shake, dust motes
 
 const TIP_SECONDS := 9.0
-const INFO_KEYS: Array[String] = ["sites", "deeds", "boss", "wave", "core", "build", "bribe", "shop", "notice"]
+const INFO_KEYS: Array[String] = ["boss", "wave", "core", "notice", "build", "bribe", "shop"]
+## Info keys that are key menus: shown bottom-center instead of under the objective.
+const MENU_KEYS: Array[String] = ["build", "bribe", "shop"]
+const CHECKLIST_KEYS: Array[String] = ["sites", "deeds"]
+const COLUMN_WIDTH := 320.0
+const CENTER_WIDTH := 600.0
 ## [district key, label, icon, fill color, high-is-bad]
 const METERS := [
 	["smog", "SMOG", &"smog", Color(0.6, 0.5, 0.4), true],
@@ -26,6 +32,10 @@ var _cash: Label
 var _objective: Label
 var _prompt: Label
 var _info_box: VBoxContainer
+var _menu_box: VBoxContainer
+var _tracker: VBoxContainer
+## checklist key -> [PanelContainer, last rows]
+var _checklists := {}
 var _info := {}
 var _player: Player
 var _toasts: VBoxContainer
@@ -95,35 +105,58 @@ func _ready() -> void:
 		meters.add_child(bar)
 		_meters[spec[0]] = [bar, spec[1], spec[4]]
 
-	# Cash top-right with a coin, toasts under it.
+	# Right column: cash with a coin, the checklists, then toasts. One column,
+	# so nothing on the right can overlap.
+	var column := VBoxContainer.new()
+	column.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	column.add_theme_constant_override("separation", 8)
+	root.add_child(column)
+	_place(column, Control.PRESET_TOP_RIGHT, Rect2(-COLUMN_WIDTH - 20.0, 16, COLUMN_WIDTH, 0))
 	var cash_box := HBoxContainer.new()
 	cash_box.alignment = BoxContainer.ALIGNMENT_END
 	cash_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.add_child(cash_box)
-	_place(cash_box, Control.PRESET_TOP_RIGHT, Rect2(-300, 16, 280, 44))
+	column.add_child(cash_box)
 	var coin := _IconControl.new(&"coin", Color(1.0, 0.82, 0.25), 30.0)
 	cash_box.add_child(coin)
 	_cash = _make_label(cash_box, 32, HORIZONTAL_ALIGNMENT_RIGHT)
 	_cash.add_theme_color_override("font_color", Color(1.0, 0.92, 0.6))
 
+	_tracker = VBoxContainer.new()
+	_tracker.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_tracker.add_theme_constant_override("separation", 6)
+	column.add_child(_tracker)
+	for key in CHECKLIST_KEYS:
+		var panel := _checklist_panel()
+		panel.visible = false
+		_tracker.add_child(panel)
+		_checklists[key] = [panel, []]
 	_toasts = VBoxContainer.new()
 	_toasts.alignment = BoxContainer.ALIGNMENT_BEGIN
 	_toasts.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.add_child(_toasts)
-	_place(_toasts, Control.PRESET_TOP_RIGHT, Rect2(-460, 70, 440, 0))
+	column.add_child(_toasts)
 
-	# Objective plus keyed lines, stacked so wrapping pushes the rest down.
+	# Objective plus status lines, stacked so wrapping pushes the rest down.
 	_info_box = VBoxContainer.new()
 	_info_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(_info_box)
-	_place(_info_box, Control.PRESET_CENTER_TOP, Rect2(-430, 16, 860, 0))
-	_objective = _make_label(_info_box, 22, HORIZONTAL_ALIGNMENT_CENTER)
+	_place(_info_box, Control.PRESET_CENTER_TOP, Rect2(-CENTER_WIDTH * 0.5, 14, CENTER_WIDTH, 0))
+	_objective = _make_label(_info_box, 20, HORIZONTAL_ALIGNMENT_CENTER)
 	_objective.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_objective.custom_minimum_size = Vector2(860, 0)
+	_objective.custom_minimum_size = Vector2(CENTER_WIDTH, 0)
+	_objective.max_lines_visible = 2
+	_objective.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	# Key menus (build, bribes, market) sit bottom-center, above the prompt.
+	_menu_box = VBoxContainer.new()
+	_menu_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_menu_box.alignment = BoxContainer.ALIGNMENT_END
+	root.add_child(_menu_box)
+	_place(_menu_box, Control.PRESET_CENTER_BOTTOM, Rect2(-450, -200, 900, 0))
+	_menu_box.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	for key in INFO_KEYS:
-		var line := _make_label(_info_box, 17, HORIZONTAL_ALIGNMENT_CENTER)
+		var menu := key in MENU_KEYS
+		var line := _make_label(_menu_box if menu else _info_box, 17, HORIZONTAL_ALIGNMENT_CENTER)
 		line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		line.custom_minimum_size = Vector2(860, 0)
+		line.custom_minimum_size = Vector2(900.0 if menu else CENTER_WIDTH, 0)
 		line.visible = false
 		_info[key] = line
 
@@ -216,6 +249,7 @@ func _ready() -> void:
 	Game.cash_changed.connect(func(_c: int) -> void: _refresh_status())
 	Game.objective_changed.connect(func(text: String) -> void: _objective.text = text)
 	Game.info_changed.connect(_on_info_changed)
+	Game.checklist_changed.connect(_on_checklist_changed)
 	Game.notice.connect(show_toast)
 	Game.tip_shown.connect(func(text: String) -> void: _tip_queue.append(text))
 	_objective.text = Game.objective
@@ -297,7 +331,8 @@ func _connect_player() -> void:
 func show_toast(text: String, seconds := 5.0) -> void:
 	var label := _make_label(_toasts, 18, HORIZONTAL_ALIGNMENT_RIGHT)
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	label.custom_minimum_size = Vector2(440, 0)
+	label.custom_minimum_size = Vector2(COLUMN_WIDTH, 0)
+	label.add_theme_font_size_override("font_size", 16)
 	label.text = text
 	label.modulate = Color(1.0, 0.95, 0.6)
 	while _toasts.get_child_count() > 4:
@@ -344,6 +379,63 @@ func _refresh_status() -> void:
 	_weapon_name.text = "[Q] %s" % weapon.display_name
 	_ammo.text = "--" if weapon.ammo < 0 else "%d / %d" % [weapon.ammo, weapon.max_ammo]
 	_ammo.add_theme_color_override("font_color", Color(1.0, 0.4, 0.35) if weapon.ammo == 0 else Color.WHITE)
+
+
+## Rows currently shown for a checklist (tests read this).
+func checklist_rows(key: String) -> Array:
+	var entry: Array = _checklists.get(key, [null, []])
+	return entry[1]
+
+
+func _checklist_panel() -> PanelContainer:
+	var panel := PanelContainer.new()
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.03, 0.05, 0.04, 0.62)
+	style.border_color = Color(UiTheme.ACCENT, 0.6)
+	style.border_width_right = 3
+	style.set_corner_radius_all(6)
+	style.content_margin_left = 12
+	style.content_margin_right = 12
+	style.content_margin_top = 6
+	style.content_margin_bottom = 8
+	panel.add_theme_stylebox_override("panel", style)
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var rows := VBoxContainer.new()
+	rows.name = "Rows"
+	rows.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	rows.add_theme_constant_override("separation", 1)
+	panel.add_child(rows)
+	return panel
+
+
+func _on_checklist_changed(key: String, title: String, rows: Array) -> void:
+	var entry: Array = _checklists.get(key, [])
+	if entry.is_empty() or entry[1] == rows:
+		return
+	entry[1] = rows.duplicate(true)
+	var panel := entry[0] as PanelContainer
+	panel.visible = not rows.is_empty()
+	var box := panel.get_node("Rows") as VBoxContainer
+	for child in box.get_children():
+		box.remove_child(child)
+		child.queue_free()
+	if rows.is_empty():
+		return
+	var header := _make_label(box, 13, HORIZONTAL_ALIGNMENT_LEFT)
+	header.text = title
+	header.add_theme_color_override("font_color", UiTheme.ACCENT)
+	for row: Array in rows:
+		var line := _make_label(box, 15, HORIZONTAL_ALIGNMENT_LEFT)
+		var state: StringName = row[1]
+		var mark := {&"done": "[x] ", &"alert": "[!] ", &"info": "      "}.get(state, "[  ] ") as String
+		line.text = mark + str(row[0])
+		match state:
+			&"done":
+				line.add_theme_color_override("font_color", Color(0.55, 0.85, 0.6, 0.8))
+			&"alert":
+				line.add_theme_color_override("font_color", Color(1.0, 0.45, 0.35))
+			&"info":
+				line.add_theme_color_override("font_color", UiTheme.MUTED)
 
 
 func _on_info_changed(key: String, text: String) -> void:

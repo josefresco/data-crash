@@ -57,6 +57,7 @@ func _run() -> void:
 	check(hud.is_map_expanded(), "[M] opens the full map")
 	hud.call("_unhandled_input", press)
 	await _test_hud_overlay(hud, hardware)
+	await _test_hud_layout(hud)
 	await _test_pickups()
 	check(level.call("guidance_point") != hardware, "once armed, it points at the next good deed")
 	await _test_grounding()
@@ -205,6 +206,34 @@ func _test_market_and_residents() -> void:
 	check(Game.district.trust > trust, "buying local raises trust")
 	check(market.buy(4, player) and Game.cash == 5, "the $80 quilt leaves $5")
 	check(not market.buy(0, player), "can't afford bread with $5")
+
+
+func _test_hud_layout(hud: Hud) -> void:
+	await seconds(0.3)
+	check(hud.checklist_rows("deeds").size() == 8, "good deeds are a checklist on the right (%d rows)" % hud.checklist_rows("deeds").size())
+	check(hud.checklist_rows("sites").size() == 3, "datacenter status is a checklist (%d rows)" % hud.checklist_rows("sites").size())
+	# Speech: only the nearest few talk, and neighbors' bubbles stack.
+	var crowd: Array[Resident] = []
+	for i in 6:
+		var r := Resident.new()
+		r.position = player.global_position + Vector3(1.0 + i * 0.4, 0.1, 3.0 + i * 2.0)
+		level.add_child(r)
+		r.set_process(false)
+		r.set_physics_process(false)
+		crowd.append(r)
+	await seconds(0.1)
+	for r in crowd:
+		r.speak("Hello there, neighbor!")
+	var talking := crowd.filter(func(r: Resident) -> bool:
+		var label := r.get("_speech_label") as Label3D
+		return label != null and not label.text.is_empty())
+	check(talking.size() <= Enemy.MAX_TALKERS, "at most %d townspeople talk at once (%d)" % [Enemy.MAX_TALKERS, talking.size()])
+	check(talking.has(crowd[0]), "the nearest one gets to talk")
+	var heights := talking.map(func(r: Resident) -> float: return (r.get("_speech_label") as Label3D).position.y - r.body_height)
+	check(heights.max() - heights.min() > 0.3, "bubbles of people standing together stack upward")
+	for r in crowd:
+		r.speak("")
+		r.queue_free()
 
 
 func _test_hud_overlay(hud: Hud, hardware: Vector3) -> void:

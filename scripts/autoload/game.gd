@@ -5,6 +5,9 @@ signal cash_changed(cash: int)
 signal objective_changed(text: String)
 ## Keyed HUD lines ("deeds", "boss", "wave", "core", "build", "bribe", "notice"). Empty text hides the line.
 signal info_changed(key: String, text: String)
+## A titled checklist on the HUD's right column ("sites", "deeds"). Each row is
+## [text, state] with state &"todo", &"done", &"alert", or &"info". No rows hides it.
+signal checklist_changed(key: String, title: String, rows: Array)
 ## Short-lived feedback line ("Rocket launcher acquired").
 signal notice(text: String, seconds: float)
 ## A one-time contextual tip (see tip()).
@@ -86,10 +89,16 @@ func reset() -> void:
 	cash_changed.emit(cash)
 	for key in ["sites", "deeds", "boss", "wave", "core", "build", "bribe", "shop", "notice"]:
 		set_info(key, "")
+	for key in ["sites", "deeds"]:
+		set_checklist(key, "", [])
 
 
 func set_info(key: String, text: String) -> void:
 	info_changed.emit(key, text)
+
+
+func set_checklist(key: String, title: String, rows: Array) -> void:
+	checklist_changed.emit(key, title, rows)
 
 
 func is_alarmed(site: StringName) -> bool:

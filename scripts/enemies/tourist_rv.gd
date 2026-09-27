@@ -17,6 +17,7 @@ var tourists: Array[Canuck] = []
 var with_mountie := false
 
 var _wait_left := 150.0
+var _wait_start := 150.0
 
 
 func _init() -> void:
@@ -66,6 +67,11 @@ func _physics_process(delta: float) -> void:
 		velocity = Vector3.ZERO
 		_wait_left -= delta
 		var helped := tourists.any(func(t: Variant) -> bool: return is_instance_valid(t) and (t as Canuck).state == Canuck.State.ALLY)
+		if helped and _wait_left <= _wait_start - 4.0:
+			# The group stays to help; the RV clears the road.
+			leg = Leg.LEAVING
+			top_speed = 9.0
+			return
 		if _wait_left <= 0.0 and not helped:
 			for t in tourists:
 				if is_instance_valid(t):

@@ -23,6 +23,11 @@ static var unit_types := {
 @export var spawn_interval := 1.2
 ## Seconds into a wave after which survivors charge the objective (no stalemates).
 @export var rush_after := 75.0
+## Seconds a targetless unit may stay within `STUCK_RADIUS` before it's
+## nudged back onto the navmesh (first strike) or withdraws (second).
+@export var stuck_seconds := 20.0
+const STUCK_RADIUS := 1.5
+const STUCK_CHECK := 2.0
 ## One entry per wave: unit key -> count (see unit_types).
 @export var waves: Array[Dictionary] = [
 	{"guard": 4, "dog": 3},
@@ -41,6 +46,9 @@ var _queue: Array[GDScript] = []
 var _spawn_timer := 0.0
 var _wave_time := 0.0
 var _spawned: Array[Enemy] = []
+## Stuck-unit failsafe: instance id -> [position at last check, seconds stuck, strikes].
+var _stuck := {}
+var _stuck_check_left := 0.0
 
 
 func total_waves() -> int:
@@ -92,6 +100,10 @@ func _physics_process(delta: float) -> void:
 		for enemy in _spawned:
 			if is_instance_valid(enemy):
 				enemy.rushing = true
+		_stuck_check_left -= delta
+		if _stuck_check_left <= 0.0:
+			_stuck_check_left = STUCK_CHECK
+			_check_stuck()
 	if _queue.is_empty():
 		return
 	_spawn_timer -= delta
@@ -121,6 +133,44 @@ func _spawn(kind: GDScript) -> void:
 	enemy.defeated.connect(_on_unit_defeated)
 	get_parent().add_child(enemy)
 	_spawned.append(enemy)
+
+
+func queue_empty() -> bool:
+	return _queue.is_empty()
+
+
+## The closest still-counted unit of this wave (null if none).
+func nearest_remaining(from: Vector3) -> Variant:
+	var best: Variant = null
+	for enemy in _spawned:
+		if is_instance_valid(enemy) and enemy.is_alive() and not enemy.is_defeated():
+			if best == null or enemy.global_position.distance_to(from) < (best as Vector3).distance_to(from):
+				best = enemy.global_position
+	return best
+
+
+## After the rush, a unit with no target that hasn't moved for stuck_seconds
+## is snapped to the nearest navmesh point and re-sent at the objective; a
+## second strike and it withdraws (counts as defeated) so the wave can end.
+func _check_stuck() -> void:
+	_spawned = _spawned.filter(func(e: Variant) -> bool: return is_instance_valid(e))
+	for enemy in _spawned:
+		if not enemy.is_alive() or enemy.is_defeated() or enemy.boss_name != "":
+			continue
+		var id := enemy.get_instance_id()
+		var entry: Array = _stuck.get(id, [enemy.global_position, 0.0, 0])
+		if enemy.global_position.distance_to(entry[0]) > STUCK_RADIUS or is_instance_valid(enemy.target):
+			entry = [enemy.global_position, 0.0, entry[2]]
+		else:
+			entry[1] += STUCK_CHECK
+		if entry[1] >= stuck_seconds:
+			entry[1] = 0.0
+			entry[2] += 1
+			if entry[2] >= 2:
+				enemy.give_up()
+			else:
+				enemy.renavigate(objective)
+		_stuck[id] = entry
 
 
 func _on_unit_defeated(_enemy: Enemy) -> void:
