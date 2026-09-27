@@ -86,6 +86,11 @@ var _stuck_time := 0.0
 var _lod_far := false
 var _lod_left := randf() * LOD_CHECK
 var _was_resting := false
+## The blow that landed last (drives the flinch and the ragdoll push).
+var _last_hit_from := Vector3.INF
+var _last_hit_kind := &""
+var _last_hit_amount := 0.0
+var _flinch: FlinchModifier
 ## While > 0 a shove (vehicle bump, blast) carries the unit instead of its legs.
 var _knock_left := 0.0
 var _investigate_left := 0.0
@@ -148,8 +153,14 @@ func apply_damage(amount: float, from: Vector3, kind: StringName = &"generic") -
 		return
 	health -= amount
 	_flash(Color(1.0, 0.3, 0.3))
+	_last_hit_from = from
+	_last_hit_kind = kind
+	_last_hit_amount = amount
 	if health <= 0.0:
 		_die()
+		return
+	if _flinch and not _lod_far and from != Vector3.ZERO:
+		_flinch.hit(global_position - from, clampf(amount / 30.0, 0.25, 1.0))
 	elif not _is_valid(target) and _nav:
 		# Getting hit reveals roughly where the attacker is: go look.
 		_nav.target_position = from
@@ -347,6 +358,27 @@ func _update_lod() -> void:
 	_lod_far = far
 	if _rig is CharacterModel:
 		(_rig as CharacterModel).set_animation_active(not far)
+
+
+## How hard the killing blow throws the body (N*s, for a ~70 kg ragdoll).
+func _death_impulse() -> Vector3:
+	var push := Vector3(randf_range(-1.0, 1.0), 0.0, randf_range(-1.0, 1.0))
+	if _last_hit_from != Vector3.INF and _last_hit_from != Vector3.ZERO:
+		push = global_position - _last_hit_from
+	push.y = 0.0
+	push = push.normalized() if push.length_squared() > 0.0001 else Vector3.FORWARD
+	match _last_hit_kind:
+		&"explosive":
+			return push * 320.0 + Vector3.UP * 260.0
+		&"impact":
+			return push * 380.0 + Vector3.UP * 140.0
+		&"shockwave":
+			return push * 300.0 + Vector3.UP * 200.0
+		&"melee":
+			return push * 150.0 + Vector3.UP * 40.0
+		&"bullet":
+			return push * clampf(_last_hit_amount * 5.0, 60.0, 260.0) + Vector3.UP * 20.0
+	return push * 80.0
 
 
 ## Override: group this unit joins. Turrets and allied dogs only shoot "hostiles".
@@ -617,6 +649,8 @@ func _build_body() -> void:
 	if _rig:
 		_visual.add_child(_rig)
 	if _rig is CharacterModel:
+		_flinch = FlinchModifier.new()
+		(_rig as CharacterModel).skeleton().add_child(_flinch)
 		# The skinned model's own material takes over hit flashes and tints.
 		_material = (_rig as CharacterModel).material
 		_material.albedo_color = _base_color()
@@ -686,8 +720,17 @@ func _die() -> void:
 	_play_death()
 
 
-## Override: death animation. Must free the node when done.
+## Override: death animation. Must free the node when done. Character
+## models near the camera go limp (Ragdoll); everything else tips over.
 func _play_death() -> void:
+	if _rig is CharacterModel and not _lod_far and is_inside_tree():
+		if _flinch:
+			_flinch.active = false
+		var doll := Ragdoll.start(_rig as CharacterModel, get_parent(), _death_impulse(), aim_point(), velocity)
+		if doll:
+			doll.finished.connect(queue_free)
+			tree_exiting.connect(doll.queue_free)
+			return
 	var tween := create_tween()
 	tween.tween_property(_visual, "rotation:x", -PI * 0.5, 0.3)
 	tween.tween_interval(1.5)

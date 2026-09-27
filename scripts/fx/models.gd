@@ -639,6 +639,99 @@ static func tree(height := 5.0, leaves := Color(0.25, 0.45, 0.2)) -> Node3D:
 	return root
 
 
+## A light that comes on in the smog (EnvironmentDriver scales group
+## "smog_lights" by smog: full in thick smog, off in clean air). No shadows,
+## a strong volumetric-fog share so it cuts a beam through the haze, and a
+## distance fade. `spot_angle` > 0 makes a downward spotlight.
+static func smog_light(parent: Node3D, at: Vector3, color: Color, energy: float, reach: float,
+		spot_angle := 0.0, fog_energy := 3.0) -> Light3D:
+	var light: Light3D
+	if spot_angle > 0.0:
+		var spot := SpotLight3D.new()
+		spot.spot_range = reach
+		spot.spot_angle = spot_angle
+		spot.spot_attenuation = 0.8
+		spot.rotation.x = -PI * 0.5  # straight down
+		light = spot
+	else:
+		var omni := OmniLight3D.new()
+		omni.omni_range = reach
+		light = omni
+	light.position = at
+	light.light_color = color
+	light.light_energy = energy
+	light.light_volumetric_fog_energy = fog_energy
+	light.shadow_enabled = false
+	light.distance_fade_enabled = true
+	light.distance_fade_begin = 90.0
+	light.distance_fade_length = 20.0
+	light.set_meta(&"base_energy", energy)
+	light.add_to_group(&"smog_lights")
+	parent.add_child(light)
+	return light
+
+
+static var _beam_materials := {}
+
+
+## A soft light shaft (fake volumetric cone) from `at` along `direction`:
+## translucent, brightest at the lamp and fading out toward the far end,
+## softened where it meets surfaces. Group "smog_beams": EnvironmentDriver
+## fades the shared materials with the smog, like the smog lights.
+static func light_cone(parent: Node3D, at: Vector3, direction: Vector3, length: float, radius: float,
+		color: Color, alpha := 0.16) -> MeshInstance3D:
+	var key := "%s/%.2f" % [color.to_html(), alpha]
+	if not _beam_materials.has(key):
+		var material := StandardMaterial3D.new()
+		material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		material.cull_mode = BaseMaterial3D.CULL_DISABLED
+		material.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
+		material.proximity_fade_enabled = true
+		material.proximity_fade_distance = 1.5
+		material.distance_fade_mode = BaseMaterial3D.DISTANCE_FADE_PIXEL_ALPHA
+		material.distance_fade_min_distance = 110.0
+		material.distance_fade_max_distance = 70.0
+		var ramp := Gradient.new()
+		ramp.set_color(0, Color(color, 1.0))
+		ramp.set_color(1, Color(color, 0.0))
+		var texture := GradientTexture2D.new()
+		texture.gradient = ramp
+		texture.fill_from = Vector2(0.0, 0.0)
+		texture.fill_to = Vector2(0.0, 1.0)  # along the cylinder's V: top (lamp) to bottom
+		texture.width = 4
+		texture.height = 64
+		material.albedo_texture = texture
+		material.albedo_color = Color(1, 1, 1, alpha)
+		material.set_meta(&"base_alpha", alpha)
+		_beam_materials[key] = material
+	var mesh := CylinderMesh.new()
+	mesh.top_radius = radius * 0.08
+	mesh.bottom_radius = radius
+	mesh.height = length
+	mesh.radial_segments = 16
+	mesh.rings = 1
+	mesh.cap_top = false
+	mesh.cap_bottom = false
+	var node := MeshInstance3D.new()
+	node.mesh = mesh
+	node.material_override = _beam_materials[key]
+	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	node.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
+	parent.add_child(node)
+	# Cylinder axis is +Y (top at +length/2): point -Y along the beam.
+	var down := -direction.normalized()
+	var side := down.cross(Vector3.RIGHT if absf(down.dot(Vector3.RIGHT)) < 0.9 else Vector3.FORWARD).normalized()
+	node.basis = Basis(side, down, side.cross(down)).orthonormalized()
+	node.position = at - down * length * 0.5
+	node.add_to_group(&"smog_beams")
+	return node
+
+
+static func beam_materials() -> Array:
+	return _beam_materials.values()
+
+
 static func streetlight(height := 5.0) -> Node3D:
 	var root := Node3D.new()
 	var metal := mat(Color(0.3, 0.32, 0.35), &"metal")
@@ -650,6 +743,10 @@ static func streetlight(height := 5.0) -> Node3D:
 	lamp.emission = Color(1.0, 0.9, 0.7)
 	lamp.emission_energy_multiplier = 1.5
 	box(root, Vector3(0.35, 0.12, 0.5), Vector3(0.0, height - 0.08, -1.05), lamp)
+	if not Engine.is_editor_hint():
+		# Sodium-orange pool under the lamp, on while the smog is thick.
+		smog_light(root, Vector3(0.0, height - 0.2, -1.05), Color(1.0, 0.72, 0.38), 5.0, 14.0, 55.0, 5.0)
+		light_cone(root, Vector3(0.0, height - 0.15, -1.05), Vector3.DOWN, height - 0.2, 2.2, Color(1.0, 0.75, 0.45), 0.12)
 	return root
 
 

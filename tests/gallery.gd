@@ -89,6 +89,28 @@ func _ready() -> void:
 		await _shot("structures", Vector3(-84.5, 2.4, 65.5), Vector3(-84.5, 0.6, 60))
 		for piece in pieces:
 			piece.queue_free()
+	if _want("deaths"):
+		# Ragdolls: five guards killed five ways, caught mid-fall and settled.
+		var kinds := [[&"bullet", 80.0], [&"bullet", 200.0], [&"melee", 99.0], [&"impact", 99.0], [&"explosive", 99.0]]
+		var victims: Array[Enemy] = []
+		for i in kinds.size():
+			var guard := SecurityGuard.new()
+			guard.position = Vector3(-90.0 + i * 3.0, 0.1, 58.0)
+			level.add_child(guard)
+			guard.set_physics_process(false)
+			victims.append(guard)
+		await _wait(0.8)
+		for i in victims.size():
+			var guard := victims[i]
+			guard.set_physics_process(true)
+			guard.max_health = 1.0
+			guard.health = 1.0
+			guard.apply_damage(kinds[i][1], guard.global_position + Vector3(0.0, 1.0, 6.0), kinds[i][0])
+		await _wait(0.35)
+		await _shot("deaths_fall", Vector3(-84, 1.8, 67), Vector3(-84, 0.6, 56))
+		await _wait(2.0)
+		await _shot("deaths_down", Vector3(-84, 1.8, 67), Vector3(-84, 0.3, 54))
+		await _shot("deaths_close", Vector3(-86.5, 1.6, 61.5), Vector3(-87.5, 0.2, 57.5))
 	if _want("parked"):
 		await _shot("parked", Vector3(-30, 0.2, 21), Vector3(-22, 0.8, 26.5))
 		await _shot("parked2", Vector3(46, 0.2, 21), Vector3(54, 0.8, 26.5))

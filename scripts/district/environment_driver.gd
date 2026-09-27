@@ -33,7 +33,7 @@ const SETTINGS_PATH := "user://settings.cfg"
 ## Multiplies the dry-dirt texture while polluted.
 @export var polluted_ground_tint := Color(0.78, 0.68, 0.55)
 @export var polluted_sun_color := Color(1.0, 0.72, 0.45)
-@export var polluted_sun_energy := 1.25
+@export var polluted_sun_energy := 0.8
 @export var polluted_saturation := 0.72
 
 @export_group("Restored")
@@ -52,6 +52,8 @@ var _smog_shown := 1.0
 var _restore_shown := 0.0
 var _initialized := false
 var _notice_left := 0.0
+var _lights_level := -1.0
+var _grade_smog := -1.0
 
 
 func _ready() -> void:
@@ -218,10 +220,72 @@ func _apply() -> void:
 		sun.light_color = restored_sun_color.lerp(polluted_sun_color, smog)
 		sun.light_energy = lerpf(polluted_sun_energy, restored_sun_energy, 1.0 - smog)
 
+	_drive_smog_lights(smog)
+	if absf(smog - _grade_smog) > 0.04:
+		_grade_smog = smog
+		env.adjustment_color_correction = color_grade(smog)
+
 	if ground and ground.material_override is ShaderMaterial:
 		var ground_mat := ground.material_override as ShaderMaterial
 		ground_mat.set_shader_parameter(&"restoration", _restore_shown)
 		ground_mat.set_shader_parameter(&"dead_tint", polluted_ground_tint.lerp(Color.WHITE, _restore_shown))
+
+
+## Lamps and floodlights (group "smog_lights") glow in the gloom: full
+## strength in thick smog, fading out below ~25% smog. Updated only when the
+## level moves, and lights that are off are hidden (free to render).
+func _drive_smog_lights(smog: float) -> void:
+	var level := clampf((smog - 0.25) / 0.5, 0.0, 1.0)
+	if absf(level - _lights_level) < 0.02:
+		return
+	_lights_level = level
+	for material: StandardMaterial3D in Models.beam_materials():
+		material.albedo_color.a = float(material.get_meta(&"base_alpha", 0.15)) * level
+	for node in get_tree().get_nodes_in_group(&"smog_beams"):
+		(node as Node3D).visible = level > 0.01
+	for node in get_tree().get_nodes_in_group(&"smog_lights"):
+		var light := node as Light3D
+		light.light_energy = float(light.get_meta(&"base_energy", 1.0)) * level
+		light.visible = level > 0.01
+		if light.has_meta(&"aim") and light.is_inside_tree():
+			var parent := light.get_parent() as Node3D
+			light.look_at(parent.global_transform * (light.get_meta(&"aim") as Vector3), Vector3.UP)
+			light.remove_meta(&"aim")
+
+
+## A 3D color-grading LUT (Environment.adjustment_color_correction) blended
+## by `smog`. Polluted: sickly olive shadows, amber highlights, a flat, crushed
+## curve. Restored: cool clean shadows, warm sunlit highlights, a gentle S-curve.
+static func color_grade(smog: float, size := 17) -> ImageTexture3D:
+	var slices: Array[Image] = []
+	for b in size:
+		var image := Image.create(size, size, false, Image.FORMAT_RGB8)
+		for g in size:
+			for r in size:
+				var c := Color(r / float(size - 1), g / float(size - 1), b / float(size - 1))
+				image.set_pixel(r, g, _grade(c, smog))
+		slices.append(image)
+	var lut := ImageTexture3D.new()
+	lut.create(Image.FORMAT_RGB8, size, size, size, false, slices)
+	return lut
+
+
+static func _grade(c: Color, smog: float) -> Color:
+	var luma := c.r * 0.2126 + c.g * 0.7152 + c.b * 0.0722
+	var shadow := clampf(1.0 - luma * 2.0, 0.0, 1.0)
+	var light := clampf(luma * 2.0 - 1.0, 0.0, 1.0)
+	# Restored grade.
+	var clean := c
+	clean += Color(-0.02, 0.0, 0.035) * shadow + Color(0.03, 0.015, -0.02) * light
+	var s_curve := func(x: float) -> float: return x + 0.04 * sin((x - 0.5) * TAU)
+	clean = Color(s_curve.call(clean.r), s_curve.call(clean.g), s_curve.call(clean.b))
+	# Polluted grade.
+	var dirty := c
+	dirty += Color(0.02, 0.035, -0.01) * shadow + Color(0.05, 0.02, -0.05) * light
+	dirty = dirty.lerp(Color(luma, luma, luma), 0.1)
+	dirty = Color(0.03, 0.03, 0.02) + dirty * 0.95  # lifted, flat blacks
+	var out := clean.lerp(dirty, clampf(smog, 0.0, 1.0))
+	return Color(clampf(out.r, 0.0, 1.0), clampf(out.g, 0.0, 1.0), clampf(out.b, 0.0, 1.0))
 
 
 ## Ground that regrows: dry dirt blends to lawn through a noise mask as the

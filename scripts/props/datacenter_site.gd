@@ -309,7 +309,14 @@ func _build_extras() -> void:
 			Vector3(-half.x + 1.5, 0, -half.y + 1.5), Vector3(half.x - 1.5, 0, -half.y + 1.5)]:
 		Models.cylinder(self, 0.15, 12.0, corner + Vector3.UP * 6.0, steel, 8)
 		var head := Models.box(self, Vector3(1.4, 0.5, 0.6), corner + Vector3(0.0, 12.1, 0.0), steel)
-		Models.box(head, Vector3(1.2, 0.3, 0.05), Vector3(0.0, -0.1, 0.31), Models.glow(Color(1.0, 0.97, 0.85), 3.0))
+		Models.box(head, Vector3(1.2, 0.3, 0.05), Vector3(0.0, -0.1, 0.31), Models.glow(Color(0.85, 0.95, 1.0), 4.0))
+		# Cold security floodlight angled into the lot: a hard beam in the smog.
+		var beam := Models.smog_light(self, corner + Vector3(0.0, 11.8, 0.0), Color(0.72, 0.88, 1.0), 16.0, 38.0, 30.0, 9.0)
+		beam.set_meta(&"aim", corner * 0.45)
+		var shaft_from: Vector3 = corner + Vector3(0.0, 11.8, 0.0)
+		var shaft_to: Vector3 = corner * 0.45
+		Models.light_cone(self, shaft_from, shaft_to - shaft_from, shaft_from.distance_to(shaft_to), 5.5,
+			Color(0.75, 0.9, 1.0), 0.1)
 	# The water board by the gate.
 	var board := Models.box(self, Vector3(5.0, 2.2, 0.3), Vector3(-9.0, 2.6, half.y + 1.5), Models.mat(Color(0.08, 0.08, 0.1), &"paint"))
 	for x in [-2.0, 2.0]:
