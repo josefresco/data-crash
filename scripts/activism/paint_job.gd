@@ -59,6 +59,7 @@ func _ready() -> void:
 	_neighbor_line.outline_size = 8
 	_neighbor_line.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	_neighbor_line.position = neighbor.position + Vector3.UP * 2.3
+	HudOverlay.as_bubble(_neighbor_line)
 	add_child(_neighbor_line)
 	# Where to stand.
 	var ring := TorusMesh.new()

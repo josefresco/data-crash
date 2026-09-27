@@ -146,7 +146,7 @@ func _ready() -> void:
 	_spawner.all_waves_cleared.connect(_on_all_waves_cleared)
 
 	($WaterMain as WaterMain).fixed.connect(func(_m: WaterMain) -> void:
-		_complete_deed("water", 100, 0.1, "Water main fixed. The Hendersons have water again. (+$100)"))
+		_complete_deed("water", 100, 0.1, "Hydrant capped. The Hendersons have water pressure again. (+$100)"))
 	($ScoutPoint as ScoutPoint).scouted.connect(func(_p: ScoutPoint) -> void:
 		_complete_deed("scout", 50, 0.05, "Datacenter scouted: cooling units marked. (+$50)"))
 	($SupplyVan as Enemy).died.connect(func(_v: Enemy) -> void:
@@ -354,6 +354,7 @@ func _move_in() -> void:
 	text.modulate = Color(0.25, 0.4, 0.2)
 	text.position = Vector3(0.0, 0.0, -0.04)
 	text.rotation.y = PI
+	Models.fit_label(text, Vector2(1.4, 0.6))
 	board.add_child(text)
 
 
@@ -864,7 +865,7 @@ func _spawn_hardware_store() -> void:
 		Game.set_meta(&"town_hall_door", hall)
 
 
-## Two patrol cars loop the first street and the main road, and two officers
+## One patrol car loops the first street and the main road, and two officers
 ## stand outside the station. All of them are site &"police": passive unless
 ## the player attacks the police. A datacenter alarm dispatches a cruiser.
 func _spawn_police() -> void:
@@ -873,7 +874,7 @@ func _spawn_police() -> void:
 		return
 	var loop: Array[Vector3] = [Vector3(2.5, 0.2, -2), Vector3(2.5, 0.2, 28), Vector3(62, 0.2, 28), Vector3(62, 0.2, 32),
 		Vector3(-62, 0.2, 32), Vector3(-62, 0.2, 28), Vector3(-2.5, 0.2, 28)]
-	for i in 2:
+	for i in 1:
 		var cruiser := PoliceCruiser.new()
 		cruiser.name = "PoliceCruiser%d" % (i + 1)
 		cruiser.site = &"police"
@@ -1007,7 +1008,7 @@ func _update_deeds() -> void:
 	var done := func(key: String) -> StringName: return &"done" if _deeds[key] else &"todo"
 	var cams := &"done" if _cameras_smashed >= _cameras_total else &"info"
 	Game.set_checklist("deeds", "GOOD DEEDS", [
-		["Fix the water main [F]", done.call("water")],
+		["Cap the burst hydrant [F]", done.call("water")],
 		["Stop the supply van", done.call("van")],
 		["Tame strays %d/2 [T]" % mini(_dogs_tamed, 2), done.call("dogs")],
 		["Scout the datacenter", done.call("scout")],

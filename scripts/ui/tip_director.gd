@@ -76,7 +76,7 @@ func _scan() -> void:
 		return
 	var eye: Vector3 = player.vehicle.global_position if player.vehicle else player.global_position
 	_near_group(eye, "strays", 10.0, "stray", "This stray won't bite. Give it a treat [T] and it will follow you and guard the block.")
-	_near_group(eye, "fixables", 10.0, "water_main", "A sabotaged water main. Hold F next to it to fix it.")
+	_near_group(eye, "fixables", 10.0, "water_main", "A sabotaged fire hydrant gushing into the street. Hold F next to it to cap it.")
 	_near_group(eye, "neighbors", 10.0, "grandma", "A grandma needs help crossing the street. Press E next to her and walk her over, slowly.")
 	_near_group(eye, "paint_jobs", 12.0, "paint", "The neighbors are repainting their house. Stand in the ring and hold F to help.")
 	_near_group(eye, "litter", 8.0, "litter_near", "Litter! Walk over it to pick it up. Clean up the whole block for a good deed.")

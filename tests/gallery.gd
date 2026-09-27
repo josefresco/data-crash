@@ -205,6 +205,21 @@ func _ready() -> void:
 		var life := level.get_node("GroundLife") as GroundLife
 		print("grass shown: %d" % life.grass_shown())
 		await _shot("life_grass", Vector3(-40.0, 1.3, 52.0), Vector3(-30.0, 0.3, 62.0))
+	if _want("hydrant"):
+		var main := level.get_node("WaterMain") as Node3D
+		var talkers: Array[Resident] = []
+		for i in 2:
+			var neighbor := Resident.new()
+			neighbor.position = main.global_position + Vector3(-2.5 + i * 1.4, 0.1, -3.0 - i * 0.8)
+			level.add_child(neighbor)
+			neighbor.set_physics_process(false)
+			talkers.append(neighbor)
+		await _wait(0.5)
+		talkers[0].speak("My water bill tripled this year.")
+		talkers[1].speak("Is that the hydrant again? Somebody call the city.")
+		await _shot("hydrant", main.global_position + Vector3(-3.0, 1.2, 5.0), main.global_position + Vector3(0.0, 0.6, 0.0))
+		for neighbor in talkers:
+			neighbor.queue_free()
 	if _want("parked"):
 		await _shot("parked", Vector3(-30, 0.2, 21), Vector3(-22, 0.8, 26.5))
 		await _shot("parked2", Vector3(46, 0.2, 21), Vector3(54, 0.8, 26.5))

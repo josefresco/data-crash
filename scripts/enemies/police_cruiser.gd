@@ -47,8 +47,6 @@ func dispatch(waypoints: Array[Vector3], site_id: StringName) -> void:
 	responding = true
 	respond_site = site_id
 	top_speed = 13.0
-	if _siren == null:
-		_siren = Sfx.loop(self, &"siren_loop", -4.0)
 
 
 ## Called off: siren off, back to the patrol loop (deployed officers stand down).
@@ -63,11 +61,24 @@ func recall() -> void:
 		_siren = null
 
 
+## Lights and siren only while there's a call: dispatched to a site, or
+## chasing the player after they attacked the police. Patrols ride dark.
+func is_pursuing() -> bool:
+	return is_alive() and (responding or (site == &"police" and Game.is_alarmed(&"police")))
+
+
 func _process(delta: float) -> void:
 	super(delta)
-	_light_clock += delta * (8.0 if responding else 3.0)
+	var active := is_pursuing()
+	if active:
+		_light_clock += delta * 8.0
 	for i in _lights.size():
-		_lights[i].visible = int(_light_clock) % 2 == i
+		_lights[i].visible = active and int(_light_clock) % 2 == i
+	if active and _siren == null:
+		_siren = Sfx.loop(self, &"siren_loop", -14.0 if deployed else -4.0)
+	elif not active and _siren:
+		_siren.queue_free()
+		_siren = null
 
 
 func _goal_point() -> Vector3:

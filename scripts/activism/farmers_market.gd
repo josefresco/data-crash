@@ -60,6 +60,7 @@ func _ready() -> void:
 	text.outline_size = 0
 	text.modulate = Color(0.25, 0.45, 0.2)
 	text.position = Vector3(0.0, 0.0, 0.04)
+	Models.fit_label(text, Vector2(8.0, 1.0))
 	banner.add_child(text)
 
 

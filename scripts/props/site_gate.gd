@@ -46,7 +46,9 @@ func _ready() -> void:
 	sign_label.font_size = 40
 	sign_label.pixel_size = 0.006
 	sign_label.outline_size = 6
-	sign_label.position = Vector3(0.0, 1.3, 0.12)
+	sign_label.outline_size = 0
+	sign_label.position = Vector3(0.0, 1.3, 0.1)
+	Models.fit_label(sign_label, Vector2(0.9, 0.35))
 	panel.add_child(sign_label)
 
 

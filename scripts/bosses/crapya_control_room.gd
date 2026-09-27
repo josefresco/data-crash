@@ -57,6 +57,7 @@ func _ready() -> void:
 	_speech.outline_size = 10
 	_speech.no_depth_test = true
 	_speech.position.y = size.y + 1.2
+	HudOverlay.as_bubble(_speech, true)
 	add_child(_speech)
 	_speech.text = LINES[0]
 	destroyed.connect(_on_destroyed)

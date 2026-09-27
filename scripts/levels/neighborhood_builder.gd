@@ -229,6 +229,7 @@ func _add_store(at: Vector3, facing_side: float, lot: Array) -> void:
 	text.outline_size = 0
 	text.modulate = color.lerp(Color.WHITE, 0.35)
 	text.position = Vector3(0.0, 0.0, 0.14)
+	Models.fit_label(text, Vector2(minf(bounds.size.x * 0.8, 10.0), 1.3))
 	board.add_child(text)
 	var door := at + Vector3(0.0, 0.0, front + 3.0).rotated(Vector3.UP, body.rotation.y) + Vector3.UP * 0.2
 	_doors.append(door)
@@ -344,6 +345,7 @@ func _add_for_sale_sign(at: Vector3) -> void:
 	text.outline_size = 0
 	text.modulate = Color(0.7, 0.1, 0.1)
 	text.position = Vector3(0.0, 1.3, 0.04)
+	Models.fit_label(text, Vector2(1.8, 0.9))
 	sign_root.add_child(text)
 
 

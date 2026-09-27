@@ -157,6 +157,7 @@ EMPLOYEES OF THE MONTH ONLY"
 	sign_text.pixel_size = 0.008
 	sign_text.outline_size = 0
 	sign_text.position = Vector3(0.0, 0.0, 0.09)
+	Models.fit_label(sign_text, Vector2(4.0, 1.0))
 	sign_board.add_child(sign_text)
 
 	# --- Corporate lawn, west side ----------------------------------------------------------
@@ -197,8 +198,10 @@ EMPLOYEES OF THE MONTH ONLY"
 	plaque.font_size = 40
 	plaque.pixel_size = 0.007
 	plaque.outline_size = 6
-	plaque.position = Vector3(1.75, 0.45, 0.0)
+	plaque.outline_size = 0
+	plaque.position = Vector3(1.72, 0.38, 0.0)
 	plaque.rotation.y = PI * 0.5
+	Models.fit_label(plaque, Vector2(3.2, 0.6))
 	fountain.add_child(plaque)
 	irrigation.append(fountain)
 	# Sprinklers in a grid, all fed by one controller box on the lawn's corner.
@@ -336,6 +339,8 @@ func _process(delta: float) -> void:
 		if _board_left <= 0.0:
 			_board_left = 0.5  # re-rendering the text every frame is costly
 			_water_board.text = "WATER USED THIS MONTH\n%s GAL" % _thousands(int(water_used))
+			if _water_board.double_sided:
+				Models.fit_label(_water_board, Vector2(4.8, 2.0))
 
 
 static func _thousands(value: int) -> String:
@@ -396,6 +401,7 @@ func _build_extras() -> void:
 	tower_sign.pixel_size = 0.01
 	tower_sign.outline_size = 8
 	tower_sign.position = Vector3(0.0, 5.0, 3.1)
+	Models.fit_label(tower_sign, Vector2(5.4, 1.6))
 	tower.add_child(tower_sign)
 	tower.destroyed.connect(func(_t: Destructible) -> void:
 		if Game.district:
@@ -422,6 +428,7 @@ func _build_extras() -> void:
 		tank_sign.pixel_size = 0.008
 		tank_sign.outline_size = 6
 		tank_sign.position = Vector3(0.0, 1.3, 1.25)
+		Models.fit_label(tank_sign, Vector2(4.6, 0.8))
 		tank.add_child(tank_sign)
 		tank.destroyed.connect(func(t: Destructible) -> void:
 			var blast := Explosive.new()

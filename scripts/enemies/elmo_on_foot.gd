@@ -68,6 +68,7 @@ func _ready() -> void:
 	_speech.width = 900.0
 	_speech.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_speech.position.y = body_height + 1.0
+	HudOverlay.as_bubble(_speech, true)
 	add_child(_speech)
 	_speech.text = TAUNTS[0]
 	if _rig is CharacterModel:

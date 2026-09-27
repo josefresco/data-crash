@@ -477,6 +477,19 @@ static func collider(parent: Node3D, size: Vector3, at: Vector3, yaw := 0.0) -> 
 	return body
 
 
+## Sizes a sign's Label3D so its text (all lines) fits inside `box` meters
+## (width, height) with a margin, measured with the label's own font. Signs
+## read from the front only.
+static func fit_label(label: Label3D, box: Vector2, fill := 0.84) -> void:
+	var font := label.font if label.font else ThemeDB.fallback_font
+	var extent := font.get_multiline_string_size(label.text, HORIZONTAL_ALIGNMENT_CENTER, -1, label.font_size)
+	extent += Vector2.ONE * label.outline_size * 2.0
+	if extent.x <= 0.0 or extent.y <= 0.0:
+		return
+	label.pixel_size = minf(box.x * fill / extent.x, box.y * fill / extent.y)
+	label.double_sided = false
+
+
 static func box(parent: Node3D, size: Vector3, at: Vector3, material: Material) -> MeshInstance3D:
 	var mesh := BoxMesh.new()
 	mesh.size = size

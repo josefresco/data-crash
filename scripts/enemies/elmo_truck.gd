@@ -74,6 +74,7 @@ func _ready() -> void:
 	_speech.modulate = Color(1.0, 0.95, 0.8)
 	_speech.position.y = body_size.y + 2.2
 	_speech.no_depth_test = true
+	HudOverlay.as_bubble(_speech, true)
 	add_child(_speech)
 	say("" if parked else LINES[0])
 

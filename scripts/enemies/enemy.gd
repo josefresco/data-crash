@@ -226,6 +226,7 @@ func speak(text: String, height := -1.0) -> void:
 		_speech_label.no_depth_test = true
 		_speech_label.width = 560.0
 		_speech_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		HudOverlay.as_bubble(_speech_label, not boss_name.is_empty())
 		add_child(_speech_label)
 	_speech_label.position.y = height
 	if text != _speech_label.text and not text.is_empty():

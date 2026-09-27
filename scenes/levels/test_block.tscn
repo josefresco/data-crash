@@ -120,7 +120,7 @@ brand_color = Color(0.7, 0.5, 1, 1)
 boss = 3
 
 [node name="WaterMain" type="Node3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6, 0, 33)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.3, 0.06, 35.6)
 script = ExtResource("15_water")
 
 [node name="ScoutPoint" type="Node3D" parent="."]

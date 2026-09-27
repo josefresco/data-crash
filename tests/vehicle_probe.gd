@@ -35,7 +35,7 @@ func _run() -> void:
 		top_speed = maxf(top_speed, result[4])
 		if maneuver != "curb crossing":
 			worst_air = maxf(worst_air, result[1])
-	check(Car._skid_marks.size() > 0, "hard driving leaves skid marks (%d)" % Car._skid_marks.size())
+	check(car.skid_mark_count() > 0, "hard driving leaves skid marks (%d)" % car.skid_mark_count())
 	await _collisions()
 	await _damage()
 	check(worst_flips == 0, "no flips in normal driving")

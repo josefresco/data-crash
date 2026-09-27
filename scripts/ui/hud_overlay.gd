@@ -8,6 +8,8 @@ extends Control
 ## - floating damage numbers for the player's hits
 ## - red arcs around the crosshair pointing toward whatever just hurt you
 ## - big title cards (Game.banner)
+## - speech as chat bubbles: Label3Ds registered with as_bubble() are hidden
+##   and drawn here as rounded bubbles with a tail (bosses get a red border)
 
 const EDGE := 56.0
 const BAR_RANGE := 45.0
@@ -16,6 +18,8 @@ const NUMBER_SECONDS := 0.9
 const ARC_SECONDS := 1.2
 const BANNER_SECONDS := 3.2
 const GOLD := Color(1.0, 0.85, 0.15)
+const BUBBLE_RANGE := 45.0
+const BUBBLE_WIDTH := 240.0
 
 var _player: Player
 var _level: Node
@@ -30,6 +34,8 @@ var _engaged := {}
 var _numbers: Array[Array] = []
 ## [world position the hit came from, seconds left, strength]
 var _arcs: Array[Array] = []
+var _speakers: Array[Label3D] = []
+var _bubble_style: StyleBoxFlat
 var _banner_title := ""
 var _banner_sub := ""
 var _banner_left := 0.0
@@ -43,6 +49,14 @@ func _init() -> void:
 func _ready() -> void:
 	_font = ThemeDB.fallback_font
 	Game.banner.connect(show_banner)
+
+
+## Turns a speech Label3D into a chat bubble: the 3D text is hidden and the
+## overlay draws its text in a bubble at the label's position.
+static func as_bubble(label: Label3D, boss := false) -> void:
+	label.visible = false
+	label.add_to_group(&"speech")
+	label.set_meta(&"boss", boss)
 
 
 func show_banner(title: String, subtitle := "") -> void:
@@ -107,6 +121,11 @@ func _scan() -> void:
 			_units.append(unit)
 	if _engaged.size() > 400:
 		_engaged.clear()
+	_speakers.clear()
+	for node in get_tree().get_nodes_in_group(&"speech"):
+		var label := node as Label3D
+		if label and not label.text.is_empty() and label.is_inside_tree() 				and label.global_position.distance_to(eye) < BUBBLE_RANGE:
+			_speakers.append(label)
 
 
 func _on_damage_dealt(at: Vector3, amount: float, killed: bool) -> void:
@@ -131,6 +150,9 @@ func _draw() -> void:
 	for unit in _units:
 		if is_instance_valid(unit):
 			_draw_unit(camera, unit)
+	for label in _speakers:
+		if is_instance_valid(label):
+			_draw_bubble(camera, label)
 	for entry in _numbers:
 		_draw_number(camera, entry)
 	if _goal != null:
@@ -162,6 +184,37 @@ func _draw_unit(camera: Camera3D, unit: Enemy) -> void:
 		var at := p + Vector2(-font_size * 0.2, -10.0)
 		draw_string_outline(_font, at, "!", HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, 6, Color(0, 0, 0, minf(t * 3.0, 1.0)))
 		draw_string(_font, at, "!", HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, Color(1.0, 0.3, 0.2, minf(t * 3.0, 1.0)))
+
+
+## A rounded speech bubble above the speaker, tail pointing down at them.
+func _draw_bubble(camera: Camera3D, label: Label3D) -> void:
+	var anchor := label.global_position
+	if camera.is_position_behind(anchor):
+		return
+	var distance := camera.global_position.distance_to(anchor)
+	var fade := clampf((BUBBLE_RANGE - distance) / 10.0, 0.0, 1.0)
+	if fade <= 0.0:
+		return
+	var font_size := int(lerpf(17.0, 13.0, clampf(distance / 40.0, 0.0, 1.0)))
+	var text_size := _font.get_multiline_string_size(label.text, HORIZONTAL_ALIGNMENT_CENTER, BUBBLE_WIDTH, font_size)
+	var pad := Vector2(11.0, 7.0)
+	var tip := camera.unproject_position(anchor)
+	text_size.x += 4.0
+	var box := Rect2(tip - Vector2(text_size.x * 0.5 + pad.x, text_size.y + pad.y * 2.0 + 10.0), text_size + pad * 2.0)
+	var boss: bool = label.get_meta(&"boss", false)
+	var fill := Color(1.0, 1.0, 0.98, 0.94 * fade)
+	var edge := Color(0.85, 0.2, 0.15, fade) if boss else Color(0.12, 0.14, 0.12, 0.7 * fade)
+	if _bubble_style == null:
+		_bubble_style = StyleBoxFlat.new()
+		_bubble_style.set_corner_radius_all(9)
+		_bubble_style.set_border_width_all(2)
+	_bubble_style.bg_color = fill
+	_bubble_style.border_color = edge
+	draw_colored_polygon(PackedVector2Array([tip, tip + Vector2(-8.0, -12.0), tip + Vector2(8.0, -12.0)]), edge)
+	_bubble_style.draw(get_canvas_item(), box)
+	draw_colored_polygon(PackedVector2Array([tip + Vector2(0.0, -3.0), tip + Vector2(-6.0, -13.0), tip + Vector2(6.0, -13.0)]), fill)
+	draw_multiline_string(_font, box.position + Vector2(pad.x, pad.y + _font.get_ascent(font_size)), label.text,
+		HORIZONTAL_ALIGNMENT_CENTER, text_size.x, font_size, -1, Color(0.08, 0.09, 0.08, fade))
 
 
 func _draw_number(camera: Camera3D, entry: Array) -> void:

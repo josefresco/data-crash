@@ -45,8 +45,8 @@ func _ready() -> void:
 	tag.outline_size = 0
 	tag.modulate = Color(0.25, 0.75, 0.35)
 	tag.position = Vector3(randf_range(-0.6, 0.6), 0.95, 0.115)
-	tag.double_sided = false
 	tag.rotation.z = randf_range(-0.06, 0.06)
+	Models.fit_label(tag, Vector2(3.0, 0.8))
 	add_child(tag)
 	var back := tag.duplicate() as Label3D
 	back.position.z = -0.115

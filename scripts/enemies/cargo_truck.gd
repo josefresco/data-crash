@@ -63,6 +63,7 @@ func _set_cargo(value: Cargo) -> void:
 	for sign_label in [_sign_left, _sign_right]:
 		if sign_label:
 			sign_label.text = text
+			Models.fit_label(sign_label, Vector2(body_size.z * 0.5, 0.95))
 			sign_label.modulate = Color(0.25, 0.2, 0.05) if cheese else Color(0.9, 1.0, 0.85)
 	if _box:
 		var mat := _box.material_override as StandardMaterial3D

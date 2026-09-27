@@ -69,8 +69,9 @@ var _head_mat: StandardMaterial3D
 ## Skid marks: last mark position per wheel (for spacing), shared pool.
 var _last_skid := {}
 var _skid_puff_left := 0.0
+## Seconds since someone last drove this car (INF: never driven).
+var _since_driven := INF
 static var _skid_material: StandardMaterial3D
-static var _skid_marks: Array[Node3D] = []
 const MAX_SKID_MARKS := 260
 var _flame_left := 0.0
 
@@ -193,6 +194,7 @@ func _physics_process(delta: float) -> void:
 	var speed := linear_velocity.length()
 	if _engine and _engine.playing:
 		_engine.pitch_scale = lerpf(_engine.pitch_scale, 0.8 + minf(speed / 14.0, 1.6) + absf(engine_force) / max_engine_force * 0.2, 1.0 - exp(-5.0 * delta))
+	_since_driven = 0.0 if driver else _since_driven + delta
 	_burn(delta)
 	if wrecked:
 		engine_force = 0.0
@@ -284,6 +286,11 @@ func _stay_upright(delta: float) -> void:
 			angular_velocity = Vector3.ZERO
 	else:
 		_tipped_time = 0.0
+
+
+## True while driven and for a few seconds after the driver bails out.
+func rams_units() -> bool:
+	return driver != null or _since_driven < 4.0
 
 
 ## Damage from anything (bullets, blasts, fire, rams, crashes).
@@ -418,17 +425,33 @@ func _drop_skid(at: Vector3) -> void:
 	mark.material_override = _skid_material
 	mark.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	mark.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
-	get_parent().add_child(mark)
+	_skid_holder().add_child(mark)
 	var along := linear_velocity
 	along.y = 0.0
 	mark.global_position = at + Vector3.UP * 0.025
 	if along.length_squared() > 0.01:
 		mark.global_basis = Basis.looking_at(along.normalized(), Vector3.UP)
-	_skid_marks.append(mark)
-	while _skid_marks.size() > MAX_SKID_MARKS:
-		var oldest := _skid_marks.pop_front() as Node3D
-		if is_instance_valid(oldest):
-			oldest.queue_free()
+	var holder := mark.get_parent()
+	while holder.get_child_count() > MAX_SKID_MARKS:
+		var oldest := holder.get_child(0)
+		holder.remove_child(oldest)
+		oldest.queue_free()
+
+
+## Skid marks live under one node in the level (the oldest are removed first).
+func _skid_holder() -> Node3D:
+	var holder := get_parent().get_node_or_null("SkidMarks") as Node3D
+	if holder == null:
+		holder = Node3D.new()
+		holder.name = "SkidMarks"
+		get_parent().add_child(holder)
+	return holder
+
+
+## Skid marks on the ground right now (tests).
+func skid_mark_count() -> int:
+	var holder := get_parent().get_node_or_null("SkidMarks")
+	return holder.get_child_count() if holder else 0
 
 
 ## Boost left, 0..1 (HUD).
@@ -447,7 +470,7 @@ func _bump(unit: Enemy) -> void:
 	var push := (along * 0.6 + away.normalized() * 0.8).normalized() * minf(speed * 0.9, 14.0) + Vector3.UP * minf(speed * 0.3, 4.0)
 	unit.apply_knockback(push)
 	var hostile := unit.faction == Enemy.Faction.HOSTILE and not unit.is_in_group("protesters") and not unit.is_in_group("strays")
-	if hostile and speed >= ram_min_speed:
+	if hostile and speed >= ram_min_speed and rams_units():
 		Sfx.play(&"car_crash", global_position, minf(-8.0 + speed, 4.0))
 		unit.apply_damage(speed * ram_damage_per_mps, global_position, &"impact")
 	elif speed > 8.0 and unit.is_in_group("residents"):
@@ -471,6 +494,11 @@ func _on_body_entered(body: Node) -> void:
 		apply_damage((_last_speed - crash_damage_from) * crash_damage, body.global_position if body is Node3D else global_position, &"impact")
 		Vfx.impact(get_parent(), global_position + global_basis.z * 2.0 + Vector3.UP * 0.6, -global_basis.z, &"metal", 1.2)
 	if _last_speed < ram_min_speed:
+		return
+	# Props always take the hit. People and vehicles only from a car the
+	# player is driving (or just bailed out of): a parked car shoved by
+	# traffic mustn't hurt them, or raise an alarm blamed on the player.
+	if (body is Enemy or body is VehicleBody3D) and not rams_units():
 		return
 	Sfx.play(&"car_crash", global_position, minf(-8.0 + _last_speed, 4.0))
 	if body.has_method("apply_damage"):

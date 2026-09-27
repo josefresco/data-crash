@@ -256,14 +256,15 @@ func _decorate_front(steel: Material, dark: Material) -> void:
 	ring.rotation.x = PI * 0.5
 	ring.position = face + Vector3(-6.3, sign_y, 0.35)
 	lintel.add_child(ring)
-	for line in [[brand_name, 0.018, 0.25], [brand_tagline, 0.0058, -0.55]]:
+	# Brand name and tagline in the space right of the logo ring.
+	for line in [[brand_name, Vector2(12.2, 1.1), 0.25], [brand_tagline, Vector2(12.2, 0.4), -0.55]]:
 		var sign_label := Label3D.new()
 		sign_label.text = line[0]
-		sign_label.pixel_size = line[1]
 		sign_label.font_size = 72
 		sign_label.outline_size = 0
 		sign_label.modulate = brand_color.lerp(Color.WHITE, 0.6)
 		sign_label.position = face + Vector3(0.9, sign_y + float(line[2]), 0.32)
+		Models.fit_label(sign_label, line[1], 0.95)
 		lintel.add_child(sign_label)
 
 
