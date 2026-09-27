@@ -118,6 +118,10 @@ func _ready() -> void:
 
 	add_to_group("site_alarm")
 	add_to_group("level")
+	var life := GroundLife.new()
+	life.name = "GroundLife"
+	add_child(life)
+	life.setup($Neighborhood as NeighborhoodBuilder)
 	($Player as Player).respawned.connect(_on_player_respawned)
 	Sfx.music(&"calm")
 	for node in get_tree().get_nodes_in_group("datacenter_sites"):
@@ -203,6 +207,7 @@ func start_defense() -> void:
 		return
 	phase = Phase.BUILD
 	_update_deeds()
+	_clear_rubble_near(_felsa.datacenter.global_position if _felsa else Vector3.ZERO, 60.0)
 	core = GreenCore.new()
 	var lot := _felsa.datacenter.global_position if _felsa else Vector3.ZERO
 	core.position = Vector3(lot.x, 0.0, lot.z)
@@ -406,6 +411,13 @@ func _on_player_respawned() -> void:
 			unit.stand_down()
 	Game.notify("Security and police lost track of you. Lie low, or hit them again.", 6.0)
 	_update_sites()
+
+
+## The defense is built on the Felsa lot: haul away its settled rubble.
+func _clear_rubble_near(center: Vector3, radius: float) -> void:
+	for node in get_tree().get_nodes_in_group("rubble"):
+		if (node as Node3D).global_position.distance_to(center) < radius:
+			node.queue_free()
 
 
 ## Title card on each phase change.

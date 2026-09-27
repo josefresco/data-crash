@@ -26,6 +26,13 @@ extends VehicleBody3D
 @export var fit_to_model := false
 ## Looping engine sound cue (see Sfx) while someone is driving.
 @export var engine_cue := &"engine_loop"
+@export_group("Damage")
+## Crashes, gunfire, and blasts wear a car down: smoke under 40%, fire
+## under 15%, then it explodes into a burnt wreck (the driver is thrown out).
+@export var max_health := 500.0
+## Self-damage per m/s of impact speed above `crash_damage_from`.
+@export var crash_damage := 6.0
+@export var crash_damage_from := 7.0
 @export_group("Stability")
 ## Arcade handling: the fastest the car may pitch or roll (rad/s) and how fast
 ## those rates die out. Yaw stays free, so spinouts still happen.
@@ -51,6 +58,20 @@ var _last_speed := 0.0
 var _driver_change_frame := -1
 var _engine: AudioStreamPlayer3D
 var _tipped_time := 0.0
+var health := 500.0
+var wrecked := false
+var _smoke: GPUParticles3D
+var _fire: GPUParticles3D
+var _burn_left := -1.0
+var _headlight: SpotLight3D
+var _tail_mat: StandardMaterial3D
+var _head_mat: StandardMaterial3D
+## Skid marks: last mark position per wheel (for spacing), shared pool.
+var _last_skid := {}
+var _skid_puff_left := 0.0
+static var _skid_material: StandardMaterial3D
+static var _skid_marks: Array[Node3D] = []
+const MAX_SKID_MARKS := 260
 var _flame_left := 0.0
 
 @onready var _cam_rig: Node3D = $CameraRig
@@ -82,6 +103,8 @@ func _ready() -> void:
 	var box := (get_node("CollisionShape3D") as CollisionShape3D)
 	var size := (box.shape as BoxShape3D).size
 	Bumper.attach(self, size + Vector3(0.6, 0.6, 1.0), box.position)
+	health = max_health
+	_build_lights(size, box.position)
 	_dress_materials()
 	Models.set_gi_mode(self, GeometryInstance3D.GI_MODE_DYNAMIC)
 
@@ -131,7 +154,7 @@ func _dress_materials() -> void:
 
 
 func can_enter() -> bool:
-	return driver == null and (Game.district == null or Game.district.trust >= required_trust)
+	return not wrecked and driver == null and (Game.district == null or Game.district.trust >= required_trust)
 
 
 func enter(player: Player) -> bool:
@@ -170,6 +193,14 @@ func _physics_process(delta: float) -> void:
 	var speed := linear_velocity.length()
 	if _engine and _engine.playing:
 		_engine.pitch_scale = lerpf(_engine.pitch_scale, 0.8 + minf(speed / 14.0, 1.6) + absf(engine_force) / max_engine_force * 0.2, 1.0 - exp(-5.0 * delta))
+	_burn(delta)
+	if wrecked:
+		engine_force = 0.0
+		_last_speed = speed
+		return
+	_update_lights()
+	if driver:
+		_skid(delta, speed)
 
 	if driver == null:
 		engine_force = 0.0
@@ -255,6 +286,151 @@ func _stay_upright(delta: float) -> void:
 		_tipped_time = 0.0
 
 
+## Damage from anything (bullets, blasts, fire, rams, crashes).
+func apply_damage(amount: float, _from: Vector3, _kind: StringName = &"generic") -> void:
+	if wrecked or amount <= 0.0:
+		return
+	health -= amount
+	var ratio := health / max_health
+	if ratio < 0.4 and _smoke == null:
+		_smoke = Vfx.smoke_column(self, _hood(), 0.7)
+		_smoke.emitting = true
+		if driver:
+			Game.tip("car_smoke", "Your car is smoking: it can't take much more. Get out before it catches fire and blows.")
+	if ratio < 0.15 and _burn_left < 0.0:
+		_burn_left = 4.0
+		_fire = Vfx.fire_patch(self, _hood(), 0.6)
+		_fire.emitting = true
+		Sfx.play(&"explosion", global_position, -10.0, 1.6)
+		if driver:
+			Game.notify("Your car's on fire! Get out!", 3.0)
+
+
+func _hood() -> Vector3:
+	var box := get_node("CollisionShape3D") as CollisionShape3D
+	var size := (box.shape as BoxShape3D).size
+	return box.position + Vector3(0.0, size.y * 0.5, size.z * 0.3)
+
+
+## Burning cars explode after a few seconds and stay as burnt-out wrecks.
+func _burn(delta: float) -> void:
+	if _burn_left < 0.0 or wrecked:
+		return
+	_burn_left -= delta
+	if _burn_left > 0.0:
+		return
+	wrecked = true
+	if driver:
+		var victim := driver
+		exit()
+		victim.apply_damage(35.0, global_position, &"explosive")
+		victim.apply_knockback((victim.global_position - global_position).normalized() * 8.0 + Vector3.UP * 4.0)
+	var blast := Explosive.new()
+	blast.radius = 5.5
+	blast.damage = 60.0
+	get_parent().add_child(blast)
+	blast.global_position = global_position + Vector3.UP * 0.8
+	blast.detonate.call_deferred()
+	apply_central_impulse(Vector3.UP * mass * 4.0)
+	# Char everything and douse the lights.
+	for mesh in find_children("*", "MeshInstance3D", true, false):
+		var burnt := StandardMaterial3D.new()
+		burnt.albedo_color = Color(0.08, 0.07, 0.07)
+		burnt.roughness = 1.0
+		(mesh as MeshInstance3D).material_override = burnt
+	if _headlight:
+		_headlight.visible = false
+	if _fire:
+		_fire.amount_ratio = 0.4
+	Game.count("cars_wrecked")
+
+
+## Lenses on every car (unique materials so brake lights can flare) and a
+## real headlight beam on the car being driven.
+func _build_lights(size: Vector3, center: Vector3) -> void:
+	_head_mat = StandardMaterial3D.new()
+	_head_mat.albedo_color = Color(1.0, 0.97, 0.85)
+	_head_mat.emission_enabled = true
+	_head_mat.emission = Color(1.0, 0.95, 0.8)
+	_head_mat.emission_energy_multiplier = 0.4
+	_tail_mat = StandardMaterial3D.new()
+	_tail_mat.albedo_color = Color(0.6, 0.05, 0.05)
+	_tail_mat.emission_enabled = true
+	_tail_mat.emission = Color(1.0, 0.1, 0.05)
+	_tail_mat.emission_energy_multiplier = 0.5
+	var y := center.y + size.y * 0.1
+	for side in [-1.0, 1.0]:
+		var x: float = side * maxf(size.x * 0.5 - 0.35, 0.3)
+		Models.box(self, Vector3(0.32, 0.14, 0.05), Vector3(x, y, center.z + size.z * 0.5 + 0.02), _head_mat)
+		Models.box(self, Vector3(0.3, 0.12, 0.05), Vector3(x, y, center.z - size.z * 0.5 - 0.02), _tail_mat)
+	_headlight = SpotLight3D.new()
+	_headlight.position = Vector3(0.0, y, center.z + size.z * 0.5 + 0.1)
+	_headlight.rotation = Vector3(deg_to_rad(-8.0), PI, 0.0)  # SpotLight shines -Z; cars face +Z
+	_headlight.light_color = Color(1.0, 0.95, 0.82)
+	_headlight.light_energy = 4.0
+	_headlight.spot_range = 24.0
+	_headlight.spot_angle = 32.0
+	_headlight.light_volumetric_fog_energy = 2.5
+	_headlight.shadow_enabled = false
+	_headlight.visible = false
+	add_child(_headlight)
+
+
+func _update_lights() -> void:
+	if _headlight == null:
+		return
+	var driven := driver != null
+	_headlight.visible = driven
+	_head_mat.emission_energy_multiplier = 3.0 if driven else 0.4
+	var braking := brake > 0.0 or (driven and global_basis.z.dot(linear_velocity) < -0.5)
+	_tail_mat.emission_energy_multiplier = 4.0 if braking else (1.2 if driven else 0.5)
+
+
+## Skid marks where the tires lose grip, and tire smoke on hard slides.
+func _skid(delta: float, speed: float) -> void:
+	_skid_puff_left -= delta
+	if speed < 4.0:
+		return
+	for wheel: VehicleWheel3D in find_children("*", "VehicleWheel3D", false, false):
+		if not wheel.is_in_contact() or wheel.get_skidinfo() > 0.55:
+			continue
+		var contact := wheel.get_contact_point()
+		var id := wheel.get_instance_id()
+		if _last_skid.has(id) and (_last_skid[id] as Vector3).distance_to(contact) < 0.35:
+			continue
+		_last_skid[id] = contact
+		_drop_skid(contact)
+		if _skid_puff_left <= 0.0:
+			_skid_puff_left = 0.12
+			Vfx.dust(get_parent(), contact + Vector3.UP * 0.2, 0.8)
+
+
+func _drop_skid(at: Vector3) -> void:
+	if _skid_material == null:
+		_skid_material = StandardMaterial3D.new()
+		_skid_material.albedo_color = Color(0.05, 0.05, 0.05, 0.55)
+		_skid_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		_skid_material.roughness = 1.0
+	var mark := MeshInstance3D.new()
+	var plane := PlaneMesh.new()
+	plane.size = Vector2(0.26, 0.5)
+	mark.mesh = plane
+	mark.material_override = _skid_material
+	mark.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mark.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
+	get_parent().add_child(mark)
+	var along := linear_velocity
+	along.y = 0.0
+	mark.global_position = at + Vector3.UP * 0.025
+	if along.length_squared() > 0.01:
+		mark.global_basis = Basis.looking_at(along.normalized(), Vector3.UP)
+	_skid_marks.append(mark)
+	while _skid_marks.size() > MAX_SKID_MARKS:
+		var oldest := _skid_marks.pop_front() as Node3D
+		if is_instance_valid(oldest):
+			oldest.queue_free()
+
+
 ## Boost left, 0..1 (HUD).
 func turbo_ratio() -> float:
 	return turbo_left / maxf(turbo_seconds, 0.01)
@@ -288,7 +464,13 @@ func _update_camera(delta: float) -> void:
 
 
 func _on_body_entered(body: Node) -> void:
-	if _last_speed < ram_min_speed or body == driver:
+	if body == driver:
+		return
+	# Hard crashes into the world or other cars wear this car down too.
+	if _last_speed > crash_damage_from and (body is StaticBody3D or body is VehicleBody3D or body is CSGShape3D):
+		apply_damage((_last_speed - crash_damage_from) * crash_damage, body.global_position if body is Node3D else global_position, &"impact")
+		Vfx.impact(get_parent(), global_position + global_basis.z * 2.0 + Vector3.UP * 0.6, -global_basis.z, &"metal", 1.2)
+	if _last_speed < ram_min_speed:
 		return
 	Sfx.play(&"car_crash", global_position, minf(-8.0 + _last_speed, 4.0))
 	if body.has_method("apply_damage"):

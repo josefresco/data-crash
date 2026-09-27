@@ -54,6 +54,7 @@ steer_speed = 2.0
 ram_min_speed = 1.5
 ram_damage_per_mps = 70.0
 max_speed = 7.0
+max_health = 2500.0
 required_trust = 0.35
 model_path = "res://assets/kenney/cars/tractor-shovel.glb"
 model_scale = 2.1

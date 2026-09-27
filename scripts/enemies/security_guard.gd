@@ -25,7 +25,7 @@ func _decorate(_visual_root: Node3D) -> void:
 	var top := _head_top()
 	Models.hat(_anchor(&"head"), &"cap", Color(0.08, 0.08, 0.09), top, body_height / 1.8)
 	_add_box(_anchor(&"chest"), Vector3(0.48, 0.42, 0.36), Vector3(0.0, -0.06, 0.0), dark)  # vest
-	_add_box(_anchor(&"hand_r"), Vector3(0.08, 0.1, 0.75), Vector3(0.0, -0.04, -0.28), dark)  # rifle
+	_hold_weapon(&"pistol")
 
 
 func _upper_pose() -> StringName:
@@ -36,7 +36,7 @@ func _upper_pose() -> StringName:
 
 func _attack(victim: Node3D) -> void:
 	_act(&"pistol_shoot")
-	var from := global_position + Vector3.UP * body_height * 0.75
+	var from := muzzle_point()
 	var aim := _aim_point_of(victim)
 	var accuracy := lerpf(close_accuracy, far_accuracy, clampf(_distance_to(victim) / sight_range, 0.0, 1.0))
 	if randf() > accuracy:
@@ -46,7 +46,7 @@ func _attack(victim: Node3D) -> void:
 	var to := from + direction * (sight_range + 5.0)
 	var query := PhysicsRayQueryParameters3D.create(from, to, SHOT_MASK, [get_rid()])
 	var hit := get_world_3d().direct_space_state.intersect_ray(query)
-	Vfx.muzzle(get_parent(), from + direction * 0.5, Color(1.0, 0.8, 0.45), direction, 0.9)
+	Vfx.muzzle(get_parent(), from + direction * 0.05, Color(1.0, 0.8, 0.45), direction, 0.9)
 	Sfx.play(&"guard_gun", from, -6.0)
 	if not hit.is_empty():
 		to = hit["position"]

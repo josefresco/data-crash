@@ -44,6 +44,8 @@ func _test_felsa_car() -> void:
 	for i in 40:
 		if not car.is_alive():
 			break
+		# Stay beside it: a burning car can still roll a little.
+		bystander.global_position = car.global_position + Vector3(2.5, 0, 0)
 		await seconds(0.25)
 	await seconds(0.3)
 	check(not car.is_alive(), "burning car burns out")

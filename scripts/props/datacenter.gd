@@ -127,6 +127,7 @@ func _build_shell() -> void:
 	for ix in nx:
 		for iz in nz:
 			var piece := _make_segment(roof_size, roof_color, Vector3i(2, 1, 2), &"plates")
+			piece.rubble_share = 0.0  # big roof slabs read as litter, not rubble
 			piece.position = Vector3(
 				-half.x + (ix + 0.5) * roof_size.x, height, -half.y + (iz + 0.5) * roof_size.z)
 			_roof.append(piece)
@@ -168,6 +169,8 @@ func _make_segment(seg_size: Vector3, seg_color: Color, seg_chunks: Vector3i,
 	piece.damage_threshold = 50.0
 	piece.density = 150.0
 	piece.label = "Datacenter wall"
+	piece.rubble_share = 0.35
+	piece.debris_lifetime = 6.0
 	add_child(piece)
 	return piece
 
@@ -285,6 +288,7 @@ func _build_interior() -> void:
 			rack.damage_threshold = 12.0
 			rack.chunks = Vector3i(4, 1, 1)
 			rack.label = "Server rack"
+			rack.sparks = true
 			rack.position = Vector3(side * (3.0 + run * 0.5), 0.0, z)
 			add_child(rack)
 			_racks.append(rack)
@@ -413,6 +417,7 @@ func _build_cooling_units() -> void:
 		unit.max_health = 150.0
 		unit.damage_threshold = 50.0
 		unit.label = "Cooling unit"
+		unit.sparks = true
 		unit.position = Vector3(
 			footprint.x * 0.5 + unit_size.x * 0.5 + 1.5, 0.0, -footprint.y * 0.5 + (i + 0.5) * spacing)
 		add_child(unit)
@@ -514,6 +519,25 @@ func _collapse(origin: Vector3) -> void:
 			turbine.shut_down()
 			get_tree().create_timer(2.5).timeout.connect(_dismantle.bind(turbine))
 
+	# A collapse to remember: a rolling dust cloud, smoke that hangs around,
+	# and a shake you feel down the street.
+	var center := global_position + Vector3.UP * 3.0
+	Game.shake(center, 1.0)
+	Sfx.play(&"explosion_big", center, 6.0, 0.6)
+	for k in 10:
+		var angle := k * TAU / 10.0
+		var spot := center + Vector3(cos(angle) * footprint.x * 0.45, -2.0, sin(angle) * footprint.y * 0.45)
+		get_tree().create_timer(0.2 + k * 0.12).timeout.connect(func() -> void:
+			if is_inside_tree():
+				Vfx.dust(get_parent(), spot, 9.0))
+	for k in 3:
+		var host := get_parent() as Node3D
+		var smoke := Vfx.smoke_column(host, host.to_local(center + Vector3(randf_range(-8, 8), -3.0, randf_range(-5, 5))), 2.0)
+		smoke.emitting = true
+		get_tree().create_timer(25.0 + k * 5.0).timeout.connect(func() -> void:
+			if is_instance_valid(smoke):
+				smoke.emitting = false
+				smoke.get_tree().create_timer(6.0).timeout.connect(smoke.queue_free))
 	# Roof drops first, then the walls fold in from the side that was hit.
 	var delay := 0.3
 	for piece in _roof:

@@ -14,6 +14,11 @@ func _ready() -> void:
 	await get_tree().create_timer(1.5).timeout
 	await _save("polluted")
 
+	# Watch the collapse from the street (the player now spawns at home).
+	var watcher := level.get_node("Player") as Player
+	watcher.global_position = Vector3(-6, 0.2, 2)
+	await get_tree().create_timer(0.3).timeout
+	watcher.aim_at(Vector3(0, 6, -42))
 	for node in get_tree().get_nodes_in_group("cooling_units"):
 		(node as Destructible).shatter((node as Node3D).global_position, 200.0)
 	await get_tree().create_timer(2.0).timeout

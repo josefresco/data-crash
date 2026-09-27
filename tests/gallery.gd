@@ -175,6 +175,36 @@ func _ready() -> void:
 		var home: Vector3 = Game.get_meta(&"home", Vector3.ZERO)
 		await _wait(0.5)
 		await _shot("home", home + Vector3(4.0, 1.0, 6.0), home)
+	if _want("armed"):
+		# Guards at pistol idle and aim, police tasers, FROST launcher: frozen poses.
+		var kinds := [[SecurityGuard, &"pistol_idle"], [SecurityGuard, &"pistol_aim"], [Police, &"shield_idle"], [Frost, &"pistol_aim"]]
+		var units: Array[Enemy] = []
+		for i in kinds.size():
+			var unit := (kinds[i][0] as GDScript).new() as Enemy
+			unit.site = &"portrait"
+			unit.position = Vector3(-88.5 + i * 2.2, 0.1, 58.0)
+			level.add_child(unit)
+			units.append(unit)
+		await _wait(0.8)
+		for i in units.size():
+			units[i].set_physics_process(false)
+			(units[i].get("_visual") as Node3D).rotation = Vector3(0.0, PI, 0.0)
+			(units[i].get("_rig") as CharacterModel).set_upper(kinds[i][1])
+		await _wait(0.8)
+		await _shot("armed", Vector3(-85.2, 1.4, 62.8), Vector3(-85.2, 1.1, 58.0))
+		await _shot("armed_side", Vector3(-80.6, 1.3, 58.4), Vector3(-85.2, 1.1, 58.0))
+		for unit in units:
+			unit.queue_free()
+	if _want("life"):
+		# Road cracks while polluted; then heal the district and watch the grass come back.
+		await _shot("life_roads", Vector3(-3.0, 1.4, 60.0), Vector3(0.0, 0.0, 75.0))
+		Game.district.smog = 0.0
+		Game.district.noise = 0.0
+		Game.district.water_table = 1.0
+		await _wait(8.0)
+		var life := level.get_node("GroundLife") as GroundLife
+		print("grass shown: %d" % life.grass_shown())
+		await _shot("life_grass", Vector3(-40.0, 1.3, 52.0), Vector3(-30.0, 0.3, 62.0))
 	if _want("parked"):
 		await _shot("parked", Vector3(-30, 0.2, 21), Vector3(-22, 0.8, 26.5))
 		await _shot("parked2", Vector3(46, 0.2, 21), Vector3(54, 0.8, 26.5))

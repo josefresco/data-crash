@@ -23,6 +23,7 @@ func _init() -> void:
 	color = Color(0.78, 0.8, 0.82)
 	surface_kind = &"plates"
 	max_health = 400.0
+	sparks = true
 	damage_threshold = 30.0
 	chunks = Vector3i(3, 2, 2)
 	label = "Gas turbine"

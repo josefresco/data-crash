@@ -91,6 +91,7 @@ var _last_hit_from := Vector3.INF
 var _last_hit_kind := &""
 var _last_hit_amount := 0.0
 var _flinch: FlinchModifier
+var _gun: Node3D
 ## While > 0 a shove (vehicle bump, blast) carries the unit instead of its legs.
 var _knock_left := 0.0
 var _investigate_left := 0.0
@@ -366,6 +367,36 @@ func _update_lod() -> void:
 		if camera and not far and boss_name.is_empty():
 			var distance := camera.global_position.distance_to(global_position)
 			model.set_update_step(1 if distance < 25.0 else (2 if distance < 40.0 else 3))
+
+
+## Puts a WeaponModels gun in the right hand, barrel along the forearm (the
+## hand anchor's +X: forward in the aim poses), optionally tinted. Returns
+## the model; its "Muzzle" marker is where shots leave (see muzzle_point()).
+func _hold_weapon(model: StringName, tint := Color(0, 0, 0, 0), scale_by := 1.0) -> Node3D:
+	var gun := WeaponModels.build(model)
+	if gun == null:
+		return null
+	gun.rotation = Vector3(0.0, -PI * 0.5, 0.0)
+	gun.scale *= scale_by * body_height / 1.8
+	gun.position = Vector3(0.05, -0.02, 0.0)
+	if tint.a > 0.0:
+		for mesh in gun.find_children("*", "MeshInstance3D", true, false):
+			var material := StandardMaterial3D.new()
+			material.albedo_color = tint
+			material.roughness = 0.5
+			(mesh as MeshInstance3D).material_override = material
+	_anchor(&"hand_r").add_child(gun)
+	_gun = gun
+	return gun
+
+
+## Where this unit's shots leave from: the held gun's muzzle, else the chest.
+func muzzle_point() -> Vector3:
+	if _gun and is_instance_valid(_gun):
+		var marker := _gun.get_node_or_null("Muzzle") as Node3D
+		if marker:
+			return marker.global_position
+	return global_position + Vector3.UP * body_height * 0.75
 
 
 ## Override: the clip held on the upper body right now (&"" = none), e.g.

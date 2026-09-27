@@ -35,7 +35,9 @@ func _run() -> void:
 		top_speed = maxf(top_speed, result[4])
 		if maneuver != "curb crossing":
 			worst_air = maxf(worst_air, result[1])
+	check(Car._skid_marks.size() > 0, "hard driving leaves skid marks (%d)" % Car._skid_marks.size())
 	await _collisions()
+	await _damage()
 	check(worst_flips == 0, "no flips in normal driving")
 	check(top_speed <= car.max_speed * 1.4 + 1.0, "turbo respects the top speed (%.1f m/s, cap %.1f)" % [top_speed, car.max_speed * 1.4])
 	check(worst_air < 0.3, "wheels stay on flat ground (worst airborne %.2fs)" % worst_air)
@@ -134,6 +136,7 @@ COLLISIONS")
 		_hold("move_forward", true)
 		_hold("sprint", t > 1.0))
 	var mine := [rad_to_deg(car.global_basis.y.angle_to(Vector3.UP))]
+	check(car.health < car.max_health and car.health > 0.0, "a crash dents the car without killing it (%.0f/%.0f)" % [car.health, car.max_health])
 	check(r[0] < 80.0 and r[1] < 3.0, "a rammed parked car isn't flipped or launched (%.0f°, %.1f m/s up)" % [r[0], r[1]])
 	print("%-26s | %7.0f° | %7.1f  | player car ended tilted %.0f°" % ["ram a parked car", r[0], r[1], mine[0]])
 	parked.queue_free()
@@ -205,3 +208,18 @@ func _watch(body: Node3D, length: float, inputs: Callable) -> Array:
 		var velocity: Vector3 = body.get("linear_velocity") if body is RigidBody3D else body.get("velocity")
 		worst[1] = maxf(worst[1], velocity.y)
 	return worst
+
+
+## Headlights, smoke, fire, and the explosion into a burnt wreck.
+func _damage() -> void:
+	await _place(STRIP, Vector3.BACK)
+	var beam := car.get("_headlight") as SpotLight3D
+	check(beam != null and beam.visible, "the driven car's headlights are on")
+	car.health = car.max_health
+	car.apply_damage(car.max_health * 0.7, car.global_position + Vector3(5, 0, 0), &"bullet")
+	check(car.get("_smoke") != null, "a badly damaged car smokes")
+	car.apply_damage(car.max_health * 0.2, car.global_position + Vector3(5, 0, 0), &"bullet")
+	check(car.get("_fire") != null, "a nearly dead car catches fire")
+	await seconds(5.0)
+	check(car.wrecked and car.driver == null and not car.can_enter(), "it explodes into a wreck, throws the driver out, and can't be driven")
+	check(player.visible, "the driver is back on foot")
