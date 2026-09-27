@@ -189,7 +189,6 @@ func exit() -> void:
 
 func _physics_process(delta: float) -> void:
 	_update_camera(delta)
-	_stabilize(delta)
 	_stay_upright(delta)
 	var speed := linear_velocity.length()
 	if _engine and _engine.playing:
@@ -255,15 +254,18 @@ func _physics_process(delta: float) -> void:
 
 
 ## Clamps and damps pitch/roll spin and caps upward speed (car-on-car
-## crashes at speed used to flip and launch cars).
-func _stabilize(delta: float) -> void:
-	var local := global_basis.inverse() * angular_velocity
-	var keep := exp(-tip_damping * delta)
+## crashes at speed used to flip and launch cars). Runs on the physics state:
+## writing `angular_velocity` from `_physics_process` wiped out the yaw the
+## steered wheels produce, so cars couldn't turn.
+func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
+	var basis := state.transform.basis
+	var local := basis.inverse() * state.angular_velocity
+	var keep := exp(-tip_damping * state.step)
 	local.x = clampf(local.x, -max_tip_rate, max_tip_rate) * keep
 	local.z = clampf(local.z, -max_tip_rate, max_tip_rate) * keep
-	angular_velocity = global_basis * local
-	if linear_velocity.y > max_rise_speed:
-		linear_velocity.y = max_rise_speed
+	state.angular_velocity = basis * local
+	if state.linear_velocity.y > max_rise_speed:
+		state.linear_velocity.y = max_rise_speed
 
 
 ## Anti-roll torque while tilted, and a reset onto the wheels if the car

@@ -24,13 +24,15 @@ func _run() -> void:
 		_wheels.append(wheel as VehicleWheel3D)
 	await seconds(2.0)
 	print("\nVEHICLE HANDLING (%s, %.0f kg)" % [car.model_path.get_file(), car.mass])
-	print("%-18s | %8s | %9s | %8s | %5s | %6s" % ["maneuver", "max tilt", "airborne", "max up v", "flips", "speed"])
+	print("%-18s | %8s | %9s | %8s | %5s | %6s | %6s" % ["maneuver", "max tilt", "airborne", "max up v", "flips", "speed", "turned"])
 	var worst_flips := 0
 	var worst_air := 0.0
 	var top_speed := 0.0
+	var turns := {}
 	for maneuver in ["straight+turbo", "slalom", "full-lock turn", "hard brake", "curb crossing", "reverse turn"]:
 		var result: Array = await _drive(maneuver)
-		print("%-18s | %7.0f° | %8.2fs | %7.1f  | %5d | %5.1f" % [maneuver, result[0], result[1], result[2], result[3], result[4]])
+		print("%-18s | %7.0f° | %8.2fs | %7.1f  | %5d | %5.1f | %5.0f°" % [maneuver, result[0], result[1], result[2], result[3], result[4], result[5]])
+		turns[maneuver] = result[5]
 		worst_flips = maxi(worst_flips, result[3])
 		top_speed = maxf(top_speed, result[4])
 		if maneuver != "curb crossing":
@@ -41,6 +43,8 @@ func _run() -> void:
 	await _collisions()
 	await _damage()
 	check(worst_flips == 0, "no flips in normal driving")
+	check(turns["full-lock turn"] > 180.0, "full lock turns the car around (%.0f°)" % turns["full-lock turn"])
+	check(turns["slalom"] > 30.0, "the slalom swings the heading (%.0f°)" % turns["slalom"])
 	check(top_speed <= car.max_speed * 1.4 + 1.0, "turbo respects the top speed (%.1f m/s, cap %.1f)" % [top_speed, car.max_speed * 1.4])
 	check(worst_air < 0.3, "wheels stay on flat ground (worst airborne %.2fs)" % worst_air)
 
@@ -67,7 +71,8 @@ func _drive(maneuver: String) -> Array:
 		start = Vector3(-14.0, 0.8, 90.0)
 		facing = Vector3.RIGHT
 	await _place(start, facing)
-	var stats := [0.0, 0.0, 0.0, 0, 0.0]
+	var stats := [0.0, 0.0, 0.0, 0, 0.0, 0.0]
+	var heading := car.global_rotation.y
 	var flipped := false
 	var clock := 0.0
 	var length := 6.0
@@ -110,6 +115,10 @@ func _drive(maneuver: String) -> Array:
 		elif tilt < 30.0:
 			flipped = false
 		stats[4] = maxf(stats[4], car.linear_velocity.length())
+		# Total heading change (absolute), in degrees.
+		var now := car.global_rotation.y
+		stats[5] += absf(rad_to_deg(angle_difference(heading, now)))
+		heading = now
 	for action in ["move_forward", "move_back", "move_left", "move_right", "sprint", "jump"]:
 		Input.action_release(action)
 	return stats
