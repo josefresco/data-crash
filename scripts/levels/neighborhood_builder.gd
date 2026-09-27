@@ -59,6 +59,8 @@ const CAR_COLORS: Array[Color] = [
 ]
 
 var _doors: Array[Vector3] = []
+## [door position, outward direction] per house (not stores).
+var _house_doors: Array = []
 ## Sign text -> the spot just outside that store's door.
 var _store_doors := {}
 ## Footprints on the ground plane (x, z) for the minimap: [Rect2, is_store].
@@ -73,6 +75,15 @@ func _ready() -> void:
 ## World positions just outside each front door (townspeople walk out of these).
 func door_positions() -> Array[Vector3]:
 	return _doors
+
+
+## The house door nearest `near` and its outward direction: [position, facing].
+func home_spot(near: Vector3) -> Array:
+	var best: Array = []
+	for entry: Array in _house_doors:
+		if best.is_empty() or (entry[0] as Vector3).distance_to(near) < (best[0] as Vector3).distance_to(near):
+			best = entry
+	return best
 
 
 ## Building footprints for the minimap: [Rect2 (x, z), is_store] pairs.
@@ -95,6 +106,7 @@ func build() -> void:
 	for child in get_children():
 		child.queue_free()
 	_doors.clear()
+	_house_doors.clear()
 	_store_doors.clear()
 	_footprints.clear()
 	_rng.seed = layout_seed
@@ -275,6 +287,7 @@ func _add_house(at: Vector3, facing_side: float) -> void:
 	var front_depth := bounds.end.z
 	var front := Vector3(0.0, 0.0, front_depth + 2.2).rotated(Vector3.UP, body.rotation.y)
 	_doors.append(at + front + Vector3.UP * 0.2)
+	_house_doors.append([at + front + Vector3.UP * 0.2, front.normalized()])
 	var path := Models.model(KENNEY + "suburban/path-long.glb", HOUSE_SCALE * 0.5)
 	path.position = Vector3(0.0, 0.02, front_depth + 1.6)
 	body.add_child(path)

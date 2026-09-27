@@ -165,6 +165,16 @@ func _ready() -> void:
 	if _want("townhall"):
 		var hall: Vector3 = Game.get_meta(&"town_hall_door", Vector3.ZERO)
 		await _shot("townhall", hall + Vector3(3.0, 1.0, -7.0), hall + Vector3(0.0, 3.5, 5.0))
+	if _want("grounds"):
+		# Felsa's visitor parking (east) and irrigated corporate lawn (west).
+		var felsa := level.get_node("FelsaSite") as DatacenterSite
+		var half := felsa.compound * 0.5
+		await _shot("grounds_lot", felsa.at(Vector3(half.x + 20.0, 1.6, 22.0)), felsa.at(Vector3(half.x + 10.0, 0.5, 0.0)))
+		await _shot("grounds_lawn", felsa.at(Vector3(-(half.x + 20.0), 1.6, 20.0)), felsa.at(Vector3(-(half.x + 9.0), 0.5, 0.0)))
+	if _want("home"):
+		var home: Vector3 = Game.get_meta(&"home", Vector3.ZERO)
+		await _wait(0.5)
+		await _shot("home", home + Vector3(4.0, 1.0, 6.0), home)
 	if _want("parked"):
 		await _shot("parked", Vector3(-30, 0.2, 21), Vector3(-22, 0.8, 26.5))
 		await _shot("parked2", Vector3(46, 0.2, 21), Vector3(54, 0.8, 26.5))

@@ -802,5 +802,12 @@ func _respawn() -> void:
 	respawned.emit()
 
 
+## Moves the player here now and makes it the respawn point.
+func set_spawn(xform: Transform3D) -> void:
+	_spawn = xform
+	global_transform = xform
+	velocity = Vector3.ZERO
+
+
 func is_spawn_protected() -> bool:
 	return _protected_left > 0.0

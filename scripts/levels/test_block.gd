@@ -50,6 +50,9 @@ enum Phase { ACTIVISM, ASSAULT, BOSS, BUILD, WAVE, WON, LOST }
 @export var tourist_interval := 240.0
 @export var tourist_groups := 3
 ## Where the RVs pull over (main-road shoulder), in rotation.
+## The player's house is the one nearest this point (they spawn and respawn
+## on its front walk, facing the street).
+@export var home_near := Vector3(-5.0, 0.0, 20.0)
 ## Seconds between a datacenter alarm and the police cruiser being sent.
 @export var police_response_delay := 30.0
 ## Most recruited Canadians with you at once: a new RV (up to 3 aboard)
@@ -302,6 +305,56 @@ func _send_canadians_home() -> void:
 			leaving += 1
 	if leaving > 0:
 		Game.notify("The Canadians head home after the wave. \"Sorry we can't stay, eh!\"", 5.0)
+
+
+## Spawn at home: the player's front walk, facing the street, with a HOME
+## sign on the lawn (Game meta "home", minimap icon).
+func _move_in() -> void:
+	var spot := ($Neighborhood as NeighborhoodBuilder).home_spot(home_near)
+	if spot.is_empty():
+		return
+	var door: Vector3 = spot[0]
+	var facing: Vector3 = spot[1]
+	facing.y = 0.0
+	facing = facing.normalized()
+	var player := $Player as Player
+	var stand := door + facing * 1.5 + Vector3.UP * 0.1
+	player.set_spawn(Transform3D(Basis.looking_at(facing, Vector3.UP), stand))
+	Game.set_meta(&"home", stand)
+	var sign_root := Node3D.new()
+	sign_root.name = "HomeSign"
+	add_child(sign_root)
+	sign_root.global_position = door + facing * 3.5 + facing.cross(Vector3.UP) * 2.2
+	sign_root.global_basis = Basis.looking_at(-facing, Vector3.UP)
+	var wood := Models.mat(Color(0.45, 0.32, 0.2))
+	Models.box(sign_root, Vector3(0.1, 1.2, 0.1), Vector3(0.0, 0.6, 0.0), wood)
+	var board := Models.box(sign_root, Vector3(1.4, 0.6, 0.06), Vector3(0.0, 1.25, 0.0), Models.mat(Color(0.95, 0.9, 0.7), &"paint"))
+	var text := Label3D.new()
+	text.text = "HOME\n(not for sale)"
+	text.font_size = 56
+	text.pixel_size = 0.007
+	text.outline_size = 0
+	text.modulate = Color(0.25, 0.4, 0.2)
+	text.position = Vector3(0.0, 0.0, -0.04)
+	text.rotation.y = PI
+	board.add_child(text)
+
+
+## An irrigation part broke or shut off: refresh the deeds line.
+func on_irrigation_changed() -> void:
+	_update_deeds()
+
+
+## [off, total] irrigation parts across all sites.
+func irrigation_status() -> Array:
+	var total := 0
+	var off := 0
+	for site_node in sites:
+		for part in site_node.irrigation:
+			total += 1
+			if not is_instance_valid(part) or not part.running or part.is_destroyed:
+				off += 1
+	return [off, total]
 
 
 ## Datacenter alarms waiting for a cruiser: site id -> seconds until dispatch.
@@ -681,6 +734,7 @@ func _spawn_hardware_store() -> void:
 		pickup.add_to_group("hardware_store")
 		add_child(pickup)
 	Game.set_meta(&"hardware_door", door)
+	_move_in()
 	var hall := ($Neighborhood as NeighborhoodBuilder).store_door("TOWN HALL")
 	if hall != Vector3.ZERO:
 		Game.set_meta(&"town_hall_door", hall)
@@ -837,6 +891,7 @@ func _update_deeds() -> void:
 		["Paint a house [F]", done.call("paint")],
 		["Litter %d/%d" % [_litter_total - _litter_left, _litter_total], done.call("litter")],
 		["Grock cams %d/%d" % [_cameras_smashed, _cameras_total], cams],
+		["Irrigation off %d/%d" % irrigation_status(), &"done" if irrigation_status()[0] >= irrigation_status()[1] else &"info"],
 	])
 
 

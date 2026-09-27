@@ -436,8 +436,8 @@ static func merge_static(root: Node3D, keep: Array = [], skip: Array = []) -> in
 
 static func _collect_static(node: Node3D, parent_xform: Transform3D, keep: Array, skip: Array,
 		groups: Dictionary, merged: Array[MeshInstance3D]) -> void:
-	if node == null or node in keep or node.get_script() != null or not node.visible:
-		return
+	if node == null or node in keep or node.get_script() != null or not node.visible 			or node.is_in_group(&"smog_beams"):
+		return  # light cones fade and hide with the smog on their own
 	var xform := parent_xform * node.transform
 	if node.get_class() == "Node3D":
 		# Plain grouping nodes (imported model roots): look inside, keep the node.

@@ -46,6 +46,9 @@ func _run() -> void:
 	await seconds(2.5)
 	check(Game.has_seen_tip("move"), "the tutorial's first tip showed")
 
+	var home: Vector3 = Game.get_meta(&"home", Vector3.ZERO)
+	check(home != Vector3.ZERO and level.get_node_or_null("HomeSign") != null, "the player has a home with a HOME sign")
+	await _test_irrigation()
 	var hardware: Vector3 = Game.get_meta(&"hardware_door")
 	check(level.call("guidance_point") == hardware, "the minimap points an unarmed player to DUECE Hardware")
 	var hud := level.get_node("Hud") as Hud
@@ -273,7 +276,7 @@ func _test_animation_layers() -> void:
 
 func _test_hud_layout(hud: Hud) -> void:
 	await seconds(0.3)
-	check(hud.checklist_rows("deeds").size() == 8, "good deeds are a checklist on the right (%d rows)" % hud.checklist_rows("deeds").size())
+	check(hud.checklist_rows("deeds").size() == 9, "good deeds are a checklist on the right (%d rows)" % hud.checklist_rows("deeds").size())
 	check(hud.checklist_rows("sites").size() == 3, "datacenter status is a checklist (%d rows)" % hud.checklist_rows("sites").size())
 	# Speech: only the nearest few talk, and neighbors' bubbles stack.
 	var crowd: Array[Resident] = []
@@ -443,6 +446,35 @@ func _test_site_life() -> void:
 
 ## Market stalls and park benches are solid (people and the player used to clip through).
 ## Bribes happen at the Town Hall only.
+## Corporate lawns: sprinklers, a controller, and a fountain per site; smashing
+## them saves water; the controller shuts its sprinklers off.
+func _test_irrigation() -> void:
+	var site_node := level.get_node("FelsaSite") as DatacenterSite
+	check(site_node.irrigation.size() >= 12, "Felsa's lawn has irrigation (%d parts)" % site_node.irrigation.size())
+	var status: Array = level.call("irrigation_status")
+	check(status[0] == 0 and status[1] >= 36, "all irrigation starts running (%d parts)" % status[1])
+	var water := Game.district.water_table
+	var head: IrrigationPart = null
+	var controller: IrrigationPart = null
+	for part in site_node.irrigation:
+		if part.kind == IrrigationPart.Kind.SPRINKLER and head == null:
+			head = part
+		elif part.kind == IrrigationPart.Kind.CONTROLLER:
+			controller = part
+	head.apply_damage(999.0, head.global_position + Vector3(0, 1, 3), &"bullet")
+	await seconds(0.3)
+	check(Game.district.water_table > water, "smashing a sprinkler saves water")
+	check(not Game.is_alarmed(&"felsa"), "wrecking the landscaping doesn't trip the alarm")
+	controller.apply_damage(999.0, controller.global_position + Vector3(0, 1, 3), &"bullet")
+	await seconds(0.3)
+	check(site_node.irrigation_running() < 0.1, "the controller takes its sprinklers down with it (%.0f%% running)" % (site_node.irrigation_running() * 100.0))
+	var cars := 0
+	for node in site_node.get_children():
+		if node is Car:
+			cars += 1
+	check(cars >= 6, "Felsa has parking lots full of drivable cars (%d)" % cars)
+
+
 func _test_town_hall() -> void:
 	var menu := get_tree().get_first_node_in_group("bribe_menu") as BribeMenu
 	var hall: Vector3 = Game.get_meta(&"town_hall_door", Vector3.ZERO)

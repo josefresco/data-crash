@@ -56,6 +56,8 @@ var sham: ShamCrapman
 var is_neutralized := false
 var boss_defeated := false
 var is_cleared := false
+## This site's sprinklers, controller, and fountain (see _build_grounds).
+var irrigation: Array[IrrigationPart] = []
 
 
 func _ready() -> void:
@@ -83,6 +85,11 @@ func _ready() -> void:
 	datacenter.neutralized.connect(_on_neutralized)
 	_post_security()
 	_build_extras()
+	_build_grounds()
+	if not Engine.is_editor_hint():
+		# Draw calls: bake the lot's static dressing (lines, beds, bushes,
+		# poles, signs) into a few meshes; bodies and scripted props stay.
+		Models.merge_static(self)
 	_spawn_worker()
 	_spawn_truck()
 	var level := get_parent()
@@ -92,7 +99,138 @@ func _ready() -> void:
 		boss_defeated = true
 
 
-## World position of a point given in compound space.
+## Share of this site's irrigation still running, 0..1.
+func irrigation_running() -> float:
+	if irrigation.is_empty():
+		return 0.0
+	var on := 0
+	for part in irrigation:
+		if is_instance_valid(part) and part.running and not part.is_destroyed:
+			on += 1
+	return on / float(irrigation.size())
+
+
+## Outside the side fences: a visitor parking lot (+X) with lit, drivable
+## cars, and a manicured corporate lawn (-X) with hedges, flower beds, trees,
+## a logo fountain, and sprinklers run by an irrigation controller. All of it
+## watered around the clock while the neighborhood's taps run dry.
+func _build_grounds() -> void:
+	var half := compound * 0.5
+	var paint := Models.mat(Color(0.92, 0.92, 0.9))
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash(site_id) + 7
+
+	# --- Visitor parking, east side ------------------------------------------------------
+	var lot := Vector3(half.x + 12.0, 0.0, 4.0)
+	Models.box(self, Vector3(18.0, 0.04, 30.0), lot + Vector3.UP * 0.02, Models.mat(Color(0.7, 0.7, 0.7), &"asphalt"))
+	for row in [-1.0, 1.0]:
+		for k in 11:
+			Models.box(self, Vector3(4.6, 0.05, 0.12), lot + Vector3(row * 6.4, 0.04, -15.0 + k * 3.0), paint)
+		for k in 10:
+			if rng.randf() < 0.45:
+				continue
+			var car := CAR_SCENE.instantiate() as Node3D
+			car.set(&"model_path", "res://assets/kenney/cars/%s.glb" % CAR_MODELS[rng.randi() % CAR_MODELS.size()])
+			car.set(&"model_scale", 1.45)
+			car.set(&"model_offset", Vector3(0.0, 0.05, 0.0))
+			car.set(&"fit_to_model", true)
+			car.position = lot + Vector3(row * 6.4, 0.4, -13.5 + k * 3.0)
+			car.rotation.y = PI * 0.5 * -row  # nose toward the aisle
+			add_child(car)
+	for z in [-9.0, 9.0]:
+		var pole := Models.streetlight(6.0)
+		pole.position = lot + Vector3(0.0, 0.0, z)
+		add_child(pole)
+	var island := Models.mat(Color(0.3, 0.55, 0.25), &"grass")
+	for z in [-15.8, 15.8]:
+		Models.box(self, Vector3(18.0, 0.18, 1.4), lot + Vector3(0.0, 0.09, z), island)
+		for x in [-6.0, 0.0, 6.0]:
+			var bush := Models.model("res://assets/kenney/nature/plant_bushLarge.glb", 2.6)
+			bush.position = lot + Vector3(x, 0.15, z)
+			add_child(bush)
+	var sign_board := Models.box(self, Vector3(4.0, 1.0, 0.15), lot + Vector3(-9.5, 1.4, -14.0), Models.mat(brand_color.darkened(0.5), &"paint"))
+	sign_board.rotation.y = PI * 0.5
+	var sign_text := Label3D.new()
+	sign_text.text = "VISITOR PARKING
+EMPLOYEES OF THE MONTH ONLY"
+	sign_text.font_size = 48
+	sign_text.pixel_size = 0.008
+	sign_text.outline_size = 0
+	sign_text.position = Vector3(0.0, 0.0, 0.09)
+	sign_board.add_child(sign_text)
+
+	# --- Corporate lawn, west side ----------------------------------------------------------
+	var lawn := Vector3(-(half.x + 11.0), 0.0, 0.0)
+	var lawn_length := compound.y - 4.0
+	var green := Models.mat(Color(0.28, 0.62, 0.22), &"grass")
+	Models.box(self, Vector3(18.0, 0.06, lawn_length), lawn + Vector3.UP * 0.03, green)
+	# A clipped hedge along the fence, then flower beds in front of it.
+	var hedge_mat := Models.mat(Color(0.15, 0.38, 0.14), &"grass")
+	Models.box(self, Vector3(1.0, 1.1, lawn_length - 2.0), Vector3(-(half.x + 2.6), 0.55, 0.0), hedge_mat)
+	Models.collider(self, Vector3(1.0, 1.1, lawn_length - 2.0), Vector3(-(half.x + 2.6), 0.55, 0.0))
+	var bloom: Array[Color] = [Color(0.9, 0.2, 0.3), Color(0.95, 0.8, 0.2), Color(0.6, 0.3, 0.85), Color(1.0, 0.55, 0.2)]
+	for k in 6:
+		var bed := Models.box(self, Vector3(1.6, 0.3, 4.0), Vector3(-(half.x + 4.5), 0.15, -22.5 + k * 9.0),
+			Models.mat(Color(0.32, 0.2, 0.12), &"dirt"))
+		for f in 5:
+			Models.ball(bed, 0.18, Vector3(rng.randf_range(-0.5, 0.5), 0.25, -1.6 + f * 0.8), Models.mat(bloom[(k + f) % bloom.size()], &"paint"))
+	for z in [-22.0, -8.0, 8.0, 22.0]:
+		var tree := Models.model("res://assets/kenney/nature/%s.glb" % ["tree_oak", "tree_default", "tree_fat"][rng.randi() % 3], 4.5)
+		tree.position = lawn + Vector3(5.5, 0.0, z)
+		add_child(tree)
+		Models.collider(self, Vector3(0.6, 3.0, 0.6), lawn + Vector3(5.5, 1.5, z))
+	# The logo fountain: a basin, three jets, and a plaque about stewardship.
+	var fountain := IrrigationPart.new()
+	fountain.kind = IrrigationPart.Kind.FOUNTAIN
+	fountain.name = "Fountain"
+	fountain.size = Vector3(3.4, 0.7, 3.4)
+	fountain.color = Color(0.9, 0.9, 0.88)
+	fountain.surface_kind = &"concrete"
+	fountain.max_health = 140.0
+	fountain.water_gain = 0.03
+	fountain.cash = 80
+	fountain.position = lawn + Vector3(1.0, 0.0, 0.0)
+	add_child(fountain)
+	Models.box(fountain, Vector3(3.0, 0.05, 3.0), Vector3(0.0, 0.66, 0.0), Models.mat(Color(0.35, 0.6, 0.85), &"paint"))
+	var plaque := Label3D.new()
+	plaque.text = "%s\nWATER STEWARDSHIP GARDEN" % brand_name
+	plaque.font_size = 40
+	plaque.pixel_size = 0.007
+	plaque.outline_size = 6
+	plaque.position = Vector3(1.75, 0.45, 0.0)
+	plaque.rotation.y = PI * 0.5
+	fountain.add_child(plaque)
+	irrigation.append(fountain)
+	# Sprinklers in a grid, all fed by one controller box on the lawn's corner.
+	var controller := IrrigationPart.new()
+	controller.kind = IrrigationPart.Kind.CONTROLLER
+	controller.name = "IrrigationController"
+	controller.size = Vector3(0.8, 1.2, 0.45)
+	controller.color = Color(0.3, 0.45, 0.35)
+	controller.surface_kind = &"metal"
+	controller.max_health = 45.0
+	controller.water_gain = 0.012
+	controller.cash = 40
+	controller.position = lawn + Vector3(7.5, 0.0, lawn_length * 0.5 - 2.0)
+	add_child(controller)
+	Models.box(controller, Vector3(0.5, 0.3, 0.02), Vector3(0.0, 0.85, 0.235), Models.glow(Color(0.3, 1.0, 0.45), 2.0))
+	var pipe := Models.mat(Color(0.3, 0.3, 0.32), &"metal")
+	Models.box(self, Vector3(0.12, 0.1, lawn_length - 4.0), lawn + Vector3(7.5, 0.1, 0.0), pipe)
+	irrigation.append(controller)
+	for col in [-5.0, 1.0, 6.0]:
+		for row in 4:
+			var head := IrrigationPart.new()
+			head.kind = IrrigationPart.Kind.SPRINKLER
+			head.size = Vector3(0.22, 0.32, 0.22)
+			head.color = Color(0.2, 0.22, 0.2)
+			head.max_health = 8.0
+			head.water_gain = 0.004
+			head.cash = 12
+			head.position = lawn + Vector3(col, 0.0, -lawn_length * 0.5 + 5.0 + row * (lawn_length - 10.0) / 3.0)
+			add_child(head)
+			controller.controlled.append(head)
+			irrigation.append(head)
+
 func at(local: Vector3) -> Vector3:
 	return to_global(local)
 
@@ -192,7 +330,8 @@ func _post_security() -> void:
 
 func _process(delta: float) -> void:
 	if _water_board and not is_neutralized:
-		water_used += delta * 57.0  # about 5 million gallons a day
+		# About 5 million gallons a day; the lawns are a good share of it.
+		water_used += delta * 57.0 * (0.7 + 0.3 * irrigation_running())
 		_board_left -= delta
 		if _board_left <= 0.0:
 			_board_left = 0.5  # re-rendering the text every frame is costly
