@@ -513,6 +513,26 @@ func _ready() -> void:
 		get_viewport().get_texture().get_image().save_png("res://tests/output/gallery_heavy_cannon.png")
 		print("saved heavy")
 		cam.queue_free()
+	if _want("suite"):
+		# The executive suite inside ForProfitSI: from the hall floor, then inside.
+		var site := level.get_node("ForProfitSite") as DatacenterSite
+		Game.alarms.erase(site.site_id)
+		var suite := site.suite
+		var cam := Camera3D.new()
+		level.add_child(cam)
+		cam.global_position = suite.to_global(Vector3(6.0, 2.2, 8.0))
+		cam.look_at(suite.to_global(Vector3(-7.0, 4.5, -6.0)))
+		cam.make_current()
+		await _wait(0.6)
+		await RenderingServer.frame_post_draw
+		get_viewport().get_texture().get_image().save_png("res://tests/output/gallery_suite_hall.png")
+		cam.global_position = suite.to_global(Vector3(-2.0, 6.6, -3.5))
+		cam.look_at(suite.to_global(suite.boss_spot() + Vector3(0.0, 1.0, 0.0)))
+		await _wait(0.3)
+		await RenderingServer.frame_post_draw
+		get_viewport().get_texture().get_image().save_png("res://tests/output/gallery_suite_office.png")
+		print("saved suite")
+		cam.queue_free()
 	if _want("stores"):
 		await _shot("store_hardware", Vector3(-8, 0.2, 31), Vector3(-14, 2.0, 21))
 		await _shot("store_row", Vector3(6, 0.2, 34), Vector3(-26, 4.0, 18))

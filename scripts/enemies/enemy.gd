@@ -97,6 +97,9 @@ var _knock_left := 0.0
 var _investigate_left := 0.0
 var _sidestep_left := 0.0
 var _sidestep := Vector3.ZERO
+## Holds its post while idle instead of wandering around home (bosses and
+## guards in an executive suite).
+var stay_put := false
 ## Multiplies move_speed (formations hold back their fastest members).
 var speed_scale := 1.0
 ## Stealth: 0..1 while quiet site security watches the player trespass (see
@@ -778,6 +781,10 @@ func _follow_player() -> void:
 
 
 func _wander() -> void:
+	if stay_put:
+		if global_position.distance_to(home) > 1.5:
+			_nav.target_position = home
+		return
 	_wander_timer -= THINK_INTERVAL
 	if _wander_timer > 0.0 or not _nav.is_navigation_finished():
 		return

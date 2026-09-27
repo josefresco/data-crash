@@ -275,6 +275,14 @@ func start_defense() -> void:
 	_update_deeds()
 	var lot := _defense_lot()
 	_clear_rubble_near(lot, 60.0)
+	# Whatever is left of the executive suite on this lot goes too, with the
+	# guards and dog posted in it.
+	if _defense_site and is_instance_valid(_defense_site):
+		if is_instance_valid(_defense_site.suite):
+			_defense_site.suite.queue_free()
+		for child in _defense_site.get_children():
+			if child is Enemy and (child as Enemy).stay_put and (child as Enemy).boss_name.is_empty():
+				child.queue_free()
 	core = GreenCore.new()
 	core.position = Vector3(lot.x, 0.0, lot.z)
 	add_child(core)

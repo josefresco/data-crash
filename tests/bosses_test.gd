@@ -21,6 +21,17 @@ func _run() -> void:
 	var felsa := level.get_node("FelsaSite") as DatacenterSite
 	check(felsa.elmo != null and felsa.elmo_truck != null and felsa.elmo_truck.parked,
 		"Elmo waits inside Felsa with his Cyberdouche parked at the dock")
+	# Every boss waits up in its datacenter's executive suite, with guards.
+	for site_node: DatacenterSite in [felsa, level.get_node("ScgrewgleSite"), level.get_node("ForProfitSite")]:
+		check(site_node.suite != null and site_node.has_node("SuiteGuard1") and site_node.has_node("SuiteDog"),
+			"%s has an executive suite with its own guards and a dog" % site_node.display_name)
+	var upstairs := func(node: Node3D, site_node: DatacenterSite) -> bool:
+		return node != null and node.global_position.y - site_node.global_position.y > ExecutiveSuite.FLOOR - 0.5
+	check(upstairs.call(felsa.elmo, felsa), "Elmo starts upstairs in the suite")
+	var scg := level.get_node("ScgrewgleSite") as DatacenterSite
+	check(upstairs.call(scg.crapya_room, scg), "Crapya's control room is up in the suite")
+	var fp := level.get_node("ForProfitSite") as DatacenterSite
+	check(upstairs.call(fp.sham, fp), "Sham starts upstairs in the suite")
 	# Clear the regular site security and traffic (keep bosses and the water cannons).
 	for node in get_tree().get_nodes_in_group("hostiles"):
 		var unit := node as Enemy

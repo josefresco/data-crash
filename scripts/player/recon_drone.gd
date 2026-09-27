@@ -196,7 +196,8 @@ func _check_recon(site: StringName) -> void:
 	var seen := 0
 	for node in get_tree().get_nodes_in_group("hostiles"):
 		var unit := node as Enemy
-		if unit == null or not unit.is_alive() or unit.site != site or not unit.boss_name.is_empty():
+		# Bosses and indoor posts (the executive suite) are out of a drone's sight.
+		if unit == null or not unit.is_alive() or unit.site != site or not unit.boss_name.is_empty() or unit.stay_put:
 			continue
 		total += 1
 		if unit.has_meta(&"recon"):

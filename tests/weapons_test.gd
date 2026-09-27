@@ -227,6 +227,9 @@ func _test_drone_recon() -> void:
 	drone.global_position = Vector3(0, 38, -42)  # over the middle of the compound
 	drone.set("_pitch", -1.2)
 	for i in 16:
+		if not is_instance_valid(drone):
+			check(false, "the recon drone stayed up (it was recalled early)")
+			return
 		drone.set_heading(TAU * i / 16.0)
 		drone.battery_left = drone.battery
 		await seconds(0.3)

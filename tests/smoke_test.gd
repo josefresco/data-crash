@@ -100,6 +100,9 @@ func _run() -> void:
 			break
 		await seconds(0.25)
 	check(neutralized[0], "datacenter neutralized")
+	await seconds(1.0)
+	var suite_floor := felsa.suite.get_children().filter(func(n: Node) -> bool: return n is Destructible and not (n as Destructible).is_destroyed)
+	check(suite_floor.is_empty(), "the collapse takes the executive suite down too (%d left)" % suite_floor.size())
 	check(game.district.smog < smog_before_collapse - 0.25, "smog clearing (smog=%.2f)" % game.district.smog)
 	check(game.cash >= datacenter.cash_reward, "cash reward paid ($%d incl. bounties)" % game.cash)
 	check(felsa.is_neutralized and not felsa.is_cleared, "Felsa's building is down but Elmo is still loose")

@@ -55,6 +55,8 @@ var elmo: ElmoOnFoot
 var elmo_truck: ElmoTruck
 var crapya_room: CrapyaControlRoom
 var sham: ShamCrapman
+## The boss's office on a mezzanine inside the datacenter.
+var suite: ExecutiveSuite
 var is_neutralized := false
 var boss_defeated := false
 var is_cleared := false
@@ -92,6 +94,8 @@ func _ready() -> void:
 		# Draw calls: bake the lot's static dressing (lines, beds, bushes,
 		# poles, signs) into a few meshes; bodies and scripted props stay.
 		Models.merge_static(self)
+	if not Engine.is_editor_hint():
+		_build_suite()  # after merge_static: the collapse must be able to remove it
 	_spawn_worker()
 	_spawn_truck()
 	var level := get_parent()
@@ -489,6 +493,41 @@ func _build_extras() -> void:
 	board.add_child(_water_board)
 
 
+## The executive suite (see ExecutiveSuite) with extra security: two guards
+## up in the office, one and a dog at the foot of the stairs.
+func _build_suite() -> void:
+	suite = ExecutiveSuite.new()
+	suite.name = "ExecutiveSuite"
+	suite.brand_name = brand_name
+	suite.brand_color = brand_color
+	suite.site_id = site_id
+	suite.footprint = datacenter.footprint
+	suite.has_desk = boss != Boss.CRAPYA
+	suite.position = building_offset
+	add_child(suite)
+	var spots := suite.guard_spots()
+	for i in spots.size():
+		var guard := SecurityGuard.new()
+		guard.name = "SuiteGuard%d" % (i + 1)
+		guard.site = site_id
+		guard.stay_put = true
+		guard.position = building_offset + spots[i]
+		add_child(guard)
+	var dog := Dog.new()
+	dog.name = "SuiteDog"
+	dog.site = site_id
+	dog.stay_put = true
+	dog.territory_radius = maxf(compound.x, compound.y) * 0.5 + 4.0
+	dog.position = building_offset + suite.dog_spot()
+	add_child(dog)
+	dog.territory_center = global_position
+
+
+## Where the boss starts: at the suite's desk (site space).
+func _boss_spot() -> Vector3:
+	return building_offset + suite.boss_spot() if suite else building_offset + Vector3(0.0, 0.1, datacenter.footprint.y * 0.5 - 4.5)
+
+
 func _spawn_worker() -> void:
 	worker = DatacenterWorker.new()
 	worker.name = "Worker"
@@ -510,7 +549,6 @@ func _spawn_truck() -> void:
 
 
 func _spawn_boss() -> void:
-	var lobby := building_offset + Vector3(0.0, 0.1, datacenter.footprint.y * 0.5 - 4.5)
 	match boss:
 		Boss.ELMO:
 			elmo_truck = ElmoTruck.new()
@@ -523,13 +561,14 @@ func _spawn_boss() -> void:
 			elmo.name = "Elmo"
 			elmo.site = site_id
 			elmo.ride = elmo_truck
-			elmo.position = lobby + Vector3(5.0, 0.0, 0.0)
+			elmo.position = _boss_spot()
+			elmo.stay_put = true
 			add_child(elmo)
 		Boss.CRAPYA:
 			crapya_room = CrapyaControlRoom.new()
 			crapya_room.name = "CrapyaControlRoom"
 			crapya_room.site_id = site_id
-			crapya_room.position = lobby + Vector3(-9.0, -0.1, -0.5)
+			crapya_room.position = _boss_spot() - Vector3(0.0, 0.1, 0.0)
 			add_child(crapya_room)
 			crapya_room.destroyed.connect(func(_r: Destructible) -> void: mark_boss_defeated())
 			# On the front edge of the roof, where they can see down into the yard.
@@ -567,7 +606,8 @@ func _spawn_boss() -> void:
 			sham = ShamCrapman.new()
 			sham.name = "Sham"
 			sham.site = site_id
-			sham.position = lobby + Vector3(5.0, 0.0, 0.0)
+			sham.position = _boss_spot()
+			sham.stay_put = true
 			add_child(sham)
 			sham.died.connect(func(_s: Enemy) -> void: mark_boss_defeated())
 		_:
@@ -585,6 +625,8 @@ func _on_neutralized() -> void:
 	# The collapse takes Crapya's control room (and her defenses) down with it.
 	if is_instance_valid(crapya_room) and not crapya_room.is_destroyed:
 		crapya_room.shatter(crapya_room.global_position + Vector3.UP * 2.0, 120.0)
+	if is_instance_valid(suite):
+		suite.collapse(suite.global_position + Vector3.UP * 6.0)
 	neutralized.emit(self)
 	_check_cleared()
 
