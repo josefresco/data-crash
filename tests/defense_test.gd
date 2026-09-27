@@ -42,7 +42,10 @@ func _run() -> void:
 	check(hits[0] == 0 and not Game.any_alarm(), "site security ignores a player who hasn't attacked")
 	(level.get_node("FelsaSite/FenceFront/Panel3") as Destructible).apply_damage(1.0, player.global_position, &"bullet")
 	check(Game.is_alarmed(&"felsa"), "hitting the fence raises the site alarm")
-	await seconds(3.0)
+	for i in 20:  # up to 5 s: hitscan spread is random
+		if hits[0] > 0:
+			break
+		await seconds(0.25)
 	check(hits[0] > 0, "guard shot the player (%d hits)" % hits[0])
 
 	# Treat converts a dog.

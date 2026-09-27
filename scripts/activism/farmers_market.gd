@@ -33,6 +33,8 @@ func _ready() -> void:
 		stall.position = Vector3(-7.5 + i * 5.0, 0.0, 0.0)
 		add_child(stall)
 		Models.box(stall, Vector3(3.2, 0.85, 1.1), Vector3(0.0, 0.43, 0.0), wood)
+		# Counter, poles, and awning: nobody walks through the stall.
+		Models.collider(stall, Vector3(3.3, 2.5, 1.3), Vector3(0.0, 1.25, 0.0))
 		# Striped awning on four poles.
 		for x in [-1.5, 1.5]:
 			for z in [-0.6, 0.6]:
@@ -49,6 +51,7 @@ func _ready() -> void:
 	# Banner across the front.
 	for x in [-10.5, 10.5]:
 		Models.box(self, Vector3(0.12, 3.6, 0.12), Vector3(x, 1.8, 1.8), wood)
+		Models.collider(self, Vector3(0.3, 3.6, 0.3), Vector3(x, 1.8, 1.8))
 	var banner := Models.box(self, Vector3(8.0, 1.0, 0.05), Vector3(0.0, 3.2, 1.8), Models.mat(Color(0.95, 0.9, 0.75), &"cloth"))
 	var text := Label3D.new()
 	text.text = "FARMER'S MARKET\nlocal food & crafts"

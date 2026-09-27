@@ -417,6 +417,19 @@ func _on_death() -> void:
 	pass
 
 
+## The heat is off (the player was knocked out): forget the target and go
+## back to post. Site units are dormant again once their alarm is cleared.
+func stand_down() -> void:
+	if _is_dead:
+		return
+	target = null
+	rushing = false
+	_investigate_left = 0.0
+	_has_los = false
+	if _nav:
+		_nav.target_position = home
+
+
 func is_defeated() -> bool:
 	return _defeated_emitted
 

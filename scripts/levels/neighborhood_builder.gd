@@ -265,6 +265,7 @@ func _add_house(at: Vector3, facing_side: float) -> void:
 	add_child(mailbox)
 	Models.box(mailbox, Vector3(0.08, 1.0, 0.08), Vector3(0.0, 0.5, 0.0), Models.mat(Color(0.3, 0.25, 0.2)))
 	Models.box(mailbox, Vector3(0.25, 0.25, 0.45), Vector3(0.0, 1.05, 0.0), Models.mat(Color(0.2, 0.25, 0.5), &"metal"))
+	Models.collider(mailbox, Vector3(0.3, 1.2, 0.5), Vector3(0.0, 0.6, 0.0))
 
 
 ## Parked cars are real, drivable Cars (keys in the ignition, this is a nice
@@ -296,6 +297,7 @@ func _add_for_sale_sign(at: Vector3) -> void:
 	for x in [-0.7, 0.7]:
 		Models.box(sign_root, Vector3(0.1, 1.6, 0.1), Vector3(x, 0.8, 0.0), wood)
 	Models.box(sign_root, Vector3(1.8, 0.9, 0.06), Vector3(0.0, 1.3, 0.0), Models.mat(Color(0.95, 0.95, 0.92)))
+	Models.collider(sign_root, Vector3(1.9, 1.8, 0.2), Vector3(0.0, 0.9, 0.0))
 	var text := Label3D.new()
 	text.text = "SOLD\nPerckerson Capital"
 	text.font_size = 48
@@ -336,6 +338,7 @@ func _build_park(x_range: Vector2, z_range: Vector2) -> void:
 		add_child(bench)
 		Models.box(bench, Vector3(1.8, 0.1, 0.5), Vector3(0.0, 0.45, 0.0), Models.mat(Color(0.45, 0.3, 0.2)))
 		Models.box(bench, Vector3(1.8, 0.5, 0.08), Vector3(0.0, 0.75, 0.22), Models.mat(Color(0.45, 0.3, 0.2)))
+		Models.collider(bench, Vector3(1.9, 1.0, 0.6), Vector3(0.0, 0.5, 0.05))
 
 
 func _build_construction_site(center: Vector3) -> void:

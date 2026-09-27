@@ -51,6 +51,18 @@ func dispatch(waypoints: Array[Vector3], site_id: StringName) -> void:
 		_siren = Sfx.loop(self, &"siren_loop", -4.0)
 
 
+## Called off: siren off, back to the patrol loop (deployed officers stand down).
+func recall() -> void:
+	responding = false
+	deployed = false
+	respond_route.clear()
+	respond_site = &""
+	top_speed = 9.0
+	if _siren:
+		_siren.queue_free()
+		_siren = null
+
+
 func _process(delta: float) -> void:
 	super(delta)
 	_light_clock += delta * (8.0 if responding else 3.0)

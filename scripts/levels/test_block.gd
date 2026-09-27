@@ -113,6 +113,7 @@ func _ready() -> void:
 
 	add_to_group("site_alarm")
 	add_to_group("level")
+	($Player as Player).respawned.connect(_on_player_respawned)
 	Sfx.music(&"calm")
 	for node in get_tree().get_nodes_in_group("datacenter_sites"):
 		var site := node as DatacenterSite
@@ -298,6 +299,36 @@ func _send_canadians_home() -> void:
 			leaving += 1
 	if leaving > 0:
 		Game.notify("The Canadians head home after the wave. \"Sorry we can't stay, eh!\"", 5.0)
+
+
+## Knocked out: like losing your wanted level. Alarms clear, security and
+## police stop pursuing and go back to their posts, dispatched cruisers go
+## back on patrol. Damage stays. Sites whose building is already down (boss
+## loose) stay hot, and the defense waves don't stop.
+func _on_player_respawned() -> void:
+	Game.show_banner("KNOCKED OUT", "The heat's off. The damage stays.")
+	if phase not in [Phase.ACTIVISM, Phase.ASSAULT]:
+		return
+	var cooled: Array[StringName] = []
+	for id: StringName in Game.alarms.keys():
+		var site_node := site(id)
+		if site_node and site_node.is_neutralized:
+			continue
+		cooled.append(id)
+	for id in cooled:
+		Game.alarms.erase(id)
+	if cooled.is_empty():
+		return
+	for node in get_tree().get_nodes_in_group("hostiles"):
+		var unit := node as Enemy
+		if unit == null:
+			continue
+		if unit is PoliceCruiser and (unit as PoliceCruiser).respond_site in cooled:
+			(unit as PoliceCruiser).recall()
+		if unit.site in cooled:
+			unit.stand_down()
+	Game.notify("Security and police lost track of you. Lie low, or hit them again.", 6.0)
+	_update_sites()
 
 
 ## Title card on each phase change.

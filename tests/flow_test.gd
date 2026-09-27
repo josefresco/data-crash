@@ -78,6 +78,8 @@ func _run() -> void:
 	await _test_vehicles()
 	await _test_reply_guys()
 	await _test_site_life()
+	await _test_solid_props()
+	await _test_heat_reset()
 	await _test_pause_and_end()
 
 
@@ -430,6 +432,46 @@ func _test_site_life() -> void:
 	var officers := get_tree().get_nodes_in_group("hostiles").filter(func(n: Node) -> bool:
 		return n is Police and (n as Police).site == &"forprofit")
 	check(officers.size() == 2, "two riot officers join the fight (%d)" % officers.size())
+
+
+## Market stalls and park benches are solid (people and the player used to clip through).
+func _test_solid_props() -> void:
+	var market := get_tree().get_first_node_in_group("markets") as Node3D
+	var stall := market.global_transform * Vector3(-7.5, 1.0, 0.0)
+	var space := player.get_world_3d().direct_space_state
+	var ray := PhysicsRayQueryParameters3D.create(stall + market.global_basis.z * 3.0, stall - market.global_basis.z * 3.0, 1)
+	check(not space.intersect_ray(ray).is_empty(), "farmer's market stalls are solid")
+	var benches := 0
+	for body in level.get_node("Neighborhood").find_children("*", "StaticBody3D", true, false):
+		if (body as Node3D).get_parent().get_child_count() > 0 and body.get_parent().get_parent() == level.get_node("Neighborhood"):
+			benches += 1
+	check(benches > 0, "neighborhood props have colliders (%d)" % benches)
+
+
+## GTA-style: getting knocked out clears the alarms; damage stays.
+func _test_heat_reset() -> void:
+	level.call("raise_alarm", &"scgrewgle", "test")
+	await seconds(1.5)
+	check(Game.is_alarmed(&"scgrewgle"), "the Scgrewgle alarm is up")
+	var hud := level.get_node("Hud") as Hud
+	player.apply_damage(99999.0, player.global_position + Vector3(0, 0, -3), &"bullet")
+	await seconds(0.3)
+	check(not Game.is_alarmed(&"scgrewgle"), "getting knocked out calls off the Scgrewgle alarm")
+	check(hud.overlay().current_banner() == "KNOCKED OUT", "a KNOCKED OUT banner shows")
+	var hunting := 0
+	for node in get_tree().get_nodes_in_group("hostiles"):
+		var unit := node as Enemy
+		if unit and unit.site == &"scgrewgle" and unit.is_alive() and is_instance_valid(unit.target):
+			hunting += 1
+	await seconds(0.6)
+	for node in get_tree().get_nodes_in_group("hostiles"):
+		var unit := node as Enemy
+		if unit and unit.site == &"scgrewgle" and unit.is_alive() and is_instance_valid(unit.target):
+			hunting += 100
+	check(hunting < 100, "Scgrewgle security stops pursuing and goes back to post")
+	player.apply_damage(50.0, player.global_position + Vector3(0, 0, -3), &"bullet")
+	check(player.health >= player.max_health - 0.1, "spawn protection absorbs hits right after respawn")
+	check(Game.stat("knockouts") >= 1.0, "knockouts are counted for the end screen")
 
 
 func _test_pause_and_end() -> void:

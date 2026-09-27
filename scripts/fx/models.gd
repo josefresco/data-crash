@@ -459,6 +459,24 @@ static func _collect_static(node: Node3D, parent_xform: Transform3D, keep: Array
 		_collect_static(child as Node3D, xform, keep, skip, groups, merged)
 
 
+## Makes a prop solid: an invisible static box (world layer, so people,
+## cars, and bullets stop at it, and the navmesh bakes around it). `at` is
+## the box center in `parent` space.
+static func collider(parent: Node3D, size: Vector3, at: Vector3, yaw := 0.0) -> StaticBody3D:
+	var body := StaticBody3D.new()
+	body.collision_layer = 1  # Game.LAYER_WORLD (this @tool script can't use the autoload)
+	body.collision_mask = 0
+	body.position = at
+	body.rotation.y = yaw
+	var shape := BoxShape3D.new()
+	shape.size = size
+	var holder := CollisionShape3D.new()
+	holder.shape = shape
+	body.add_child(holder)
+	parent.add_child(body)
+	return body
+
+
 static func box(parent: Node3D, size: Vector3, at: Vector3, material: Material) -> MeshInstance3D:
 	var mesh := BoxMesh.new()
 	mesh.size = size
@@ -736,6 +754,7 @@ static func streetlight(height := 5.0) -> Node3D:
 	var root := Node3D.new()
 	var metal := mat(Color(0.3, 0.32, 0.35), &"metal")
 	cylinder(root, 0.08, height, Vector3(0.0, height * 0.5, 0.0), metal, 6)
+	collider(root, Vector3(0.3, height, 0.3), Vector3(0.0, height * 0.5, 0.0))
 	box(root, Vector3(0.12, 0.12, 1.2), Vector3(0.0, height, -0.55), metal)
 	var lamp := StandardMaterial3D.new()
 	lamp.albedo_color = Color(1.0, 0.95, 0.8)

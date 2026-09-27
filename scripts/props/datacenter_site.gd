@@ -295,19 +295,23 @@ func _build_extras() -> void:
 	var sub := Vector3(-27.0, 0.0, -4.0)
 	for k in 3:
 		var transformer := Models.box(self, Vector3(1.6, 2.0, 1.4), sub + Vector3(0.0, 1.0, -3.0 + k * 3.0), Models.mat(Color(0.45, 0.5, 0.45), &"plates"))
+		Models.collider(self, Vector3(1.6, 2.0, 1.4), sub + Vector3(0.0, 1.0, -3.0 + k * 3.0))
 		for x in [-0.4, 0.0, 0.4]:
 			Models.cylinder(transformer, 0.08, 0.7, Vector3(x, 1.35, 0.0), Models.mat(Color(0.6, 0.4, 0.3), &"paint"), 8)
 	for z in [-5.0, 5.0]:
 		Models.box(self, Vector3(4.0, 1.8, 0.06), sub + Vector3(0.0, 0.9, z), Models.mat(Color(0.8, 0.82, 0.85), &"chainlink"))
+		Models.collider(self, Vector3(4.0, 1.8, 0.2), sub + Vector3(0.0, 0.9, z))
 	# Flagpoles by the front gate, floodlight masts at the corners.
 	var flag := Models.mat(brand_color, &"cloth")
 	for x in [-10.0, -12.5, 10.0, 12.5]:
 		Models.cylinder(self, 0.07, 9.0, Vector3(x, 4.5, half.y - 2.5), steel, 8)
+		Models.collider(self, Vector3(0.25, 9.0, 0.25), Vector3(x, 4.5, half.y - 2.5))
 		var cloth := Models.box(self, Vector3(1.8, 1.1, 0.04), Vector3(x + 0.95, 8.3, half.y - 2.5), flag)
 		cloth.rotation.y = 0.1
 	for corner in [Vector3(-half.x + 1.5, 0, half.y - 1.5), Vector3(half.x - 1.5, 0, half.y - 1.5),
 			Vector3(-half.x + 1.5, 0, -half.y + 1.5), Vector3(half.x - 1.5, 0, -half.y + 1.5)]:
 		Models.cylinder(self, 0.15, 12.0, corner + Vector3.UP * 6.0, steel, 8)
+		Models.collider(self, Vector3(0.4, 12.0, 0.4), corner + Vector3.UP * 6.0)
 		var head := Models.box(self, Vector3(1.4, 0.5, 0.6), corner + Vector3(0.0, 12.1, 0.0), steel)
 		Models.box(head, Vector3(1.2, 0.3, 0.05), Vector3(0.0, -0.1, 0.31), Models.glow(Color(0.85, 0.95, 1.0), 4.0))
 		# Cold security floodlight angled into the lot: a hard beam in the smog.
@@ -319,6 +323,7 @@ func _build_extras() -> void:
 			Color(0.75, 0.9, 1.0), 0.1)
 	# The water board by the gate.
 	var board := Models.box(self, Vector3(5.0, 2.2, 0.3), Vector3(-9.0, 2.6, half.y + 1.5), Models.mat(Color(0.08, 0.08, 0.1), &"paint"))
+	Models.collider(self, Vector3(5.0, 3.7, 0.4), Vector3(-9.0, 1.85, half.y + 1.5))
 	for x in [-2.0, 2.0]:
 		Models.box(self, Vector3(0.15, 1.5, 0.15), Vector3(-9.0 + x, 0.75, half.y + 1.5), steel)
 	_water_board = Label3D.new()

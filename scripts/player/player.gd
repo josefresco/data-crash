@@ -12,6 +12,10 @@ signal hit_confirmed(killed: bool)
 signal damage_dealt(at: Vector3, amount: float, killed: bool)
 ## The player got hurt from `from` (the HUD's direction arc).
 signal hurt_from(from: Vector3, amount: float)
+## Knocked out and back at the spawn point (the level calls off the heat).
+signal respawned
+## Seconds of spawn protection after a respawn.
+const SPAWN_PROTECTION := 3.0
 
 ## Hitscan and aim rays hit world, vehicles, destructibles, and units (not debris).
 const AIM_MASK := 1 | 4 | 16 | 32
@@ -65,6 +69,7 @@ var _aim_pose: AimModifier
 var _aim_hold := 0.0
 ## Alternates jab and cross for bare-handed punches.
 var _punch_left := false
+var _protected_left := 0.0
 ## Right mouse held (not in build mode or a car): zoomed, steadier aim.
 var aiming := false
 ## Mouse sensitivity multiplier while aiming.
@@ -120,6 +125,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _physics_process(delta: float) -> void:
 	_fire_timer = maxf(_fire_timer - delta, 0.0)
+	_protected_left = maxf(_protected_left - delta, 0.0)
 	_aim_hold = maxf(_aim_hold - delta, 0.0)
 	aiming = not build_mode and vehicle == null and Input.is_action_pressed("aim") and current_weapon().aims()
 	if aiming:
@@ -150,6 +156,8 @@ func _physics_process(delta: float) -> void:
 
 
 func apply_damage(amount: float, from: Vector3, _kind: StringName = &"generic") -> void:
+	if _protected_left > 0.0:
+		return
 	if amount > 0.0:
 		hurt_from.emit(from, amount)
 	if amount >= 3.0:
@@ -789,3 +797,10 @@ func _respawn() -> void:
 	velocity = Vector3.ZERO
 	health = max_health
 	health_changed.emit(health, max_health)
+	_protected_left = SPAWN_PROTECTION
+	Game.count("knockouts")
+	respawned.emit()
+
+
+func is_spawn_protected() -> bool:
+	return _protected_left > 0.0
