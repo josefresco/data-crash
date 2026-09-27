@@ -4,7 +4,10 @@ extends TestCase
 ## hands-off defense survives the early waves but is in real danger by 4-5,
 ## so the player's shooting, repairs, and talk-downs matter.
 ##
-##   Godot_console.exe --headless --fixed-fps 60 --path . res://tests/balance_sim.tscn
+##   Godot_console.exe --headless --fixed-fps 60 --path . res://tests/balance_sim.tscn [-- canadians=N]
+##
+## `canadians=N` recruits N lost Canadians at the core before every wave (they
+## hold the core while the player is away); the table adds how many are left.
 
 const MAIN_SCENE := preload("res://scenes/levels/test_block.tscn")
 const WAVE_TIMEOUT := 300.0
@@ -20,9 +23,15 @@ const BUILD_PLAN := [
 ]
 
 var _next_build := 0
+var _canadians := 0
+## This wave's recruits (the table counts the survivors).
+var _squad: Array[Canuck] = []
 
 
 func _run() -> void:
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("canadians="):
+			_canadians = arg.trim_prefix("canadians=").to_int()
 	var level := MAIN_SCENE.instantiate()
 	level.set("boss_enabled", false)
 	add_child(level)
@@ -43,12 +52,13 @@ func _run() -> void:
 	await seconds(10.0)
 
 	var core := level.get("core") as GreenCore
-	print("\nstart cash $%d, townspeople %d" % [Game.cash, get_tree().get_nodes_in_group("townspeople").size()])
-	print("wave | core hp | built | cash after | crew | trust | seconds")
+	print("\nstart cash $%d, townspeople %d, Canadians %d" % [Game.cash, get_tree().get_nodes_in_group("townspeople").size(), _canadians])
+	print("wave | core hp | built | cash after | crew | trust | seconds | canucks")
 	var survived := 0
 	for wave in spawner.total_waves():
 		var built := _answer_breach(level, build, core.global_position)
 		built += _build_what_we_can(build, core.global_position)
+		_recruit(level, core.global_position)
 		var started := Time.get_ticks_msec()
 		var game_time := 0.0
 		level.call("start_next_wave")
@@ -56,10 +66,10 @@ func _run() -> void:
 			await seconds(0.5)
 			game_time += 0.5
 		var alive := is_instance_valid(core) and not core.is_destroyed
-		print("%4d | %7s | %5d | %10d | %4d | %5.2f | %4.0f%s" % [wave + 1,
+		print("%4d | %7s | %5d | %10d | %4d | %5.2f | %7.0f | %7d%s" % [wave + 1,
 			str(ceili(core.health)) if alive else "LOST", built, Game.cash,
 			get_tree().get_nodes_in_group("townspeople").size(), Game.district.trust, game_time,
-			"  (timeout)" if game_time >= WAVE_TIMEOUT else ""])
+			_squad.filter(func(c: Variant) -> bool: return is_instance_valid(c) and (c as Canuck).is_alive()).size(), "  (timeout)" if game_time >= WAVE_TIMEOUT else ""])
 		if not alive or spawner.wave_active:
 			for node in get_tree().get_nodes_in_group("hostiles") + get_tree().get_nodes_in_group("protesters"):
 				var e := node as Enemy
@@ -74,6 +84,19 @@ func _run() -> void:
 		await seconds(5.0)  # townspeople repair between waves
 	print("survived %d/%d waves (real %.0fs)\n" % [survived, spawner.total_waves(), Time.get_ticks_msec() / 1000.0])
 	check(survived >= 2, "hands-off defense survives the opening waves")
+
+
+## Tops the recruited Canadians up to `_canadians` (they go home after each
+## wave, like a player helping the next RV that rolls in).
+func _recruit(level: Node, center: Vector3) -> void:
+	_squad.clear()
+	for i in maxi(_canadians - (level.call("canadian_allies") as int), 0):
+		var tourist := Canuck.new()
+		tourist.setup(i % 3 == 0)
+		level.add_child(tourist)
+		tourist.global_position = center + Vector3(-3.0 + i * 1.5, 0.2, 6.0)
+		tourist.join()
+		_squad.append(tourist)
 
 
 ## A sensible player reacts to the breach intel: a turret between the core and

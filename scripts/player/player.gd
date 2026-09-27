@@ -72,6 +72,14 @@ var _punch_left := false
 var _protected_left := 0.0
 ## Seconds since leaving the ground (0 while grounded).
 var _air_time := 0.0
+## The recon drone in the air (null on foot); relaunch cooldown after it ends.
+var drone: ReconDrone = null
+var _drone_cooldown := 0.0
+## Hoses: the water jet on the held nozzle, its hiss, and how long it keeps
+## running after the last spray tick.
+var _jet: GPUParticles3D
+var _hiss: AudioStreamPlayer3D
+var _spray_left := 0.0
 ## Right mouse held (not in build mode or a car): zoomed, steadier aim.
 var aiming := false
 ## Mouse sensitivity multiplier while aiming.
@@ -112,6 +120,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			and Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 		get_viewport().set_input_as_handled()
+	elif drone:
+		return  # the drone takes the mouse and the weapon keys
 	elif event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		var motion := event as InputEventMouseMotion
 		var sensitivity := Game.mouse_sensitivity * (AIM_SENSITIVITY if aiming else 1.0)
@@ -129,6 +139,10 @@ func _physics_process(delta: float) -> void:
 	_fire_timer = maxf(_fire_timer - delta, 0.0)
 	_protected_left = maxf(_protected_left - delta, 0.0)
 	_aim_hold = maxf(_aim_hold - delta, 0.0)
+	_drone_cooldown = maxf(_drone_cooldown - delta, 0.0)
+	if drone:
+		_stand_while_piloting(delta)
+		return
 	aiming = not build_mode and vehicle == null and Input.is_action_pressed("aim") and current_weapon().aims()
 	if aiming:
 		_aim_hold = maxf(_aim_hold, 0.15)
@@ -145,6 +159,8 @@ func _physics_process(delta: float) -> void:
 			_plant()
 	if Input.is_action_just_pressed("treat"):
 		give_treat()
+	if Input.is_action_just_pressed("drone") and not build_mode:
+		launch_drone()
 	if Input.is_action_just_pressed("interact") and Engine.get_physics_frames() != _vehicle_change_frame:
 		if not talk_down():
 			var thing := nearest_interactable()
@@ -163,6 +179,8 @@ func apply_damage(amount: float, from: Vector3, _kind: StringName = &"generic") 
 	amount *= Game.damage_taken_scale()
 	if amount > 0.0:
 		hurt_from.emit(from, amount)
+	if drone and amount >= 3.0:
+		drone.recall("You're under fire! The drone came back.", 3.0)
 	if amount >= 3.0:
 		Sfx.play(&"hit_soft", global_position + Vector3.UP, -6.0)
 	health -= amount
@@ -445,6 +463,12 @@ func refill_ammo() -> void:
 ## Fires the current weapon once. Public so tests can shoot without input.
 func fire() -> void:
 	var weapon := current_weapon()
+	if weapon.kind == Weapon.Kind.DRONE:
+		# Launching is free; the ammo is FPV payloads for the dive.
+		if _fire_timer <= 0.0:
+			_fire_timer = weapon.cooldown
+			launch_drone()
+		return
 	if not weapon.has_ammo():
 		if _fire_timer <= 0.0:
 			_fire_timer = 0.4
@@ -454,6 +478,9 @@ func fire() -> void:
 	_fire_timer = weapon.cooldown
 	if weapon.kind == Weapon.Kind.MELEE:
 		_melee(weapon)
+		return
+	if weapon.kind == Weapon.Kind.SPRAY:
+		_spray(weapon)
 		return
 	Game.count("shots")
 	if weapon.aims():
@@ -540,11 +567,18 @@ func _refresh_held() -> void:
 		_held.queue_free()
 		_held = null
 	_held = WeaponModels.build(weapon.model)
+	_jet = null
 	if _held:
 		_held_scale = _held.scale.x
 		add_child(_held)
 		_held.top_level = true
 		_place_held(false)
+		if weapon.kind == Weapon.Kind.SPRAY:
+			_jet = Vfx.water_jet(_held.get_node("Muzzle") as Node3D)
+			var jet_material := _jet.process_material as ParticleProcessMaterial
+			jet_material.initial_velocity_min = weapon.reach * 1.35
+			jet_material.initial_velocity_max = weapon.reach * 1.55
+			jet_material.spread = 4.0 if weapon.reach < 12.0 else 2.0
 
 
 ## Aiming: the gun sits out in front of the right shoulder along the aim, and
@@ -575,6 +609,13 @@ func _place_held(aiming_now: bool) -> void:
 func _process(delta: float) -> void:
 	if _swing > 0.0:
 		_swing = maxf(_swing - delta / 0.3, 0.0)
+	if _spray_left > 0.0:
+		_spray_left -= delta
+		if _spray_left <= 0.0:
+			if _jet and is_instance_valid(_jet):
+				_jet.emitting = false
+			if _hiss:
+				_hiss.stop()
 	var weapon := current_weapon()
 	var target := 1.0 if _aim_hold > 0.0 and weapon.aims() and vehicle == null else 0.0
 	_aim_pose.influence = move_toward(_aim_pose.influence, target, delta * 8.0)
@@ -666,6 +707,102 @@ func _fire_pellet(weapon: Weapon, effects := true) -> void:
 			_report_damage(target as Enemy, before, point)
 	if target is RigidBody3D:
 		(target as RigidBody3D).apply_impulse(-normal * 2.0, point - (target as Node3D).global_position)
+
+
+## One 0.1 s tick of a hose: people in a narrow cone out to `reach` get
+## pushed back (the fire hose knocks them off their feet up close);
+## protesters just scatter, unharmed; fires along the jet go out.
+func _spray(weapon: Weapon) -> void:
+	_aim_hold = 1.2
+	_place_held(true)
+	_spray_left = 0.2
+	if _jet and is_instance_valid(_jet):
+		_jet.emitting = true
+	if _hiss == null:
+		_hiss = Sfx.loop(self, weapon.sound, -8.0)
+	if _hiss and not _hiss.playing:
+		_hiss.play()
+	var from := muzzle_point()
+	var aim := _aim_direction()
+	var flat_aim := Vector3(aim.x, 0.0, aim.z).normalized()
+	var tick := weapon.cooldown
+	var space := get_world_3d().direct_space_state
+	for group: String in ["hostiles", "protesters"]:
+		for node in get_tree().get_nodes_in_group(group):
+			var unit := node as Enemy
+			if unit == null or not unit.is_alive() or unit is FelsaCar or unit is Drone:
+				continue
+			var to := unit.aim_point() - from
+			var distance := to.length()
+			if distance > weapon.reach or to.normalized().dot(aim) < 0.93:
+				continue
+			var query := PhysicsRayQueryParameters3D.create(from, unit.aim_point(), 1 | 16, [get_rid()])
+			if not space.intersect_ray(query).is_empty():
+				continue
+			if unit is OrangeHat:
+				(unit as OrangeHat).scatter()
+				unit.apply_knockback(flat_aim * weapon.knockback * 0.5)
+				continue
+			var falloff := 1.0 - distance / weapon.reach * 0.5
+			if unit.boss_name.is_empty():
+				unit.apply_knockback(flat_aim * weapon.knockback * falloff)
+				if weapon.stuns and distance < weapon.reach * 0.6:
+					unit.stun(0.3)
+			if weapon.damage > 0.0:
+				var before := unit.health
+				unit.apply_damage(weapon.damage * tick, from, &"water")
+				_report_damage(unit, before)
+	for node in get_tree().get_nodes_in_group("extinguishable"):
+		var fire := node as Node3D
+		if fire == null:
+			continue
+		var on_line := Geometry3D.get_closest_point_to_segment(fire.global_position, from, from + aim * weapon.reach)
+		var flat := Vector2(on_line.x - fire.global_position.x, on_line.z - fire.global_position.z)
+		if flat.length() < 2.5 and absf(on_line.y - fire.global_position.y) < 3.0:
+			fire.call(&"douse", weapon.douse * tick)
+	Game.tip("hose", "Hoses push people back and put out fires: burning cars, molotov patches. Protesters just scatter, soaked but unharmed.")
+
+
+## Launches the recon drone from overhead (needs the Recon drone kit).
+## Returns it, or null when it can't go up right now.
+func launch_drone() -> ReconDrone:
+	var kit := weapon_named("Recon drone")
+	if kit == null or not kit.owned or drone != null or vehicle != null:
+		return null
+	if _drone_cooldown > 0.0:
+		Game.notify("Drone recharging: %d s." % ceili(_drone_cooldown), 2.0)
+		return null
+	drone = ReconDrone.new()
+	drone.pilot = self
+	get_parent().add_child(drone)
+	drone.global_position = global_position + Vector3.UP * 2.4
+	drone.set_heading(_pivot.global_rotation.y)
+	velocity = Vector3.ZERO
+	Sfx.play(&"throw", global_position + Vector3.UP * 1.5, -4.0, 1.4)
+	return drone
+
+
+## The drone is down or home: take the view back.
+func drone_ended(cooldown: float) -> void:
+	drone = null
+	_drone_cooldown = maxf(_drone_cooldown, cooldown)
+	if is_visible_in_tree():
+		_camera.make_current()
+
+
+func drone_cooldown() -> float:
+	return _drone_cooldown
+
+
+## Standing still with the controller while the drone flies.
+func _stand_while_piloting(delta: float) -> void:
+	if not is_on_floor():
+		velocity.y -= _gravity * delta
+	velocity.x = 0.0
+	velocity.z = 0.0
+	move_and_slide()
+	_rig.set_motion(0.0)
+	_set_prompt("")
 
 
 func _throw(weapon: Weapon) -> void:
@@ -812,6 +949,8 @@ func heal(amount: float) -> void:
 
 
 func _respawn() -> void:
+	if drone:
+		drone.recall("", 3.0)
 	global_transform = _spawn
 	velocity = Vector3.ZERO
 	health = max_health

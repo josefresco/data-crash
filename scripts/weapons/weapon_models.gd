@@ -60,6 +60,32 @@ static func build(model: StringName) -> Node3D:
 			Models.cylinder(root, 0.045, 0.22, Vector3(0.0, 0.08, -0.03), Models.glass(Color(0.3, 0.55, 0.25, 0.8)), 8)
 			Models.cylinder(root, 0.018, 0.08, Vector3(0.0, 0.22, -0.03), Models.glass(Color(0.3, 0.55, 0.25, 0.8)), 6)
 			Models.box(root, Vector3(0.05, 0.1, 0.03), Vector3(0.0, 0.3, -0.03), Models.mat(Color(0.9, 0.85, 0.7), &"cloth"))  # rag
+		&"hose":
+			# Pistol-grip garden nozzle with a loop of green hose off the back.
+			var green := Models.mat(Color(0.15, 0.5, 0.2), &"rough")
+			Models.box(root, Vector3(0.04, 0.12, 0.05), Vector3(0.0, -0.03, 0.0), Models.mat(Color(0.2, 0.25, 0.3), &"paint")).rotation.x = 0.3
+			Models.cylinder(root, 0.024, 0.2, Vector3(0.0, 0.05, -0.1), Models.mat(Color(0.75, 0.6, 0.25), &"metal"), 8).rotation.x = PI * 0.5
+			Models.cylinder(root, 0.02, 0.5, Vector3(0.0, -0.12, 0.22), green, 6).rotation.x = -0.9
+			muzzle = -0.21
+		&"firehose":
+			# Brass fire nozzle with a lever, on a length of red hose.
+			var brass := Models.mat(Color(0.8, 0.62, 0.25), &"metal")
+			Models.cylinder(root, 0.045, 0.42, Vector3(0.0, 0.05, -0.2), brass, 10).rotation.x = PI * 0.5
+			Models.cylinder(root, 0.03, 0.12, Vector3(0.0, 0.05, -0.47), brass, 8).rotation.x = PI * 0.5
+			Models.box(root, Vector3(0.03, 0.02, 0.14), Vector3(0.0, 0.11, -0.12), black)  # lever
+			Models.cylinder(root, 0.055, 0.7, Vector3(0.0, 0.0, 0.3), Models.mat(Color(0.7, 0.12, 0.1), &"cloth"), 8).rotation.x = PI * 0.5 - 0.3
+			muzzle = -0.54
+			grip = Vector3(0.0, 0.02, -0.3)
+		&"drone":
+			# Little quadcopter: body, four arms, four rotor discs.
+			var shell := Models.mat(Color(0.85, 0.86, 0.88), &"paint")
+			Models.box(root, Vector3(0.12, 0.05, 0.16), Vector3.ZERO, shell)
+			for corner: Vector2 in [Vector2(1, 1), Vector2(-1, 1), Vector2(1, -1), Vector2(-1, -1)]:
+				var arm := Vector3(corner.x * 0.11, 0.0, corner.y * 0.11)
+				Models.box(root, Vector3(0.02, 0.02, 0.16), arm * 0.5, black).rotation.y = atan2(corner.x, corner.y)
+				var rotor := Models.cylinder(root, 0.055, 0.008, arm + Vector3.UP * 0.035, Models.mat(Color(0.1, 0.1, 0.1, 1.0), &"metal"), 10)
+				rotor.name = "Rotor"
+			Models.ball(root, 0.02, Vector3(0.0, -0.01, -0.085), Models.glow(Color(1.0, 0.2, 0.15), 2.0))  # camera light
 		&"grenade":
 			Models.ball(root, 0.06, Vector3(0.0, 0.03, -0.04), Models.mat(Color(0.25, 0.3, 0.18), &"metal"))
 			Models.box(root, Vector3(0.02, 0.05, 0.06), Vector3(0.0, 0.1, -0.04), steel)

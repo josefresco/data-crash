@@ -8,6 +8,7 @@ extends SecurityGuard
 
 func _init() -> void:
 	max_health = 1.0
+	uses_cover = false
 	shot_damage = 3.0
 	bounty = 0
 	body_color = Color(0.4, 0.8, 1.0)

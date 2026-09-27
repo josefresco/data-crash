@@ -13,9 +13,9 @@ extends CanvasLayer
 ## - CameraFx: FOV kick, explosion shake, dust motes
 
 const TIP_SECONDS := 9.0
-const INFO_KEYS: Array[String] = ["boss", "wave", "core", "notice", "build", "bribe", "shop"]
+const INFO_KEYS: Array[String] = ["boss", "wave", "core", "notice", "build", "bribe", "shop", "drone"]
 ## Info keys that are key menus: shown bottom-center instead of under the objective.
-const MENU_KEYS: Array[String] = ["build", "bribe", "shop"]
+const MENU_KEYS: Array[String] = ["build", "bribe", "shop", "drone"]
 const CHECKLIST_KEYS: Array[String] = ["sites", "deeds"]
 const COLUMN_WIDTH := 320.0
 const CENTER_WIDTH := 600.0

@@ -20,6 +20,7 @@ var _push_left := 0.0
 
 func _init() -> void:
 	outfit = ""  # procedural turret, not a person
+	uses_cover = false
 	max_health = 120.0
 	move_speed = 0.0
 	sight_range = 32.0

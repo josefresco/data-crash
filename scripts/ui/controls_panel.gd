@@ -9,6 +9,11 @@ const SECTIONS := [
 		["WASD", "Move"], ["Mouse", "Aim"], ["Shift", "Sprint"], ["Space", "Jump"],
 		["Left click", "Fire"], ["Right click (hold)", "Aim: zoom in, tighter spread"], ["Q / wheel", "Switch weapon"], ["E", "Drive / talk down / use"],
 		["G", "Plant C4"], ["T", "Give a dog a treat"], ["F (hold)", "Repair / fix"],
+		["X", "Launch / recall the recon drone"],
+	]],
+	["Drone", [
+		["WASD / mouse", "Fly and look"], ["Space / C", "Climb / descend"], ["Left click", "FPV dive (needs a payload)"],
+		["X", "Bring it home"],
 	]],
 	["Driving", [
 		["W / S", "Throttle / reverse"], ["A / D", "Steer"], ["Shift", "Turbo (limited)"], ["Space", "Brake"], ["E", "Get out"],

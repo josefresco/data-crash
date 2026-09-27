@@ -19,6 +19,7 @@ var _flames: GPUParticles3D
 
 func _ready() -> void:
 	add_to_group("fire_zones")
+	add_to_group("extinguishable")
 	_time_left = duration
 	_mat = StandardMaterial3D.new()
 	_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -68,6 +69,11 @@ func _physics_process(delta: float) -> void:
 	var player := get_tree().get_first_node_in_group("player") as Player
 	if player and player.is_visible_in_tree() and _inside(player):
 		player.apply_damage(player_dps * TICK, global_position, &"fire")
+
+
+## Hose water: burns `amount` seconds off the fire.
+func douse(amount: float) -> void:
+	_time_left = minf(_time_left, duration) - amount
 
 
 func _inside(node: Node3D) -> bool:

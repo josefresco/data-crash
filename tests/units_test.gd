@@ -1,6 +1,7 @@
 extends TestCase
 ## Mechanics of the Phase 3 cast: police shields, FROST abductions, Orange Hat
-## pickets, townsperson and player repairs.
+## pickets, townsperson and player repairs, guards fighting from cover and
+## flanking, and recruited Canadians holding the core.
 ##
 ##   Godot_console.exe --headless --fixed-fps 60 --path . res://tests/units_test.tscn
 
@@ -22,6 +23,9 @@ func _run() -> void:
 	await _test_frost_abduction()
 	await _test_orange_hat()
 	await _test_repairs()
+	await _test_guard_cover()
+	await _test_guard_flank()
+	await _test_canadian_post()
 
 
 func _enter_defense_phase() -> void:
@@ -41,6 +45,120 @@ func _enter_defense_phase() -> void:
 	player.global_position = Vector3(-85, 0.2, 100)
 	check(get_tree().get_nodes_in_group("townspeople").size() >= 2, "townspeople joined (%d)"
 		% get_tree().get_nodes_in_group("townspeople").size())
+
+
+## Samples a fight for `duration` s with the player held still (and healed):
+## returns [times hit, samples the guard was hidden, tactics seen].
+func _watch_guard(guard: SecurityGuard, duration: float) -> Array:
+	var hits := 0
+	var hidden := 0
+	var seen := {}
+	var eye := player.global_position + Vector3.UP * 1.4
+	var space := player.get_world_3d().direct_space_state
+	for i in int(duration / 0.25):
+		await seconds(0.25)
+		if not is_instance_valid(guard) or not guard.is_alive():
+			break
+		seen[guard.tactic] = true
+		if player.health < player.max_health:
+			hits += 1
+			player.heal(9999.0)
+		var query := PhysicsRayQueryParameters3D.create(eye, guard.global_position + Vector3.UP * 1.2, SecurityGuard.COVER_MASK)
+		if not space.intersect_ray(query).is_empty():
+			hidden += 1
+	return [hits, hidden, seen]
+
+
+func _test_guard_cover() -> void:
+	# A free-standing wall in the open strip, baked into the navmesh.
+	var wall := StaticBody3D.new()
+	wall.name = "CoverWall"
+	wall.collision_layer = 1
+	var shape := BoxShape3D.new()
+	shape.size = Vector3(6.0, 2.6, 0.6)
+	var collider := CollisionShape3D.new()
+	collider.shape = shape
+	collider.position.y = 1.3
+	wall.add_child(collider)
+	level.add_child(wall)
+	wall.global_position = Vector3(-84, 0, 60)
+	var baker := level.get_node("NavBaker") as NavBaker
+	var bakes := baker.bake_count
+	get_tree().call_group(&"nav_baker", &"request_rebake")
+	for i in 120:
+		if baker.bake_count > bakes:
+			break
+		await seconds(0.25)
+	await seconds(0.5)
+
+	player.global_position = Vector3(-84, 0.2, 72)
+	player.heal(9999.0)
+	player.set_physics_process(false)
+	var guard := _spawn(SecurityGuard.new(), Vector3(-84, 0.1, 65)) as SecurityGuard
+	var result: Array = await _watch_guard(guard, 12.0)
+	var seen: Dictionary = result[2]
+	check(seen.has(SecurityGuard.Tactic.COVER), "a guard in the open runs for cover")
+	check(result[1] >= 4, "the guard spends time out of sight behind the wall (%d samples)" % result[1])
+	check(seen.has(SecurityGuard.Tactic.PEEK) and result[0] >= 1, "…and pops out to shoot (hit %d times)" % result[0])
+	guard.apply_damage(9999.0, Vector3.ZERO)
+	wall.queue_free()
+	player.set_physics_process(true)
+	player.global_position = Vector3(-85, 0.2, 100)
+	await seconds(0.5)
+
+
+func _test_guard_flank() -> void:
+	player.global_position = Vector3(-84, 0.2, 30)
+	player.heal(9999.0)
+	player.set_physics_process(false)
+	var guards: Array[SecurityGuard] = []
+	var bearings: Array[float] = []
+	for x: float in [-87.0, -84.0, -81.0]:
+		var guard := _spawn(SecurityGuard.new(), Vector3(x, 0.1, 18)) as SecurityGuard
+		guards.append(guard)
+		bearings.append(0.0)
+	var flanked := false
+	var swing := 0.0
+	for i in 40:
+		await seconds(0.25)
+		player.heal(9999.0)
+		for g in guards.size():
+			var guard := guards[g]
+			if not is_instance_valid(guard) or not guard.is_alive():
+				continue
+			if guard.tactic == SecurityGuard.Tactic.FLANK:
+				flanked = true
+			var offset := guard.global_position - player.global_position
+			var bearing := atan2(offset.x, offset.z)
+			if i == 0:
+				bearings[g] = bearing
+			swing = maxf(swing, absf(angle_difference(bearings[g], bearing)))
+	check(flanked, "with three guards on the player, one goes to flank")
+	check(swing > deg_to_rad(40.0), "the flanker swings around the player (%.0f degrees)" % rad_to_deg(swing))
+	for guard in guards:
+		if is_instance_valid(guard):
+			guard.apply_damage(9999.0, Vector3.ZERO)
+	player.set_physics_process(true)
+	player.global_position = Vector3(-85, 0.2, 100)
+	await seconds(0.5)
+
+
+func _test_canadian_post() -> void:
+	var core := level.get("core") as GreenCore
+	var tourist := Canuck.new()
+	tourist.setup(false)
+	level.add_child(tourist)
+	tourist.global_position = core.global_position + Vector3(0, 0.3, 18)
+	tourist.join()
+	await seconds(10.0)
+	var near_core := tourist.global_position.distance_to(core.global_position)
+	check(near_core < 9.0, "with the player away, a recruited Canadian holds the core (%.1f m)" % near_core)
+	player.global_position = core.global_position + Vector3(12, 0.2, 12)
+	await seconds(6.0)
+	var near_player := tourist.global_position.distance_to(player.global_position)
+	check(near_player < 7.0, "…and tags along again once you're back (%.1f m)" % near_player)
+	player.global_position = Vector3(-85, 0.2, 100)
+	tourist.queue_free()
 
 
 func _spawn(unit: Enemy, at: Vector3) -> Enemy:

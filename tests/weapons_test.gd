@@ -1,5 +1,7 @@
 extends TestCase
-## Player arsenal: shotgun, rifle, ammo, molotov fire, rock lure, knockback.
+## Player arsenal: shotgun, rifle, ammo, molotov fire, rock lure, knockback,
+## hoses (push, stun, scatter, put out fires), and the recon drone (flight,
+## spotting, FPV dive, recall).
 ##
 ##   Godot_console.exe --headless --fixed-fps 60 --path . res://tests/weapons_test.tscn
 
@@ -30,6 +32,8 @@ func _run() -> void:
 	await _test_shovel()
 	await _test_held_models()
 	await _test_hit_feedback()
+	await _test_hoses()
+	await _test_drone()
 
 
 func _select(weapon_name: String) -> void:
@@ -62,6 +66,129 @@ func _test_held_models() -> void:
 	var muzzle := player.muzzle_point()
 	check(muzzle.distance_to(player.global_position + Vector3.UP * 1.4) < 1.2 and muzzle != player.global_position + Vector3.UP * 1.4,
 		"shots leave from the pistol's muzzle (%s)" % (muzzle - player.global_position))
+
+
+## Sprays the current hose at `point` for `ticks` spray ticks (0.1 s each).
+func _spray_at(point: Vector3, ticks: int) -> void:
+	for i in ticks:
+		player.aim_at(point)
+		player.fire()
+		await seconds(0.1)
+
+
+func _test_hoses() -> void:
+	player.global_position = Vector3(-84, 0.2, 60)
+	player.heal(9999.0)
+	await seconds(0.2)
+	_select("Garden hose")
+	await seconds(0.1)
+	check(player.held_model() != null, "the garden hose nozzle is in hand")
+	var guard := _dummy(SecurityGuard.new(), player.global_position + Vector3(0, 0, -6), false) as SecurityGuard
+	guard.uses_cover = false
+	await seconds(0.3)
+	var before := guard.global_position.distance_to(player.global_position)
+	await _spray_at(guard.aim_point(), 15)
+	var jet := player.get("_jet") as GPUParticles3D
+	check(jet != null and jet.emitting, "water streams from the nozzle while spraying")
+	var pushed := guard.global_position.distance_to(player.global_position) - before
+	check(pushed > 2.0, "the garden hose pushes a guard back (%.1f m)" % pushed)
+	check(guard.health == guard.max_health, "garden hose water doesn't hurt")
+	await seconds(0.4)
+	check(not jet.emitting, "the water stops when you let go")
+
+	_select("Fire hose")
+	player.heal(9999.0)
+	guard.global_position = player.global_position + Vector3(0, 0, -5)
+	await seconds(0.2)
+	await _spray_at(guard.aim_point(), 2)
+	check(guard.get("_stun_timer") as float > 0.0, "the fire hose knocks a guard off his feet up close")
+	guard.apply_damage(9999.0, Vector3.ZERO)
+
+	var hat := _dummy(OrangeHat.new(), player.global_position + Vector3(2, 0, -6), false) as OrangeHat
+	await seconds(0.2)
+	await _spray_at(hat.aim_point(), 3)
+	check(hat.persuaded and hat.health == hat.max_health, "a hosed protester scatters, unharmed")
+	hat.queue_free()
+
+	var fire := FireZone.new()
+	level.add_child(fire)
+	fire.global_position = player.global_position + Vector3(0, 0, -7)
+	await seconds(0.2)
+	await _spray_at(fire.global_position, 10)
+	check(not is_instance_valid(fire), "the fire hose puts out a molotov fire")
+
+	var car := level.get_node("Car") as Car
+	car.global_transform = Transform3D(Basis.IDENTITY, player.global_position + Vector3(4, 0.6, -7))
+	car.linear_velocity = Vector3.ZERO
+	await seconds(0.5)
+	car.apply_damage(car.max_health * 0.9, car.global_position, &"bullet")
+	check(car.is_burning(), "a badly shot-up car catches fire")
+	await _spray_at(car.global_position + Vector3.UP, 5)
+	check(not car.is_burning() and not car.wrecked, "the fire hose puts out a burning car before it blows")
+
+
+func _test_drone() -> void:
+	player.global_position = Vector3(-84, 0.2, 85)
+	player.heal(9999.0)
+	await seconds(0.2)
+	var guard := _dummy(SecurityGuard.new(), player.global_position + Vector3(0, 0, -24)) as SecurityGuard
+	_select("Recon drone")
+	var kit := player.current_weapon()
+	check(kit.display_name == "Recon drone" and kit.ammo == 2, "the drone kit comes with two FPV payloads")
+	player.fire()
+	await seconds(0.1)
+	var drone := player.drone
+	check(drone != null and get_viewport().get_camera_3d().get_parent().get_parent() == drone,
+		"firing the kit launches the drone and switches to its camera")
+	if drone == null:
+		return
+	drone.set_heading(0.0)  # facing -Z, toward the guard
+	var start := drone.global_position
+	Input.action_press("move_forward")
+	await seconds(1.0)
+	Input.action_release("move_forward")
+	check(start.z - drone.global_position.z > 5.0, "WASD flies the drone (%.1f m)" % (start.z - drone.global_position.z))
+	await seconds(0.5)
+	check(guard.spotted_left > 0.0 and drone.spotted_count >= 1, "the drone spots a guard in view")
+	var hud := level.get_node("Hud") as Hud
+	await seconds(0.3)
+	check(guard in hud.overlay().spotted_units(), "the HUD marks the spotted guard")
+	check(player.velocity.length() < 0.5, "the player stands still while piloting")
+
+	# FPV dive: point it at the guard and click.
+	var to := guard.aim_point() - drone.global_position
+	drone.set("_pitch", asin(clampf(to.normalized().y, -1.0, 1.0)))
+	drone.set_heading(atan2(-to.x, -to.z))
+	Input.action_press("fire")
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	Input.action_release("fire")
+	for i in 40:
+		if not is_instance_valid(drone):
+			break
+		await seconds(0.1)
+	check(not is_instance_valid(drone), "the FPV dive ends the flight")
+	check(not guard.is_alive() or guard.health < guard.max_health * 0.5,
+		"the FPV dive blows up on the guard (%.0f hp left)" % maxf(guard.health, 0.0))
+	check(kit.ammo == 1, "the dive used one payload (%d left)" % kit.ammo)
+	check(player.drone == null and get_viewport().get_camera_3d() == player.get("_camera"), "the view returns to the player")
+	check(player.drone_cooldown() > 0.0 and player.launch_drone() == null, "the next drone needs a moment")
+
+	player.set("_drone_cooldown", 0.0)
+	check(player.launch_drone() != null, "a new drone goes up after the cooldown")
+	await seconds(0.3)
+	player.apply_damage(5.0, player.global_position + Vector3(5, 0, 0), &"bullet")
+	await seconds(0.1)
+	check(player.drone == null, "getting hurt calls the drone back")
+	player.set("_drone_cooldown", 0.0)
+	var target_drone := player.launch_drone()
+	await seconds(0.2)
+	target_drone.apply_damage(100.0, Vector3.ZERO, &"bullet")
+	await seconds(0.1)
+	check(player.drone == null and player.drone_cooldown() > 15.0, "a drone shot down takes a while to replace")
+	if is_instance_valid(guard):
+		guard.queue_free()
+	_select("Pistol")
 
 
 func _dummy(unit: Enemy, at: Vector3, frozen := true) -> Enemy:

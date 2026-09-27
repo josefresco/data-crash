@@ -27,6 +27,8 @@ var _font: Font
 var _goal: Variant = null
 var _scan_left := 0.0
 var _units: Array[Enemy] = []
+## Hostiles marked by the recon drone (drawn through walls, any distance).
+var _spotted: Array[Enemy] = []
 ## instance id -> seconds of "!" left; instance id -> was fighting last scan.
 var _alerts := {}
 var _engaged := {}
@@ -108,8 +110,11 @@ func _scan() -> void:
 	if camera == null:
 		return
 	var eye := camera.global_position
+	_spotted.clear()
 	for node in get_tree().get_nodes_in_group("hostiles"):
 		var unit := node as Enemy
+		if unit and unit.is_alive() and unit.spotted_left > 0.0:
+			_spotted.append(unit)
 		if unit == null or not unit.is_alive() or unit.is_dormant() or unit.boss_name != "":
 			continue
 		var id := unit.get_instance_id()
@@ -153,6 +158,9 @@ func _draw() -> void:
 	var camera := get_viewport().get_camera_3d()
 	if camera == null:
 		return
+	for unit in _spotted:
+		if is_instance_valid(unit):
+			_draw_spotted(camera, unit)
 	for unit in _units:
 		if is_instance_valid(unit):
 			_draw_unit(camera, unit)
@@ -190,6 +198,31 @@ func _draw_unit(camera: Camera3D, unit: Enemy) -> void:
 		var at := p + Vector2(-font_size * 0.2, -10.0)
 		draw_string_outline(_font, at, "!", HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, 6, Color(0, 0, 0, minf(t * 3.0, 1.0)))
 		draw_string(_font, at, "!", HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, Color(1.0, 0.3, 0.2, minf(t * 3.0, 1.0)))
+
+
+## Drone mark: a red chevron over the unit's head, through walls, with its
+## distance once it's far. Fades out over the mark's last seconds.
+func _draw_spotted(camera: Camera3D, unit: Enemy) -> void:
+	var head := unit.global_position + Vector3.UP * (unit.body_height + 0.9)
+	if camera.is_position_behind(head):
+		return
+	var p := camera.unproject_position(head)
+	var alpha := clampf(unit.spotted_left / 3.0, 0.0, 1.0)
+	var color := Color(1.0, 0.25, 0.2, 0.9 * alpha)
+	var s := 7.0
+	var chevron := PackedVector2Array([p + Vector2(-s, -s), p + Vector2(0, 0), p + Vector2(s, -s)])
+	draw_polyline(chevron, Color(0, 0, 0, 0.7 * alpha), 5.0)
+	draw_polyline(chevron, color, 2.5)
+	var distance := camera.global_position.distance_to(head)
+	if distance > 25.0:
+		var text := "%dm" % roundi(distance)
+		draw_string_outline(_font, p + Vector2(-12, -s - 4), text, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, 4, Color(0, 0, 0, 0.7 * alpha))
+		draw_string(_font, p + Vector2(-12, -s - 4), text, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, color)
+
+
+## Units the drone has marked (tests read it).
+func spotted_units() -> Array[Enemy]:
+	return _spotted
 
 
 ## A rounded speech bubble above the speaker, tail pointing down at them.

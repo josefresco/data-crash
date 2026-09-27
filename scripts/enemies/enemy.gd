@@ -97,6 +97,8 @@ var _knock_left := 0.0
 var _investigate_left := 0.0
 var _sidestep_left := 0.0
 var _sidestep := Vector3.ZERO
+## Seconds left marked by the player's recon drone (HUD shows it through walls).
+var spotted_left := 0.0
 var _gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 
 
@@ -269,8 +271,18 @@ func _process(delta: float) -> void:
 	# Game time, not wall time: fields must expire correctly when time scales.
 	if _field_left > 0.0:
 		_field_left -= delta
+	if spotted_left > 0.0:
+		spotted_left -= delta
 	if _field_bubble and _field_bubble.visible and not is_field_shielded():
 		_field_bubble.visible = false
+
+
+## Marked by the recon drone for `duration` seconds. True if it wasn't
+## marked already.
+func spot(duration: float) -> bool:
+	var fresh := spotted_left <= 0.0
+	spotted_left = maxf(spotted_left, duration)
+	return fresh
 
 
 ## Walk over to check out a noise (thrown rocks). Ignored while fighting.
@@ -672,6 +684,8 @@ func _aim_point_of(other: Node3D) -> Vector3:
 	if other is Destructible:
 		var box := other as Destructible
 		return box.global_position + Vector3.UP * minf(box.size.y * 0.5, 1.5)
+	if other.has_method("aim_point"):
+		return other.call(&"aim_point")  # the player's drone
 	return other.global_position + Vector3.UP * 1.0
 
 

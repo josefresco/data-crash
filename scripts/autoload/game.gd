@@ -215,6 +215,8 @@ func _register_input_actions() -> void:
 		"slot_4": KEY_4,
 		"slot_5": KEY_5,
 		"map": KEY_M,
+		"drone": KEY_X,
+		"descend": KEY_C,
 	}
 	for action: String in keys:
 		_ensure_action(action)

@@ -163,15 +163,20 @@ func _threat() -> void:
 # --- 3. Allies against a guard squad ----------------------------------------------
 
 func _allies() -> void:
-	print("\nALLIES vs 3 security guards (40 s, player far away)")
-	print("%-22s | %6s | %11s | %s" % ["squad", "won", "guards left", "allies left (mean over 3)"])
-	for setup in [["2 Canadians", 2, 0], ["3 Canadians", 3, 0], ["2 tamed dogs", 0, 2], ["3 Canadians + 2 dogs", 3, 2]]:
+	const RUNS := 5
+	print("
+ALLIES vs 3 security guards (40 s; the player is far away except for the dogs row)")
+	print("%-24s | %6s | %8s | %11s | %s" % ["squad", "won", "win time", "guards left", "allies left (mean over %d)" % RUNS])
+	for setup in [["1 Canadian", 1, 0], ["2 Canadians", 2, 0], ["3 Canadians", 3, 0], ["4 Canadians", 4, 0],
+			["2 tamed dogs + player", 0, 2]]:
 		var wins := 0
+		var win_time := 0.0
 		var guards_left := 0
 		var allies_left := 0
-		for trial in 3:
+		for trial in RUNS:
 			_clear()
-			player.global_position = STAND + Vector3(0.0, 0.0, 60.0)
+			# Tamed dogs only defend the player, so that row keeps the player close.
+			player.global_position = STAND + Vector3(0.0, 0.0, 4.0 if setup[2] > 0 else 60.0)
 			await seconds(0.3)
 			var guards: Array[Enemy] = []
 			for i in 3:
@@ -180,7 +185,7 @@ func _allies() -> void:
 			for i in setup[1]:
 				var tourist := Canuck.new()
 				tourist.setup(false)
-				tourist.position = STAND + Vector3(-2.0 + i * 2.0, -0.1, 0.0)
+				tourist.position = STAND + Vector3(-3.0 + i * 2.0, -0.1, 0.0)
 				level.add_child(tourist)
 				tourist.join()
 				allies.append(tourist)
@@ -190,8 +195,10 @@ func _allies() -> void:
 				level.add_child(dog)
 				dog.befriend()
 				allies.append(dog)
+			var elapsed := 0.0
 			for i in 160:
 				await seconds(0.25)
+				elapsed += 0.25
 				player.heal(9999.0)
 				var g := guards.filter(func(e: Variant) -> bool: return is_instance_valid(e) and (e as Enemy).is_alive()).size()
 				var a := allies.filter(func(e: Variant) -> bool: return is_instance_valid(e) and (e as Enemy).is_alive()).size()
@@ -203,5 +210,7 @@ func _allies() -> void:
 			allies_left += a_left
 			if g_left == 0:
 				wins += 1
-		print("%-22s | %4d/3 | %11.1f | %.1f" % [setup[0], wins, guards_left / 3.0, allies_left / 3.0])
+				win_time += elapsed
+		print("%-24s | %4d/%d | %7.1fs | %11.1f | %.1f" % [setup[0], wins, RUNS, win_time / maxf(wins, 1),
+			guards_left / float(RUNS), allies_left / float(RUNS)])
 	_clear()

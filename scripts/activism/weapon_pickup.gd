@@ -11,6 +11,8 @@ signal picked_up(pickup: WeaponPickup)
 @export var kind := &"rocks"
 ## For kind &"weapon": the Weapon.display_name it hands out (free, full ammo).
 @export var gun_name := "Pistol"
+## Toast when taking a weapon (default: DUECE Hardware's line).
+@export var note := ""
 @export var reach := 2.6
 ## Seconds until it's back (0 = gone for good).
 @export var respawn := 45.0
@@ -157,6 +159,9 @@ func interact(player: Player) -> void:
 		player.select_weapon(player.weapons.find(gun))
 		player.weapon_changed.emit(player.current_weapon())
 		Sfx.play(&"hit_metal", global_position, -2.0, 0.8)
+		if not note.is_empty():
+			Game.notify(note, 3.5)
+			return
 		Game.notify(("Took the %s. Duece doesn't charge neighbors." % gun_name.to_lower()) if not had else "%s ammo topped up." % gun_name)
 		Game.tip("hardware", "Everything at DUECE Hardware is free: guns, grenades, molotovs, shovels, and ammo. Come back anytime to top up.")
 		return

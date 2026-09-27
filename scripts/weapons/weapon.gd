@@ -2,9 +2,11 @@ class_name Weapon
 extends RefCounted
 ## Stats for one player weapon. HITSCAN weapons fire `pellets` rays with random
 ## `spread`; THROWN weapons launch a Throwable of `throw_kind`; MELEE weapons
-## hit everything in a short arc (`reach`) in front of the player.
+## hit everything in a short arc (`reach`) in front of the player. SPRAY
+## weapons (hoses) push people back in a cone out to `reach` and put out
+## fires; DRONE launches the player's ReconDrone (ammo = FPV payloads).
 
-enum Kind { HITSCAN, THROWN, MELEE }
+enum Kind { HITSCAN, THROWN, MELEE, SPRAY, DRONE }
 
 var display_name := ""
 var kind := Kind.HITSCAN
@@ -32,6 +34,10 @@ var two_handed := false
 ## MELEE: how far the swing reaches, and how hard it shoves.
 var reach := 2.0
 var knockback := 0.0
+## SPRAY: seconds of fire put out per second of spraying, and whether the
+## jet knocks people off their feet up close.
+var douse := 0.0
+var stuns := false
 ## Muzzle flash scale, camera kick per shot (radians), and what it ejects
 ## (&"brass", &"shell", or &"" for nothing).
 var flash_size := 1.0
@@ -77,12 +83,19 @@ static func default_loadout() -> Array[Weapon]:
 		make("Rocket launcher", {"kind": Kind.THROWN, "throw_kind": &"rocket", "damage": 260.0,
 			"cooldown": 1.5, "throw_speed": 42.0, "ammo": 0, "max_ammo": 4, "owned": false, "sound": &"rocket",
 			"model": &"rocket", "two_handed": true}),
+		# Hoses: damage is per second; knockback is added every 0.1 s tick.
+		make("Garden hose", {"kind": Kind.SPRAY, "damage": 0.0, "cooldown": 0.1, "reach": 9.0, "knockback": 0.35,
+			"douse": 2.5, "owned": false, "sound": &"hiss_loop", "model": &"hose"}),
+		make("Fire hose", {"kind": Kind.SPRAY, "damage": 3.0, "cooldown": 0.1, "reach": 16.0, "knockback": 0.45,
+			"douse": 8.0, "stuns": true, "owned": false, "sound": &"hiss_loop", "model": &"firehose", "two_handed": true}),
+		make("Recon drone", {"kind": Kind.DRONE, "cooldown": 0.5, "ammo": 0, "max_ammo": 2, "owned": false,
+			"model": &"drone"}),
 	]
 
 
 ## Guns and the launcher raise the arms to aim; throwables and melee don't.
 func aims() -> bool:
-	return kind == Kind.HITSCAN or throw_kind == &"rocket"
+	return kind == Kind.HITSCAN or kind == Kind.SPRAY or throw_kind == &"rocket"
 
 
 func has_ammo() -> bool:

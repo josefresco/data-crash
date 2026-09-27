@@ -24,6 +24,12 @@ const THANKS := "Thanks a bunch, eh! We'll help you out. Sorry in advance!"
 
 @export var stick_damage := 14.0
 @export var patience := 150.0
+## During the defense, with the player farther than this from the core,
+## recruited Canadians hold the core instead of tagging along.
+@export var post_leash := 30.0
+## While holding the core they only take on hostiles this close to it, under
+## the turrets' cover (chasing farther out got them picked off).
+@export var post_radius := 14.0
 
 var state := State.LOST
 var mountie := false
@@ -127,6 +133,18 @@ func _pick_target() -> Node3D:
 	return super()
 
 
+func _candidates() -> Array[Node3D]:
+	var list := super()
+	var post: Variant = _defense_post()
+	if post == null:
+		return list
+	var near: Array[Node3D] = []
+	for node in list:
+		if node.global_position.distance_to(post as Vector3) <= post_radius:
+			near.append(node)
+	return near
+
+
 func _idle() -> void:
 	match state:
 		State.LOST:
@@ -142,6 +160,15 @@ func _idle() -> void:
 			if global_position.distance_to(_home_exit) < 5.0 or _home_left <= 0.0:
 				_emit_defeated()
 				queue_free()
+		State.ALLY:
+			var post: Variant = _defense_post()
+			if post == null:
+				super()
+			elif _nav.target_position.distance_to(post as Vector3) > 7.0 \
+					or (_nav.is_navigation_finished() and randf() < 0.05):
+				# Take up a spot around the core; shift about now and then.
+				var angle := randf() * TAU
+				_nav.target_position = (post as Vector3) + Vector3(cos(angle), 0.0, sin(angle)) * randf_range(4.0, 6.5)
 		State.LEAVING:
 			if rv != null and is_instance_valid(rv):
 				_nav.target_position = (rv as Node3D).global_position
@@ -152,6 +179,20 @@ func _idle() -> void:
 				queue_free()
 		_:
 			super()
+
+
+## The core, when the defense is on and the player is away from it.
+func _defense_post() -> Variant:
+	var level := get_tree().get_first_node_in_group("level")
+	if level == null or not level.has_method("ally_post"):
+		return null
+	var post: Variant = level.call(&"ally_post")
+	if post == null:
+		return null
+	var player := get_tree().get_first_node_in_group("player") as Node3D
+	if player and player.is_visible_in_tree() and player.global_position.distance_to(post as Vector3) <= post_leash:
+		return null
+	return post
 
 
 func _attack(victim: Node3D) -> void:

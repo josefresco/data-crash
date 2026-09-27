@@ -63,6 +63,8 @@ var wrecked := false
 var _smoke: GPUParticles3D
 var _fire: GPUParticles3D
 var _burn_left := -1.0
+## Water on a burning car (hoses): enough puts the fire out.
+var _doused := 0.0
 var _headlight: SpotLight3D
 var _tail_mat: StandardMaterial3D
 var _head_mat: StandardMaterial3D
@@ -83,6 +85,7 @@ var _flame_left := 0.0
 
 func _ready() -> void:
 	add_to_group("vehicles")
+	add_to_group("extinguishable")
 	turbo_left = turbo_seconds
 	# People and animals don't stop a car (the bumper shoves them instead).
 	collision_mask = Game.LAYER_WORLD | Game.LAYER_PLAYER | Game.LAYER_VEHICLES | Game.LAYER_DEBRIS | Game.LAYER_DESTRUCTIBLE
@@ -313,6 +316,28 @@ func apply_damage(amount: float, _from: Vector3, _kind: StringName = &"generic")
 		Sfx.play(&"explosion", global_position, -10.0, 1.6)
 		if driver:
 			Game.notify("Your car's on fire! Get out!", 3.0)
+
+
+func is_burning() -> bool:
+	return _burn_left >= 0.0 and not wrecked
+
+
+## Hose water (seconds of fire put out). A couple of seconds of spray puts a
+## burning car out and leaves it smoking at 20% health.
+func douse(amount: float) -> void:
+	if not is_burning():
+		return
+	_doused += amount
+	if _doused < 2.0:
+		return
+	_doused = 0.0
+	_burn_left = -1.0
+	health = maxf(health, max_health * 0.2)
+	if _fire:
+		_fire.emitting = false
+		_fire = null
+	Sfx.play(&"hiss_loop", global_position, -6.0)
+	Game.notify("Fire's out. That car's still smoking, though.", 2.5)
 
 
 func _hood() -> Vector3:

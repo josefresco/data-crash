@@ -146,7 +146,8 @@ func _ready() -> void:
 	_spawner.all_waves_cleared.connect(_on_all_waves_cleared)
 
 	($WaterMain as WaterMain).fixed.connect(func(_m: WaterMain) -> void:
-		_complete_deed("water", 100, 0.1, "Hydrant capped. The Hendersons have water pressure again. (+$100)"))
+		_complete_deed("water", 100, 0.1, "Hydrant capped. The Hendersons have water pressure again. (+$100)")
+		_give_fire_hose())
 	_place_scout_points()
 	($SupplyVan as Enemy).died.connect(func(_v: Enemy) -> void:
 		_complete_deed("van", 0, 0.05, "Supply van intercepted. Cargo seized. (+$150)"))
@@ -249,6 +250,16 @@ func start_defense() -> void:
 ## yellow objective marker on the minimap: grab a weapon at DUECE Hardware,
 ## then the nearest good deed, then the nearest standing datacenter (or its
 ## loose boss), then the green core.
+## Where recruited allies hold when the player is off elsewhere during the
+## defense: the green core. Null outside BUILD/WAVE, or with no core.
+func ally_post() -> Variant:
+	if phase != Phase.BUILD and phase != Phase.WAVE:
+		return null
+	if core == null or not is_instance_valid(core) or core.is_destroyed:
+		return null
+	return core.global_position
+
+
 func guidance_point() -> Variant:
 	var player := get_tree().get_first_node_in_group("player") as Player
 	if player == null:
@@ -355,6 +366,15 @@ func _place_scout_points() -> void:
 			_update_deeds())
 
 
+## The fire department's thank-you for capping the hydrant.
+func _give_fire_hose() -> void:
+	var player := get_node_or_null("Player") as Player
+	if player == null:
+		return
+	player.unlock_weapon("Fire hose")
+	Game.notify("The fire crew left you their spare fire hose. [Q] to pick it: it knocks people flat and puts out fires.", 5.0)
+
+
 ## Spawn at home: the player's front walk, facing the street, with a HOME
 ## sign on the lawn (Game meta "home", minimap icon).
 func _move_in() -> void:
@@ -369,6 +389,15 @@ func _move_in() -> void:
 	var stand := door + facing * 1.5 + Vector3.UP * 0.1
 	player.set_spawn(Transform3D(Basis.looking_at(facing, Vector3.UP), stand))
 	Game.set_meta(&"home", stand)
+	# A garden hose on a reel by the front walk.
+	var hose := WeaponPickup.new()
+	hose.name = "GardenHose"
+	hose.kind = &"weapon"
+	hose.gun_name = "Garden hose"
+	hose.note = "Grabbed the garden hose. Good for fires, and for cooling people off."
+	hose.respawn = 20.0
+	add_child(hose)
+	hose.global_position = door + facing * 1.2 - facing.cross(Vector3.UP) * 2.4
 	var sign_root := Node3D.new()
 	sign_root.name = "HomeSign"
 	add_child(sign_root)
@@ -883,7 +912,8 @@ func _spawn_hardware_store() -> void:
 		return
 	var stock := [
 		[&"shovel", ""], [&"weapon", "Pistol"], [&"weapon", "Shotgun"], [&"weapon", "Hunting rifle"],
-		[&"weapon", "Machine gun"], [&"weapon", "Grenades"], [&"molotovs", ""], [&"rocks", ""], [&"ammo", ""],
+		[&"weapon", "Machine gun"], [&"weapon", "Grenades"], [&"weapon", "Recon drone"], [&"molotovs", ""],
+		[&"rocks", ""], [&"ammo", ""],
 	]
 	for i in stock.size():
 		var pickup := WeaponPickup.new()
@@ -891,7 +921,7 @@ func _spawn_hardware_store() -> void:
 		pickup.gun_name = stock[i][1]
 		pickup.respawn = 20.0
 		# One tidy row centered on the door, a pace apart.
-		pickup.position = Vector3(door.x - 7.6 + i * 1.9, 0.0, door.z - 0.9)
+		pickup.position = Vector3(door.x + (i - (stock.size() - 1) * 0.5) * 1.9, 0.0, door.z - 0.9)
 		pickup.add_to_group("hardware_store")
 		add_child(pickup)
 	Game.set_meta(&"hardware_door", door)
