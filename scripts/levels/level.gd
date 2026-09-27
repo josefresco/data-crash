@@ -920,6 +920,14 @@ func _update_boss_bar() -> void:
 		hint = "BEHIND GLASS: heavy explosives only!"
 	elif boss is CrapyaControlRoom:
 		hint = "Bullets bounce: rifle, explosives, or the dozer"
+	elif boss is PeteBottleneck:
+		hint = "PUMPS RUNNING: he heals! Wreck the river pumps" if (boss as PeteBottleneck).pumps_running() > 0 \
+			else "Hoses won't work on him"
+	elif boss is ChadHodler:
+		hint = "COLD WALLET: wait out the shield" if (boss as ChadHodler).is_field_shielded() \
+			else ("Rug pulled: finish him!" if (boss as ChadHodler).rugged else "Thin out the HODL bros")
+	elif boss is BradHypewell and (boss as BradHypewell).is_hyped():
+		hint = "HYPE SHIELD: smash the chatbot kiosks!"
 	Game.set_boss(String(boss.get("boss_name")), ratio, hint)
 
 

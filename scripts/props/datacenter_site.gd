@@ -18,7 +18,7 @@ signal neutralized(site: DatacenterSite)
 ## Building down and boss down: this site is done.
 signal cleared(site: DatacenterSite)
 
-enum Boss { NONE, ELMO, CRAPYA, SHAM }
+enum Boss { NONE, ELMO, CRAPYA, SHAM, BOTTLER, MINER, HYPE }
 
 @export var site_id := &"felsa"
 @export var display_name := "Felsa Cloud"
@@ -39,6 +39,8 @@ enum Boss { NONE, ELMO, CRAPYA, SHAM }
 @export var patrol_cyberdouche := false
 ## The level's scout perch for this site is a railed rooftop (else a treehouse).
 @export var scout_rooftop := false
+## BOTTLER only: river intake pumps (site space) that keep Pete healing.
+@export var pump_spots: Array[Vector3] = []
 
 const CAR_SCENE := preload("res://scenes/vehicles/car.tscn")
 const CAR_MODELS: Array[String] = ["sedan", "suv", "hatchback-sports", "taxi", "van", "suv-luxury"]
@@ -262,6 +264,12 @@ func boss_label() -> String:
 			return "Crapya Butella"
 		Boss.SHAM:
 			return "Sham Crapman"
+		Boss.BOTTLER:
+			return "Pete Bottleneck"
+		Boss.MINER:
+			return "Chad Hodler"
+		Boss.HYPE:
+			return "Brad Hypewell"
 	return ""
 
 
@@ -610,8 +618,90 @@ func _spawn_boss() -> void:
 			sham.stay_put = true
 			add_child(sham)
 			sham.died.connect(func(_s: Enemy) -> void: mark_boss_defeated())
+		Boss.BOTTLER:
+			_place_boss(PeteBottleneck.new(), "Pete")
+			_build_pumps()
+		Boss.MINER:
+			_place_boss(ChadHodler.new(), "Chad")
+		Boss.HYPE:
+			_place_boss(BradHypewell.new(), "Brad")
+			_build_kiosks()
 		_:
 			boss_defeated = true
+
+
+## District 2 bosses: the site's boss (Pete, Chad, Brad), upstairs in the suite.
+var boss_unit: Enemy
+
+
+func _place_boss(unit: Enemy, unit_name: String) -> void:
+	boss_unit = unit
+	unit.name = unit_name
+	unit.site = site_id
+	unit.position = _boss_spot()
+	unit.stay_put = true
+	add_child(unit)
+	unit.died.connect(func(_u: Enemy) -> void: mark_boss_defeated())
+
+
+## Pete's river intake pumps: squat blue housings with a pipe to the water.
+## Each one wrecked gives the river some water back.
+func _build_pumps() -> void:
+	for i in pump_spots.size():
+		var pump := Destructible.new()
+		pump.name = "RiverPump%d" % (i + 1)
+		pump.size = Vector3(2.4, 2.2, 2.4)
+		pump.color = Color(0.25, 0.4, 0.62)
+		pump.surface_kind = &"plates"
+		pump.max_health = 240.0
+		pump.damage_threshold = 10.0
+		pump.chunks = Vector3i(2, 2, 2)
+		pump.label = "River pump"
+		pump.site_id = site_id
+		pump.sparks = true
+		pump.position = pump_spots[i]
+		add_child(pump)
+		pump.add_to_group("river_pumps")
+		Models.cylinder(pump, 0.3, 4.0, Vector3(0.0, 0.5, 3.0), Models.mat(Color(0.5, 0.52, 0.55), &"metal"), 10).rotation.x = PI * 0.5
+		Models.box(pump, Vector3(1.6, 0.4, 1.6), Vector3(0.0, 2.4, 0.0), Models.glow(Color(0.3, 0.7, 1.0), 2.0))
+		var sign_label := Label3D.new()
+		sign_label.text = "%s\nRIVER INTAKE" % brand_name
+		sign_label.modulate = brand_color
+		sign_label.position = Vector3(0.0, 1.4, 1.22)
+		pump.add_child(sign_label)
+		Models.fit_label(sign_label, Vector2(2.2, 0.8))
+		pump.destroyed.connect(func(_p: Destructible) -> void:
+			if Game.district:
+				Game.district.water_table += 0.06
+			Game.add_cash(40)
+			Game.notify("River pump wrecked: the river breathes again. (+$40)", 3.5))
+
+
+## Brad's chatbot kiosks in the lobby: while any stands, he's hype-shielded
+## and they hallucinate copies of him.
+func _build_kiosks() -> void:
+	var half := datacenter.footprint.y * 0.5
+	for i in 3:
+		var kiosk := Destructible.new()
+		kiosk.name = "ChatbotKiosk%d" % (i + 1)
+		kiosk.size = Vector3(1.1, 2.1, 0.6)
+		kiosk.color = Color(0.92, 0.93, 0.95)
+		kiosk.surface_kind = &"paint"
+		kiosk.max_health = 120.0
+		kiosk.chunks = Vector3i(2, 2, 1)
+		kiosk.label = "Chatbot kiosk"
+		kiosk.site_id = site_id
+		kiosk.sparks = true
+		kiosk.position = building_offset + Vector3(5.0 + i * 4.5, 0.0, half - 3.0)
+		add_child(kiosk)
+		kiosk.add_to_group("chatbot_kiosks")
+		Models.box(kiosk, Vector3(0.9, 0.7, 0.04), Vector3(0.0, 1.45, 0.32), Models.glow(brand_color, 2.5))
+		var screen := Label3D.new()
+		screen.text = "ASK ME\nANYTHING"
+		screen.modulate = Color(0.02, 0.05, 0.06)
+		screen.position = Vector3(0.0, 1.45, 0.35)
+		kiosk.add_child(screen)
+		Models.fit_label(screen, Vector2(0.8, 0.6))
 
 
 func _on_neutralized() -> void:

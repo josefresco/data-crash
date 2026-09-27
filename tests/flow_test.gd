@@ -290,6 +290,11 @@ func _test_hud_layout(hud: Hud) -> void:
 		r.set_physics_process(false)
 		crowd.append(r)
 	await seconds(0.1)
+	# Whoever else is mid-sentence nearby would take the talker slots.
+	for t: Variant in Enemy._talkers.duplicate():
+		if is_instance_valid(t):
+			(t as Enemy).speak("")
+	Enemy._talkers.clear()
 	for r in crowd:
 		r.speak("Hello there, neighbor!")
 	var talking := crowd.filter(func(r: Resident) -> bool:

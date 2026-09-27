@@ -51,7 +51,12 @@ func _process(delta: float) -> void:
 	_line_left -= delta
 	if _line_left <= 0.0:
 		_line_left = randf_range(3.5, 6.0)
-		speak(LINES.pick_random() if randf() < 0.7 else "")
+		speak(_lines().pick_random() if randf() < 0.7 else "")
+
+
+## What they shout (subclasses: other fandoms).
+func _lines() -> Array:
+	return LINES
 
 
 ## Elmo went down: they wander off to post about it. Not a kill, no bounty.

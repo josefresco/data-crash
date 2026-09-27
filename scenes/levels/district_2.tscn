@@ -1,0 +1,200 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/levels/level.gd" id="1_level"]
+[ext_resource type="Script" path="res://scripts/district/environment_driver.gd" id="2_env"]
+[ext_resource type="PackedScene" path="res://scenes/player/player.tscn" id="3_player"]
+[ext_resource type="PackedScene" path="res://scenes/vehicles/car.tscn" id="4_car"]
+[ext_resource type="Script" path="res://scripts/ui/hud.gd" id="7_hud"]
+[ext_resource type="Script" path="res://scripts/nav/nav_baker.gd" id="8_nav"]
+[ext_resource type="Script" path="res://scripts/build/build_controller.gd" id="9_build"]
+[ext_resource type="Script" path="res://scripts/waves/wave_spawner.gd" id="10_waves"]
+[ext_resource type="Script" path="res://scripts/enemies/dog.gd" id="12_dog"]
+[ext_resource type="Script" path="res://scripts/district/district_audio.gd" id="13_audio"]
+[ext_resource type="Script" path="res://scripts/activism/water_main.gd" id="15_water"]
+[ext_resource type="Script" path="res://scripts/activism/scout_point.gd" id="16_scout"]
+[ext_resource type="Script" path="res://scripts/enemies/supply_van.gd" id="17_van"]
+[ext_resource type="Script" path="res://scripts/systems/bribe_menu.gd" id="18_bribe"]
+[ext_resource type="Script" path="res://scripts/levels/neighborhood_builder.gd" id="19_hood"]
+[ext_resource type="Script" path="res://scripts/activism/security_cache.gd" id="21_cache"]
+[ext_resource type="Script" path="res://scripts/props/datacenter_site.gd" id="27_site"]
+[ext_resource type="Script" path="res://scripts/activism/foreman.gd" id="22_foreman"]
+[ext_resource type="PackedScene" path="res://scenes/vehicles/bulldozer.tscn" id="23_dozer"]
+
+[sub_resource type="ProceduralSkyMaterial" id="SkyMat"]
+sky_top_color = Color(0.38, 0.32, 0.25, 1)
+sky_horizon_color = Color(0.55, 0.45, 0.32, 1)
+ground_horizon_color = Color(0.55, 0.45, 0.32, 1)
+
+[sub_resource type="Sky" id="Sky"]
+sky_material = SubResource("SkyMat")
+
+[sub_resource type="Environment" id="Environment"]
+background_mode = 2
+sky = SubResource("Sky")
+ambient_light_source = 3
+tonemap_mode = 4
+glow_enabled = true
+fog_enabled = true
+fog_light_color = Color(0.45, 0.36, 0.25, 1)
+fog_density = 0.035
+
+[sub_resource type="BoxShape3D" id="GroundShape"]
+size = Vector3(400, 1, 400)
+
+[sub_resource type="PlaneMesh" id="GroundMesh"]
+size = Vector2(400, 400)
+
+[sub_resource type="StandardMaterial3D" id="GroundMat"]
+albedo_color = Color(0.32, 0.3, 0.26, 1)
+
+[node name="District2" type="Node3D" groups=["nav_source"]]
+script = ExtResource("1_level")
+grock_camera_spots = Array[Vector4]([Vector4(7.6, 0, 8, 3.14159), Vector4(-7.6, 0, 56, 0), Vector4(7.6, 0, 134, 3.14159), Vector4(-46, 0, 24.6, -1.5708), Vector4(18, 0, 35.4, 1.5708), Vector4(50, 0, 24.6, -1.5708), Vector4(-30, 0, 75.4, 1.5708), Vector4(-30, 0, 115.4, 1.5708), Vector4(50, 0, 104.6, -1.5708), Vector4(7.6, 0, 124, 3.14159)])
+tourist_stops = Array[Vector3]([Vector3(3.8, 0.2, 132), Vector3(-3.8, 0.2, 52), Vector3(3.8, 0.2, 122)])
+breach_fences = Array[String](["PureDrainSite/FenceLeft", "PureDrainSite/FenceRight", "PureDrainSite/FenceBack"])
+defense_site_id = &"puredrain"
+intro_objective = "Three corporations are draining the river: PureDrain Bottling (north), MoonMine (west), and SynergAI (east), each with a boss inside. Help the neighbors first (optional), then hit them."
+
+[node name="NavBaker" type="NavigationRegion3D" parent="."]
+script = ExtResource("8_nav")
+bake_bounds = AABB(-92, -2, -96, 184, 20, 260)
+
+[node name="NavBakerWest" type="NavigationRegion3D" parent="."]
+script = ExtResource("8_nav")
+bake_bounds = AABB(-190, -2, -96, 98, 20, 260)
+
+[node name="NavBakerEast" type="NavigationRegion3D" parent="."]
+script = ExtResource("8_nav")
+bake_bounds = AABB(92, -2, -96, 98, 20, 260)
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+rotation_degrees = Vector3(-50, 30, 0)
+light_color = Color(1, 0.72, 0.45, 1)
+light_energy = 0.5
+shadow_enabled = true
+
+[node name="EnvironmentDriver" type="Node" parent="."]
+script = ExtResource("2_env")
+
+[node name="Ground" type="StaticBody3D" parent="."]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Ground"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.5, 0)
+shape = SubResource("GroundShape")
+
+[node name="Mesh" type="MeshInstance3D" parent="Ground"]
+mesh = SubResource("GroundMesh")
+material_override = SubResource("GroundMat")
+
+[node name="Neighborhood" type="Node3D" parent="."]
+script = ExtResource("19_hood")
+layout_seed = 21
+reserved_lots = Array[Vector3]([Vector3(18, 0, 124)])
+store_lots = [[Vector3(-14, 0, 16), "e", "DUECE HARDWARE", Color(0.9, 0.2, 0.15, 1)], [Vector3(14, 0, 16), "h", "THE DAM DINER", Color(0.2, 0.65, 0.95, 1)], [Vector3(-30, 0, 16), "d", "POLICE", Color(0.25, 0.4, 1, 1)], [Vector3(30, 0, 16), "c", "RIVER BAIT & TACKLE", Color(0.3, 0.85, 0.45, 1)], [Vector3(-14, 0, 44), "a", "SPIN CYCLE", Color(0.5, 0.8, 1, 1)], [Vector3(14, 0, 44), "d", "BOATHOUSE PIZZA", Color(1, 0.6, 0.15, 1)], [Vector3(-30, 0, 44), "l", "TOWN HALL", Color(0.95, 0.82, 0.4, 1)]]
+has_river = true
+river_z = 90.0
+
+[node name="Player" parent="." instance=ExtResource("3_player")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, 0.1, 20)
+
+[node name="Car" parent="." instance=ExtResource("4_car")]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 2, 0.6, 17)
+
+[node name="PureDrainSite" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -42)
+script = ExtResource("27_site")
+site_id = &"puredrain"
+display_name = "PureDrain Bottling"
+brand_name = "PUREDRAIN"
+brand_tagline = "FROM YOUR RIVER TO YOUR SHELF  //  NOW 30% MORE PLASTIC"
+brand_color = Color(0.3, 0.7, 1, 1)
+boss = 4
+pump_spots = Array[Vector3]([Vector3(-28, 0, 125), Vector3(28, 0, 125), Vector3(52, 0, 125)])
+
+[node name="MoonMineSite" type="Node3D" parent="."]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, -150, 0, 30)
+script = ExtResource("27_site")
+site_id = &"moonmine"
+scout_rooftop = true
+display_name = "MoonMine"
+brand_name = "MOONMINE"
+brand_tagline = "PROOF OF WORK (YOURS)  //  HASHING THE RIVER SINCE Q2"
+brand_color = Color(0.98, 0.6, 0.1, 1)
+boss = 5
+
+[node name="SynergAISite" type="Node3D" parent="."]
+transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, 150, 0, 30)
+script = ExtResource("27_site")
+site_id = &"synergai"
+display_name = "SynergAI Campus"
+brand_name = "SYNERGAI"
+brand_tagline = "THE FUTURE, NOW IN BETA  //  ONE LAKE PER PROMPT"
+brand_color = Color(0.2, 0.95, 0.85, 1)
+boss = 6
+
+[node name="WaterMain" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.3, 0.06, 35.6)
+script = ExtResource("15_water")
+
+[node name="ScoutPoint" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -30, 0, -8)
+script = ExtResource("16_scout")
+site_id = &"puredrain"
+
+[node name="SupplyVan" type="CharacterBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.5, 0.2, 42)
+script = ExtResource("17_van")
+route = Array[Vector3]([Vector3(-2.5, 0.2, 96), Vector3(-2.5, 0.2, -5)])
+
+[node name="StrayDog1" type="CharacterBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 24, 0.1, 31)
+script = ExtResource("12_dog")
+stray = true
+
+[node name="StrayDog2" type="CharacterBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 28, 0.1, 29)
+script = ExtResource("12_dog")
+stray = true
+
+[node name="SecurityCache" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -24, 0, -20)
+script = ExtResource("21_cache")
+
+[node name="Bulldozer" parent="." instance=ExtResource("23_dozer")]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 26, 0.8, 57)
+
+[node name="Foreman" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 22, 0, 54)
+script = ExtResource("22_foreman")
+vehicle_path = NodePath("../Bulldozer")
+
+[node name="BribeMenu" type="Node" parent="."]
+script = ExtResource("18_bribe")
+
+[node name="BuildController" type="Node3D" parent="."]
+script = ExtResource("9_build")
+
+[node name="WaveSpawner" type="Node3D" parent="."]
+script = ExtResource("10_waves")
+
+[node name="SouthRoad" type="Marker3D" parent="WaveSpawner"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.2, 140)
+
+[node name="West" type="Marker3D" parent="WaveSpawner"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -85, 0.2, -30)
+
+[node name="BoardroomSite" type="Marker3D" parent="WaveSpawner"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 18, 0.2, 124)
+metadata/reserved = true
+
+[node name="East" type="Marker3D" parent="WaveSpawner"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 85, 0.2, -30)
+
+[node name="DistrictAudio" type="AudioStreamPlayer" parent="."]
+script = ExtResource("13_audio")
+
+[node name="Hud" type="CanvasLayer" parent="."]
+script = ExtResource("7_hud")

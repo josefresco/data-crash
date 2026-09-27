@@ -79,6 +79,12 @@ OUTFITS = {
     "mountie": ((0.82, 0.1, 0.1), "shirt", (0.08, 0.1, 0.25), (0.35, 0.22, 0.12), (0.95, 0.8, 0.3)),
     # Datacenter tech: company polo with a lanyard badge, khakis.
     "tech": ((0.22, 0.42, 0.72), "skin", (0.56, 0.5, 0.38), (0.15, 0.15, 0.17), (0.95, 0.95, 0.95)),
+    # District 2 bosses: Pete Bottleneck (bottled water), Chad Hodler (crypto
+    # mining), Brad Hypewell (AI keynotes), and Chad's HODL bros.
+    "pete": ((0.55, 0.78, 0.92), "shirt", (0.72, 0.64, 0.48), (0.35, 0.22, 0.12), (0.15, 0.45, 0.95)),
+    "chad": ((0.08, 0.08, 0.09), "shirt", (0.35, 0.36, 0.38), (0.95, 0.95, 0.95), (0.98, 0.6, 0.1)),
+    "brad": ((0.05, 0.05, 0.06), "shirt", (0.2, 0.28, 0.45), (0.95, 0.95, 0.95), (0.2, 0.95, 0.85)),
+    "hodl_bro": ((0.55, 0.95, 0.2), "skin", (0.3, 0.3, 0.32), (0.95, 0.95, 0.95), (0.98, 0.6, 0.1)),
     # Neighborhood grandmas: lavender cardigan, gray slacks, sensible shoes.
     "old_lady": ((0.66, 0.55, 0.78), "shirt", (0.48, 0.47, 0.5), (0.72, 0.62, 0.5), None),
 }
