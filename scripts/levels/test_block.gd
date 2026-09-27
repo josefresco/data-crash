@@ -112,6 +112,7 @@ func _ready() -> void:
 
 	add_to_group("site_alarm")
 	add_to_group("level")
+	Sfx.music(&"calm")
 	for node in get_tree().get_nodes_in_group("datacenter_sites"):
 		var site := node as DatacenterSite
 		sites.append(site)
@@ -300,6 +301,8 @@ func _send_canadians_home() -> void:
 
 ## Title card on each phase change.
 func _announce_phase() -> void:
+	Sfx.music({Phase.ACTIVISM: &"calm", Phase.ASSAULT: &"assault", Phase.BUILD: &"build",
+		Phase.WAVE: &"wave"}.get(phase, &""))
 	# Checklists only belong to their phases.
 	_update_sites()
 	_update_deeds()

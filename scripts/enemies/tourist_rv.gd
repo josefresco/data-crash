@@ -29,6 +29,7 @@ func _init() -> void:
 	body_size = Vector3(2.0, 1.8, 4.6)
 	model_path = "res://assets/kenney/cars/van.glb"
 	model_scale = 1.45
+	thermal_runaway = false
 	explosion_damage = 30.0
 
 

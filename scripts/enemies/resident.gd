@@ -38,8 +38,8 @@ var role := &"walker"
 
 var _pause_left := 0.0
 var _line_left := 0.0
-## Animation LOD: re-checked twice a second.
-var _lod_left := randf() * 0.5
+## Sprinkler toggle, twice a second.
+var _spray_left := randf() * 0.5
 var _route_index := 0
 var _spray: GPUParticles3D
 var _pet: Dog
@@ -106,14 +106,10 @@ func _process(delta: float) -> void:
 	super(delta)
 	if _is_dead:
 		return
-	_lod_left -= delta
-	if _lod_left <= 0.0 and _rig is CharacterModel:
-		_lod_left = 0.5
-		var camera := get_viewport().get_camera_3d()
-		var near := camera == null or camera.global_position.distance_to(global_position) < 55.0
-		(_rig as CharacterModel).set_animation_active(near)
-		if _spray:
-			_spray.emitting = near and _nav.is_navigation_finished() and randf() < 0.6
+	_spray_left -= delta
+	if _spray and _spray_left <= 0.0:
+		_spray_left = 0.5
+		_spray.emitting = not is_far() and _nav.is_navigation_finished() and randf() < 0.6
 	_line_left -= delta
 	if _line_left <= 0.0:
 		_line_left = randf_range(14.0, 30.0) if role != &"busker" else randf_range(6.0, 10.0)

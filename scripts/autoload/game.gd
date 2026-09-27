@@ -220,6 +220,11 @@ func _register_input_actions() -> void:
 	var right_click := InputEventMouseButton.new()
 	right_click.button_index = MOUSE_BUTTON_RIGHT
 	InputMap.action_add_event("cancel", right_click)
+	# Hold right click to aim (build mode uses the same button to exit).
+	_ensure_action("aim")
+	var aim_click := InputEventMouseButton.new()
+	aim_click.button_index = MOUSE_BUTTON_RIGHT
+	InputMap.action_add_event("aim", aim_click)
 
 
 func _ensure_action(action: String) -> void:

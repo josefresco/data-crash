@@ -19,6 +19,10 @@ const WEDGE_LENGTH := 5.1
 const WEDGE_HEIGHT := 1.9
 
 @export var top_speed := 11.0
+## Cyberdouche batteries go into thermal runaway when wedged (four
+## reversals in 20 s). Gas vehicles built on this class (police cruisers,
+## the tourist RV) turn it off.
+@export var thermal_runaway := true
 @export var acceleration := 6.0
 ## Radians per second of steering.
 @export var turn_rate := 2.2
@@ -200,7 +204,7 @@ func _begin_reverse() -> void:
 		return  # off duty: no thermal runaway from idle bumping
 	_reversals.append(_clock)
 	_reversals = _reversals.filter(func(t: float) -> bool: return _clock - t < 20.0)
-	if _reversals.size() >= 4 and not is_burning:
+	if _reversals.size() >= 4 and not is_burning and thermal_runaway:
 		_ignite()
 
 

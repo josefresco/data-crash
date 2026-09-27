@@ -58,6 +58,8 @@ func _run() -> void:
 	hud.call("_unhandled_input", press)
 	await _test_hud_overlay(hud, hardware)
 	await _test_hud_layout(hud)
+	check(Sfx.music_track == &"calm", "calm music plays in the neighborhood (%s)" % Sfx.music_track)
+	await _test_aim_hold()
 	await _test_pickups()
 	check(level.call("guidance_point") != hardware, "once armed, it points at the next good deed")
 	await _test_grounding()
@@ -211,6 +213,29 @@ func _test_market_and_residents() -> void:
 	check(Game.district.trust > trust, "buying local raises trust")
 	check(market.buy(4, player) and Game.cash == 5, "the $80 quilt leaves $5")
 	check(not market.buy(0, player), "can't afford bread with $5")
+
+
+## Hold right click: zoom in (narrower FOV) and a steadier aim.
+func _test_aim_hold() -> void:
+	var saved := player.weapons.map(func(w: Weapon) -> Array: return [w.owned, w.ammo])
+	var index := player.weapon_index
+	player.arm_all()
+	for i in player.weapons.size():
+		if player.weapons[i].display_name == "Pistol":
+			player.select_weapon(i)
+	var camera := get_viewport().get_camera_3d()
+	var fov_before := camera.fov
+	Input.action_press("aim")
+	await seconds(0.5)
+	check(player.aiming, "holding right click aims the pistol")
+	check(camera.fov < fov_before - 10.0, "aiming zooms in (fov %.0f -> %.0f)" % [fov_before, camera.fov])
+	Input.action_release("aim")
+	await seconds(0.5)
+	check(not player.aiming and absf(camera.fov - fov_before) < 1.0, "releasing it zooms back out")
+	for i in saved.size():
+		player.weapons[i].owned = saved[i][0]
+		player.weapons[i].ammo = saved[i][1]
+	player.select_weapon(index)
 
 
 func _test_hud_layout(hud: Hud) -> void:

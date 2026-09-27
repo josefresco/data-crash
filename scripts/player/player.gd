@@ -63,6 +63,12 @@ var _held_scale := 1.0
 var _aim_pose: AimModifier
 ## Seconds the aim pose stays up after the last shot.
 var _aim_hold := 0.0
+## Right mouse held (not in build mode or a car): zoomed, steadier aim.
+var aiming := false
+## Mouse sensitivity multiplier while aiming.
+const AIM_SENSITIVITY := 0.55
+## Spread multiplier while aiming.
+const AIM_SPREAD := 0.45
 ## Melee swing animation, 1 -> 0.
 var _swing := 0.0
 
@@ -99,8 +105,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 	elif event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		var motion := event as InputEventMouseMotion
-		_pivot.rotate_y(-motion.relative.x * Game.mouse_sensitivity)
-		_pitch = clampf(_pitch - motion.relative.y * Game.mouse_sensitivity, -1.2, 0.6)
+		var sensitivity := Game.mouse_sensitivity * (AIM_SENSITIVITY if aiming else 1.0)
+		_pivot.rotate_y(-motion.relative.x * sensitivity)
+		_pitch = clampf(_pitch - motion.relative.y * sensitivity, -1.2, 0.6)
 		_spring.rotation.x = _pitch
 	if not build_mode:
 		if event.is_action_pressed("next_weapon"):
@@ -112,6 +119,9 @@ func _unhandled_input(event: InputEvent) -> void:
 func _physics_process(delta: float) -> void:
 	_fire_timer = maxf(_fire_timer - delta, 0.0)
 	_aim_hold = maxf(_aim_hold - delta, 0.0)
+	aiming = not build_mode and vehicle == null and Input.is_action_pressed("aim") and current_weapon().aims()
+	if aiming:
+		_aim_hold = maxf(_aim_hold, 0.15)
 	_move(delta)
 	_footsteps(delta)
 
@@ -588,7 +598,8 @@ func _fire_pellet(weapon: Weapon, effects := true) -> void:
 	var muzzle := muzzle_point()
 	var center := get_viewport().get_visible_rect().size * 0.5
 	var origin := _camera.project_ray_origin(center)
-	var jitter := Vector3(randf_range(-1.0, 1.0), randf_range(-1.0, 1.0), randf_range(-1.0, 1.0)) * weapon.spread
+	var jitter := Vector3(randf_range(-1.0, 1.0), randf_range(-1.0, 1.0), randf_range(-1.0, 1.0)) * weapon.spread \
+		* (AIM_SPREAD if aiming else 1.0)
 	var direction := (_aim_direction() + jitter).normalized()
 	var query := PhysicsRayQueryParameters3D.create(origin, origin + direction * weapon.max_range, AIM_MASK, [get_rid()])
 	var hit := get_world_3d().direct_space_state.intersect_ray(query)

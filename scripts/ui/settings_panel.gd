@@ -53,7 +53,7 @@ func _ready() -> void:
 		volume.value_changed.connect(func(value: float) -> void:
 			Sfx.set_volume(bus, value)
 			Sfx.save_settings())
-		_row(grid, "%s volume" % ("Jingles" if bus == "Music" else bus), volume)
+		_row(grid, "%s volume" % bus, volume)
 
 	var tips := CheckBox.new()
 	tips.button_pressed = Game.show_tips

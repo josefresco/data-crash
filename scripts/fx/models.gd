@@ -378,6 +378,22 @@ static func _noise(frequency: float) -> NoiseTexture2D:
 	return texture
 
 
+## Draw-call budget: small detail parts stop drawing at a distance where
+## they'd be a few pixels (the level has thousands of them).
+const SMALL_PART := 0.6
+const MEDIUM_PART := 2.0
+const SMALL_RANGE := 60.0
+const MEDIUM_RANGE := 130.0
+
+
+static func cull_small(node: GeometryInstance3D, extent: float) -> void:
+	if extent < SMALL_PART:
+		node.visibility_range_end = SMALL_RANGE
+	elif extent < MEDIUM_PART:
+		node.visibility_range_end = MEDIUM_RANGE
+	node.visibility_range_end_margin = 4.0
+
+
 static func box(parent: Node3D, size: Vector3, at: Vector3, material: Material) -> MeshInstance3D:
 	var mesh := BoxMesh.new()
 	mesh.size = size
@@ -385,6 +401,7 @@ static func box(parent: Node3D, size: Vector3, at: Vector3, material: Material) 
 	node.mesh = mesh
 	node.material_override = material
 	node.position = at
+	cull_small(node, maxf(size.x, maxf(size.y, size.z)))
 	parent.add_child(node)
 	return node
 
@@ -401,6 +418,7 @@ static func cylinder(parent: Node3D, radius: float, height: float, at: Vector3, 
 	node.mesh = mesh
 	node.material_override = material
 	node.position = at
+	cull_small(node, maxf(radius * 2.0, height))
 	parent.add_child(node)
 	return node
 
@@ -415,6 +433,7 @@ static func ball(parent: Node3D, radius: float, at: Vector3, material: Material)
 	node.mesh = mesh
 	node.material_override = material
 	node.position = at
+	cull_small(node, radius * 2.0)
 	parent.add_child(node)
 	return node
 

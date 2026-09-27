@@ -64,11 +64,69 @@ func play(cue: StringName, at: Vector3, volume_db := 0.0, pitch := 1.0, pitch_ji
 	return player
 
 
+## Background music: crossfades to the looping `music_<track>.ogg` ("calm",
+## "assault", "build", "wave"); "" fades out. Jingles on the Music bus duck it.
+const MUSIC_FADE := 2.5
+const MUSIC_DB := -8.0
+var music_track := &""
+var _music_players: Array[AudioStreamPlayer] = []
+var _music_current := 0
+
+
+func music(track: StringName) -> void:
+	if track == music_track:
+		return
+	music_track = track
+	if _music_players.is_empty():
+		for i in 2:
+			var player := AudioStreamPlayer.new()
+			player.bus = &"Music"
+			player.volume_db = -60.0
+			player.process_mode = Node.PROCESS_MODE_ALWAYS
+			add_child(player)
+			_music_players.append(player)
+	var old := _music_players[_music_current]
+	if old.playing:
+		var out := create_tween()
+		out.tween_property(old, "volume_db", -60.0, MUSIC_FADE)
+		out.tween_callback(old.stop)
+	if track == &"":
+		return
+	var path := "res://assets/audio/music_%s.ogg" % track
+	if not ResourceLoader.exists(path):
+		push_warning("Sfx: no music track %s" % path)
+		return
+	var stream := load(path) as AudioStreamOggVorbis
+	stream.loop = true
+	_music_current = 1 - _music_current
+	var next := _music_players[_music_current]
+	next.stream = stream
+	next.volume_db = -60.0
+	next.play()
+	var fade_in := create_tween()
+	fade_in.tween_property(next, "volume_db", MUSIC_DB, MUSIC_FADE)
+
+
+## Dips the music for a jingle or a big moment.
+func duck_music(seconds := 2.5) -> void:
+	if _music_players.is_empty():
+		return
+	var player := _music_players[_music_current]
+	if not player.playing:
+		return
+	var tween := create_tween()
+	tween.tween_property(player, "volume_db", MUSIC_DB - 14.0, 0.2)
+	tween.tween_interval(seconds)
+	tween.tween_property(player, "volume_db", MUSIC_DB, 1.0)
+
+
 ## Non-positional sound on the UI bus (clicks, jingles, tips).
 func ui(cue: StringName, volume_db := 0.0, bus := "UI") -> void:
 	var stream := _pick(cue)
 	if stream == null:
 		return
+	if bus == "Music":
+		duck_music(stream.get_length())
 	for player in _ui_players:
 		if not player.playing:
 			player.stream = stream

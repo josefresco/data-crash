@@ -16,6 +16,10 @@ const LOS_MASK := 1 | 2 | 16 | 32
 const THINK_INTERVAL := 0.25
 ## Ground speed (m/s) the Kenney run clip is authored for.
 const RUN_CLIP_SPEED := 4.0
+## AI level of detail: beyond this distance from the camera a unit thinks
+## half as often and stops animating (bosses never go far).
+const LOD_DISTANCE := 60.0
+const LOD_CHECK := 0.5
 ## Damage let through while inside a projection drone's force field.
 const FIELD_DAMAGE_FACTOR := 0.35
 const ALLY_TINT := Color(0.3, 0.85, 0.4)
@@ -78,6 +82,10 @@ var _field_left := 0.0
 var _field_bubble: MeshInstance3D
 var _walk_phase := randf() * TAU
 var _stuck_time := 0.0
+## True while far from the camera (see LOD_DISTANCE); re-checked every LOD_CHECK s.
+var _lod_far := false
+var _lod_left := randf() * LOD_CHECK
+var _was_resting := false
 ## While > 0 a shove (vehicle bump, blast) carries the unit instead of its legs.
 var _knock_left := 0.0
 var _investigate_left := 0.0
@@ -275,6 +283,10 @@ func _physics_process(delta: float) -> void:
 	if not is_on_floor():
 		velocity.y -= _gravity * delta
 	_attack_timer = maxf(_attack_timer - delta, 0.0)
+	_lod_left -= delta
+	if _lod_left <= 0.0:
+		_lod_left = LOD_CHECK
+		_update_lod()
 
 	var move_dir := Vector3.ZERO
 	if _stun_timer > 0.0:
@@ -282,7 +294,7 @@ func _physics_process(delta: float) -> void:
 	else:
 		_think_timer -= delta
 		if _think_timer <= 0.0:
-			_think_timer = THINK_INTERVAL
+			_think_timer = THINK_INTERVAL * (2.0 if _lod_far else 1.0)
 			_think()
 
 		if _is_valid(target) and _has_los and _distance_to(target) <= _engage_range(target):
@@ -301,11 +313,40 @@ func _physics_process(delta: float) -> void:
 	velocity.z = lerpf(velocity.z, move_dir.z * move_speed, weight)
 	if move_dir != Vector3.ZERO:
 		_face(global_position + move_dir, delta)
+	# Standing still on the floor: skip the physics move and the animation
+	# update (most site security and townsfolk idle most of the time).
+	if is_resting(move_dir):
+		velocity = Vector3.ZERO
+		if not _was_resting:
+			_was_resting = true
+			_animate(delta)
+		return
+	_was_resting = false
 	move_and_slide()
 	_animate(delta)
 
 	if global_position.y < -30.0:
 		_die()
+
+
+## True when this frame needs no physics move: on the floor, not steering,
+## not shoved, and (nearly) stopped.
+func is_resting(move_dir: Vector3) -> bool:
+	return move_dir == Vector3.ZERO and _knock_left <= 0.0 and is_on_floor() \
+		and Vector2(velocity.x, velocity.z).length_squared() < 0.0025
+
+
+func is_far() -> bool:
+	return _lod_far
+
+
+func _update_lod() -> void:
+	var camera := get_viewport().get_camera_3d()
+	var far := boss_name.is_empty() and camera != null \
+		and camera.global_position.distance_squared_to(global_position) > LOD_DISTANCE * LOD_DISTANCE
+	_lod_far = far
+	if _rig is CharacterModel:
+		(_rig as CharacterModel).set_animation_active(not far)
 
 
 ## Override: group this unit joins. Turrets and allied dogs only shoot "hostiles".
