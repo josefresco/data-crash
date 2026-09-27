@@ -53,6 +53,8 @@ grock_camera_spots = Array[Vector4]([Vector4(7.6, 0, 8, 3.14159), Vector4(-7.6, 
 tourist_stops = Array[Vector3]([Vector3(3.8, 0.2, 132), Vector3(-3.8, 0.2, 52), Vector3(3.8, 0.2, 122)])
 breach_fences = Array[String](["PureDrainSite/FenceLeft", "PureDrainSite/FenceRight", "PureDrainSite/FenceBack"])
 defense_site_id = &"puredrain"
+district_index = 1
+intro_lines = Array[String](["Riverbend had a river. Then the bottlers found it.", "A crypto mine hums by the water. An AI campus drinks a lake per prompt.", "The riverbed is cracking. The neighbors are fed up.", "Same fight, new town."])
 intro_objective = "Three corporations are draining the river: PureDrain Bottling (north), MoonMine (west), and SynergAI (east), each with a boss inside. Help the neighbors first (optional), then hit them."
 
 [node name="NavBaker" type="NavigationRegion3D" parent="."]

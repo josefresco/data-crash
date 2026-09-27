@@ -32,6 +32,7 @@ func _run() -> void:
 	var save := SaveGame.read()
 	check(int(save.get("waves_cleared", -1)) == 2 and (save.get("structures", []) as Array).size() == 3,
 		"the checkpoint has the wave and the built structures")
+	check(str(save.get("scene", "")) == Game.district_scene(0), "the checkpoint remembers which district it's in")
 
 	# Continue into a fresh level.
 	level.queue_free()
@@ -67,3 +68,29 @@ func _run() -> void:
 	Game.difficulty = 1
 	check(easy.max_health < hard.max_health, "difficulty scales enemy health (%.0f easy, %.0f hard)" % [easy.max_health, hard.max_health])
 	SaveGame.clear()
+	# The campaign: District 2 is locked until District 1 is won.
+	Game.reset_progress()
+	var title := (load("res://scenes/ui/title.tscn") as PackedScene).instantiate()
+	add_child(title)
+	await seconds(0.2)
+	var locked := title.find_children("*", "Button", true, false).filter(func(b: Node) -> bool:
+		return "Riverbend" in (b as Button).text)
+	check(locked.size() == 1 and (locked[0] as Button).disabled, "the title shows Riverbend, locked")
+	title.queue_free()
+	check(Game.unlock_district(1) and not Game.unlock_district(1), "winning Maple Grove unlocks Riverbend (once)")
+	Game.load_progress()
+	check(Game.districts_unlocked == 2, "the unlock is saved")
+	title = (load("res://scenes/ui/title.tscn") as PackedScene).instantiate()
+	add_child(title)
+	await seconds(0.2)
+	var open := title.find_children("*", "Button", true, false).filter(func(b: Node) -> bool:
+		return (b as Button).text == "Play: Riverbend" and not (b as Button).disabled)
+	check(open.size() == 1, "then the title offers Play: Riverbend")
+	title.queue_free()
+	var ending := resumed.get("_end_screen") as EndScreen
+	ending.show_result(true, 5, 5)
+	await seconds(0.1)
+	var next := ending.find_children("*", "Button", true, false).filter(func(b: Node) -> bool:
+		return (b as Button).text == "Next: Riverbend")
+	check(next.size() == 1, "the win screen offers the next district")
+	Game.reset_progress()

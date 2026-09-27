@@ -57,6 +57,60 @@ var pending_intro := false
 var pending_save := {}
 
 
+## The campaign, in order: [scene, name]. Winning a district unlocks the
+## next; each one starts fresh (cash, weapons, and trust reset on load).
+const DISTRICTS := [
+	["res://scenes/levels/test_block.tscn", "Maple Grove"],
+	["res://scenes/levels/district_2.tscn", "Riverbend"],
+]
+const PROGRESS_PATH := "user://progress.cfg"
+## Scenes under res://tests/ use their own progress file (never the player's).
+const TEST_PROGRESS_PATH := "user://progress_test.cfg"
+## How many districts can be played (at least the first).
+var districts_unlocked := 1
+
+
+func district_scene(index: int) -> String:
+	return DISTRICTS[clampi(index, 0, DISTRICTS.size() - 1)][0]
+
+
+func district_name(index: int) -> String:
+	return DISTRICTS[clampi(index, 0, DISTRICTS.size() - 1)][1]
+
+
+func _progress_file() -> String:
+	var scene := get_tree().current_scene
+	return TEST_PROGRESS_PATH if scene and scene.scene_file_path.begins_with("res://tests/") else PROGRESS_PATH
+
+
+func load_progress() -> void:
+	districts_unlocked = 1
+	var config := ConfigFile.new()
+	if config.load(_progress_file()) == OK:
+		districts_unlocked = clampi(int(config.get_value("campaign", "unlocked", 1)), 1, DISTRICTS.size())
+
+
+## Unlocks district `index` (0-based). Returns true when it was locked.
+func unlock_district(index: int) -> bool:
+	if index >= DISTRICTS.size() or index < districts_unlocked:
+		return false
+	districts_unlocked = index + 1
+	var config := ConfigFile.new()
+	config.set_value("campaign", "unlocked", districts_unlocked)
+	var err := config.save(_progress_file())
+	if err != OK:
+		push_warning("Couldn't save progress (error %d)" % err)
+	return true
+
+
+## Tests: back to only the first district (the test progress file).
+func reset_progress() -> void:
+	districts_unlocked = 1
+	var file := _progress_file()
+	if FileAccess.file_exists(file):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(file))
+
+
 ## Quits after freeing the running scene and letting a few frames pass.
 ## Tearing a live level (physics bodies, ragdoll joints, audio loops) down
 ## inside the engine's own shutdown segfaulted now and then; freeing it
@@ -102,6 +156,7 @@ func _notification(what: int) -> void:
 
 func _ready() -> void:
 	get_tree().auto_accept_quit = false  # the close button goes through quit_cleanly()
+	load_progress.call_deferred()  # after the main scene is set (test scenes use their own file)
 	_register_input_actions()
 	load_settings()
 

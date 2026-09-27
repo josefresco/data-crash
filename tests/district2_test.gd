@@ -17,10 +17,14 @@ var player: Player
 
 
 func _run() -> void:
+	Game.pending_intro = true
 	level = D2.instantiate() as Level
 	add_child(level)
 	player = level.get_node("Player") as Player
 	await seconds(2.0)
+	var intro := level.get_children().filter(func(n: Node) -> bool: return n is IntroOverlay)
+	check(intro.size() == 1 and str((intro[0] as IntroOverlay).lines[0]).begins_with("Riverbend"), "Riverbend opens with its own story")
+	check(level.district_index == 1 and Game.district_name(1) == "Riverbend", "District 2 is Riverbend in the campaign")
 	var hood := level.get_node("Neighborhood") as NeighborhoodBuilder
 	check(hood.has_river and hood.river() != null, "District 2 has its river")
 	check(level.sites.size() == 3, "three datacenters (%d)" % level.sites.size())

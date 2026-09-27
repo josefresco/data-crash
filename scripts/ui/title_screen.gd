@@ -31,14 +31,21 @@ func _ready() -> void:
 	_menu.add_child(title)
 	_menu.add_child(UiTheme.label("Sabotage the server farm. Save the suburb.", 24, UiTheme.ACCENT))
 	_menu.add_child(Control.new())
-	var entries := [["Play", _play], ["Settings", _show_panel.bind(SettingsPanel)],
-			["Controls", _show_panel.bind(ControlsPanel)], ["Quit", func() -> void: Game.quit_cleanly()]]
+	var entries := []
 	var save := SaveGame.read()
 	if not save.is_empty():
-		entries.insert(0, ["Continue (wave %d of 5)" % (int(save.get("waves_cleared", 0)) + 1), _continue.bind(save)])
+		entries.append(["Continue (wave %d of 5)" % (int(save.get("waves_cleared", 0)) + 1), _continue.bind(save)])
+	for i in Game.DISTRICTS.size():
+		if i < Game.districts_unlocked:
+			entries.append(["Play: %s" % Game.district_name(i), _play.bind(i)])
+		else:
+			entries.append(["%s (win %s first)" % [Game.district_name(i), Game.district_name(i - 1)], Callable()])
+	entries.append_array([["Settings", _show_panel.bind(SettingsPanel)],
+			["Controls", _show_panel.bind(ControlsPanel)], ["Quit", func() -> void: Game.quit_cleanly()]])
 	for entry in entries:
-		var node := UiTheme.button(entry[0], entry[1], 340.0)
+		var node := UiTheme.button(entry[0], entry[1] if (entry[1] as Callable).is_valid() else func() -> void: pass, 380.0)
 		node.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		node.disabled = not (entry[1] as Callable).is_valid()
 		_menu.add_child(node)
 	(_menu.get_child(3) as Button).grab_focus()
 
@@ -68,17 +75,17 @@ func _process(delta: float) -> void:
 			puff.position = puff.get_meta(&"origin")
 
 
-func _play() -> void:
+func _play(index := 0) -> void:
 	Game.pending_intro = true
 	Game.pending_save = {}
-	get_tree().change_scene_to_file(LEVEL_SCENE)
+	get_tree().change_scene_to_file(Game.district_scene(index))
 
 
 ## Resume the defense from the checkpoint.
 func _continue(save: Dictionary) -> void:
 	Game.pending_intro = false
 	Game.pending_save = save
-	get_tree().change_scene_to_file(LEVEL_SCENE)
+	get_tree().change_scene_to_file(str(save.get("scene", LEVEL_SCENE)))
 
 
 func _show_panel(kind: GDScript) -> void:

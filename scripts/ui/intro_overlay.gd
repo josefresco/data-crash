@@ -11,6 +11,9 @@ const LINES := [
 ]
 const LINE_SECONDS := 2.6
 
+## The captions (a district can bring its own; see Level.intro_lines).
+var lines: Array = LINES
+
 var _shade: ColorRect
 var _label: Label
 var _hint: Label
@@ -69,10 +72,10 @@ func _input(event: InputEvent) -> void:
 
 func _next() -> void:
 	_index += 1
-	if _index >= LINES.size():
+	if _index >= lines.size():
 		finish()
 		return
-	_label.text = LINES[_index]
+	_label.text = lines[_index]
 	_left = LINE_SECONDS
 
 

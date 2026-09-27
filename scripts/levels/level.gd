@@ -79,6 +79,10 @@ enum Phase { ACTIVISM, ASSAULT, BOSS, BUILD, WAVE, WON, LOST }
 @export var breach_from_wave := 3
 
 @export_group("District")
+## This district's place in Game.DISTRICTS (winning it unlocks the next).
+@export var district_index := 0
+## Opening captions (empty: IntroOverlay's default story).
+@export var intro_lines: Array[String] = []
 ## The site whose lot the green datacenter goes up on in Phase 3.
 @export var defense_site_id := &"felsa"
 ## The opening objective line.
@@ -159,7 +163,10 @@ func _ready() -> void:
 	add_to_group("level")
 	if Game.pending_intro:
 		Game.pending_intro = false
-		add_child(IntroOverlay.new())
+		var intro := IntroOverlay.new()
+		if not intro_lines.is_empty():
+			intro.lines = intro_lines
+		add_child(intro)
 	if not Game.pending_save.is_empty():
 		var save := Game.pending_save
 		Game.pending_save = {}
@@ -670,6 +677,7 @@ func save_checkpoint() -> void:
 		"core_health": core.health if is_instance_valid(core) else 0.0,
 		"structures": _built_structures(),
 		"difficulty": Game.difficulty,
+		"scene": scene_file_path,
 	})
 
 
@@ -1312,6 +1320,8 @@ func _on_all_waves_cleared() -> void:
 		return
 	SaveGame.clear()
 	phase = Phase.WON
+	if Game.unlock_district(district_index + 1):
+		Game.notify("%s unlocked: another town needs you." % Game.district_name(district_index + 1), 6.0)
 	# Harry's hires: their contracts are void. Everyone left goes home.
 	for node in get_tree().get_nodes_in_group("hostiles"):
 		(node as Enemy).apply_damage(99999.0, (node as Node3D).global_position, &"explosive")

@@ -56,6 +56,12 @@ func show_result(won: bool, waves_cleared: int, total_waves: int) -> void:
 	buttons.alignment = BoxContainer.ALIGNMENT_CENTER
 	buttons.add_theme_constant_override("separation", 16)
 	body.add_child(buttons)
+	var next := _next_district()
+	if won and next >= 0:
+		buttons.add_child(UiTheme.button("Next: %s" % Game.district_name(next), func() -> void:
+			Game.pending_intro = true
+			Game.pending_save = {}
+			get_tree().change_scene_to_file(Game.district_scene(next)), 260.0))
 	buttons.add_child(UiTheme.button("Play again", func() -> void: get_tree().reload_current_scene(), 220.0))
 	buttons.add_child(UiTheme.button("Title screen", func() -> void: get_tree().change_scene_to_file(TITLE_SCENE), 220.0))
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
@@ -66,3 +72,12 @@ func show_result(won: bool, waves_cleared: int, total_waves: int) -> void:
 func _site_name() -> String:
 	var level := get_tree().get_first_node_in_group("level")
 	return level.call(&"defense_site_name") if level and level.has_method("defense_site_name") else "Felsa Cloud"
+
+
+## The district after this one, if it's unlocked (-1: none).
+func _next_district() -> int:
+	var level := get_tree().get_first_node_in_group("level")
+	if level == null:
+		return -1
+	var next := int(level.get("district_index")) + 1
+	return next if next < Game.DISTRICTS.size() and next < Game.districts_unlocked else -1
