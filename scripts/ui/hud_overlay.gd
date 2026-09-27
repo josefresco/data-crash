@@ -84,6 +84,7 @@ func _process(delta: float) -> void:
 		_player = get_tree().get_first_node_in_group("player") as Player
 		if _player:
 			_player.damage_dealt.connect(_on_damage_dealt)
+			_player.headshot_landed.connect(_on_headshot)
 			_player.hurt_from.connect(_on_hurt)
 	if _level == null or not is_instance_valid(_level):
 		_level = get_tree().get_first_node_in_group("level")
@@ -143,6 +144,12 @@ func _scan() -> void:
 		var ray := PhysicsRayQueryParameters3D.create(eye, head, 1 | 16)
 		if space.intersect_ray(ray).is_empty():
 			_speakers.append(label)
+
+
+func _on_headshot(at: Vector3) -> void:
+	_numbers.append([at + Vector3.UP * 0.45, "HEADSHOT", NUMBER_SECONDS * 1.3, true])
+	if _numbers.size() > 24:
+		_numbers.pop_front()
 
 
 func _on_damage_dealt(at: Vector3, amount: float, killed: bool) -> void:

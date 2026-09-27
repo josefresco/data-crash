@@ -22,6 +22,9 @@ const LAYER_VEHICLES := 4
 const LAYER_DEBRIS := 8
 const LAYER_DESTRUCTIBLE := 16
 const LAYER_ENEMIES := 32
+## Ragdolls: they collide with the world and props only, so cars run over
+## bodies instead of bouncing off (or being launched by) them.
+const LAYER_BODIES := 64
 
 const SETTINGS_PATH := "user://settings.cfg"
 const DEFAULT_SENSITIVITY := 0.0025

@@ -99,6 +99,17 @@ static func impact(parent: Node, at: Vector3, normal := Vector3.UP, kind := &"de
 			pm.scale_max = 0.12
 			sparks.lifetime = 0.45
 			_flash(parent, at + normal * 0.05, 0.45 * scale, Color(2.2, 1.8, 1.1))
+		&"water":
+			var drops := _burst(parent, at, "circle_05_alpha.png", false, int(10 * scale), 0.5)
+			var wet := drops.process_material as ParticleProcessMaterial
+			wet.direction = (normal + Vector3.UP).normalized()
+			wet.spread = 60.0
+			wet.initial_velocity_min = 1.5
+			wet.initial_velocity_max = 3.5
+			wet.gravity = Vector3(0.0, -9.8, 0.0)
+			wet.scale_min = 0.06
+			wet.scale_max = 0.14
+			wet.color_ramp = _ramp([Color(0.85, 0.93, 1.0, 0.9), Color(0.8, 0.9, 1.0, 0.0)])
 		&"flesh":
 			var puff := _burst(parent, at, "smoke_01_alpha.png", false, 3, 0.35)
 			var pm := puff.process_material as ParticleProcessMaterial

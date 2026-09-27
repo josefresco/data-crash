@@ -104,6 +104,8 @@ var speed_scale := 1.0
 var suspicion := 0.0
 var _voiced_suspicion := false
 var _site_node: Variant = null
+## Seconds left soaked by a hose (moves at 60%).
+var soaked_left := 0.0
 ## Seconds left marked by the player's recon drone (HUD shows it through walls).
 var spotted_left := 0.0
 var _gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
@@ -142,6 +144,17 @@ func set_faction(value: Faction) -> void:
 		add_to_group(group)
 	if _material:
 		_material.albedo_color = _base_color()
+
+
+## A bullet at world `point` hit the head (characters only: at or above the
+## neck bone). Headshots deal HEADSHOT_FACTOR.
+const HEADSHOT_FACTOR := 2.5
+
+
+func is_head_hit(point: Vector3) -> bool:
+	if not _rig is CharacterModel:
+		return false
+	return point.y >= (_rig as CharacterModel).anchor(&"head").global_position.y - 0.03
 
 
 ## Point other units aim at.
@@ -286,6 +299,8 @@ func _process(delta: float) -> void:
 		_field_left -= delta
 	if spotted_left > 0.0:
 		spotted_left -= delta
+	if soaked_left > 0.0:
+		soaked_left -= delta
 	if _field_bubble and _field_bubble.visible and not is_field_shielded():
 		_field_bubble.visible = false
 
@@ -312,6 +327,24 @@ func apply_knockback(impulse: Vector3) -> void:
 		return
 	velocity += impulse
 	_knock_left = 0.35
+
+
+## Knocked off its feet (a car bump, a hose blast): a stagger clip, down for
+## `duration`, then back up. Reads clearly as "still alive".
+func knock_down(duration: float) -> void:
+	if _is_dead:
+		return
+	_stun_timer = maxf(_stun_timer, duration)
+	_act(&"knockback", true)
+
+
+## Hosed: slowed while soaked, and grumbles about it.
+func soak(duration: float) -> void:
+	if _is_dead:
+		return
+	if soaked_left <= 0.0 and randf() < 0.5 and outfit != "":
+		speak(["Hey! My uniform!", "Cut it out!", "That's cold!", "Ugh, soaked!"].pick_random())
+	soaked_left = maxf(soaked_left, duration)
 
 
 func stun(duration: float) -> void:
@@ -354,8 +387,9 @@ func _physics_process(delta: float) -> void:
 	if _knock_left > 0.0:
 		_knock_left -= delta
 		weight *= 0.08
-	velocity.x = lerpf(velocity.x, move_dir.x * move_speed * speed_scale, weight)
-	velocity.z = lerpf(velocity.z, move_dir.z * move_speed * speed_scale, weight)
+	var pace := move_speed * speed_scale * (0.6 if soaked_left > 0.0 else 1.0)
+	velocity.x = lerpf(velocity.x, move_dir.x * pace, weight)
+	velocity.z = lerpf(velocity.z, move_dir.z * pace, weight)
 	if move_dir != Vector3.ZERO:
 		var look: Variant = _look_while_moving()
 		_face(look as Vector3 if look != null else global_position + move_dir, delta)

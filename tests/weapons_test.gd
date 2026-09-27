@@ -93,7 +93,9 @@ func _test_hoses() -> void:
 	check(jet != null and jet.emitting, "water streams from the nozzle while spraying")
 	var pushed := guard.global_position.distance_to(player.global_position) - before
 	check(pushed > 2.0, "the garden hose pushes a guard back (%.1f m)" % pushed)
-	check(guard.health == guard.max_health, "garden hose water doesn't hurt")
+	check(guard.health < guard.max_health and guard.health > guard.max_health * 0.8,
+		"garden hose water barely hurts (%.0f of %.0f)" % [guard.health, guard.max_health])
+	check(guard.soaked_left > 0.0, "a hosed guard is soaked (slowed)")
 	await seconds(0.4)
 	check(not jet.emitting, "the water stops when you let go")
 

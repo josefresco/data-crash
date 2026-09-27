@@ -4,6 +4,7 @@
 
 crack_<n>.png: branching dark cracks on transparency.
 oil_<n>.png: soft, uneven dark stains with a faint rainbow sheen.
+blood_<n>.png: wound splats for character models (a dark core, flecks).
 Deterministic (seeded), so rerunning produces the same files.
 """
 import math
@@ -64,13 +65,41 @@ def oil(seed):
     return img
 
 
+def blood(seed):
+    """A wound splat for character models: a dark red core, a torn edge, and
+    a few flecks. White-ish alpha shape in deep red (tinted in the shader)."""
+    rng = random.Random(seed)
+    img = Image.new("RGBA", (SIZE, SIZE), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    for _ in range(14):
+        r = rng.uniform(14, 34)
+        cx = SIZE / 2 + rng.uniform(-30, 30)
+        cy = SIZE / 2 + rng.uniform(-30, 30)
+        red = rng.randint(95, 135)
+        draw.ellipse([cx - r, cy - r * rng.uniform(0.6, 1.0), cx + r, cy + r * rng.uniform(0.6, 1.0)],
+                     fill=(red, rng.randint(6, 16), rng.randint(6, 14), rng.randint(200, 245)))
+    # Flecks thrown outward.
+    for _ in range(26):
+        angle = rng.uniform(0, math.tau)
+        dist = rng.uniform(55, 105)
+        r = rng.uniform(2, 7)
+        cx = SIZE / 2 + math.cos(angle) * dist
+        cy = SIZE / 2 + math.sin(angle) * dist
+        draw.ellipse([cx - r, cy - r, cx + r, cy + r], fill=(110, 10, 10, rng.randint(150, 230)))
+    # A darker, wetter center.
+    draw.ellipse([SIZE / 2 - 22, SIZE / 2 - 18, SIZE / 2 + 22, SIZE / 2 + 18], fill=(60, 4, 6, 240))
+    return img.filter(ImageFilter.GaussianBlur(1.2))
+
+
 def main():
     OUT.mkdir(parents=True, exist_ok=True)
     for n in range(3):
         crack(100 + n).save(OUT / f"crack_{n}.png")
     for n in range(2):
         oil(200 + n).save(OUT / f"oil_{n}.png")
-    print(f"wrote 5 decals to {OUT}")
+    for n in range(3):
+        blood(300 + n).save(OUT / f"blood_{n}.png")
+    print(f"wrote 8 decals to {OUT}")
 
 
 if __name__ == "__main__":

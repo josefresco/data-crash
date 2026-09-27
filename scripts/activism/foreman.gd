@@ -32,5 +32,5 @@ func _process(delta: float) -> void:
 	elif dozer.can_enter():
 		_label.text = "Foreman: \"Keys are in it. Knock 'em down.\""
 	else:
-		_label.text = "Foreman: \"Show me the block's behind you.\"\n(trust %d%% / %d%%)" % [
+		_label.text = "Foreman: \"Get the neighborhood on your side and the dozer's yours.\"\n(neighborhood trust %d%%, needs %d%%)" % [
 			roundi(Game.district.trust * 100.0), roundi(dozer.required_trust * 100.0)]

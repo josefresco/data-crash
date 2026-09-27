@@ -14,6 +14,8 @@ signal damage_dealt(at: Vector3, amount: float, killed: bool)
 signal hurt_from(from: Vector3, amount: float)
 ## Knocked out and back at the spawn point (the level calls off the heat).
 signal respawned
+## A bullet hit a head (HUD pop-up).
+signal headshot_landed(at: Vector3)
 ## Seconds of spawn protection after a respawn.
 const SPAWN_PROTECTION := 3.0
 
@@ -711,10 +713,21 @@ func _fire_pellet(weapon: Weapon, effects := true) -> void:
 	if target and not friendly and target.has_method("apply_damage"):
 		# `from` is the shooter: riot shields and debris direction depend on it.
 		var before: float = (target as Enemy).health if target is Enemy else 0.0
-		target.call(&"apply_damage", weapon.damage, muzzle, &"bullet")
+		var damage := weapon.damage
+		var head := target is Enemy and (target as Enemy).is_head_hit(point)
+		if head:
+			damage *= Enemy.HEADSHOT_FACTOR
+		target.call(&"apply_damage", damage, muzzle, &"bullet")
 		if target is Enemy and (target as Enemy).faction == Enemy.Faction.HOSTILE:
-			hit_confirmed.emit(not (target as Enemy).is_alive())
+			var killed := not (target as Enemy).is_alive()
+			hit_confirmed.emit(killed)
 			_report_damage(target as Enemy, before, point)
+			if head:
+				headshot_landed.emit(point)
+				Game.count("headshots")
+				Sfx.play(&"hitmarker", point, -2.0, 1.5)
+				if killed and before > 0.0:
+					Game.add_cash(5)  # headshot kills pay a little extra
 	if target is RigidBody3D:
 		(target as RigidBody3D).apply_impulse(-normal * 2.0, point - (target as Node3D).global_position)
 
@@ -754,10 +767,15 @@ func _spray(weapon: Weapon) -> void:
 				unit.apply_knockback(flat_aim * weapon.knockback * 0.5)
 				continue
 			var falloff := 1.0 - distance / weapon.reach * 0.5
+			unit.soak(3.0)
+			if randf() < 0.3:
+				Vfx.impact(get_parent(), unit.aim_point() - to.normalized() * 0.3, -to.normalized(), &"water", 0.8)
 			if unit.boss_name.is_empty():
 				unit.apply_knockback(flat_aim * weapon.knockback * falloff)
 				if weapon.stuns and distance < weapon.reach * 0.6:
-					unit.stun(0.3)
+					unit.knock_down(0.4)
+				elif randf() < 0.08:
+					unit.call(&"_act", &"hit_chest")
 			if weapon.damage > 0.0:
 				var before := unit.health
 				unit.apply_damage(weapon.damage * tick, from, &"water")

@@ -494,12 +494,18 @@ func _bump(unit: Enemy) -> void:
 	var away := unit.global_position - global_position
 	away.y = 0.0
 	var along := linear_velocity.normalized()
-	var push := (along * 0.6 + away.normalized() * 0.8).normalized() * minf(speed * 0.9, 14.0) + Vector3.UP * minf(speed * 0.3, 4.0)
+	var push := (along * 0.6 + away.normalized() * 0.8).normalized() * minf(speed * 0.9, 14.0) + Vector3.UP * minf(speed * 0.12, 1.5)
 	unit.apply_knockback(push)
 	var hostile := unit.faction == Enemy.Faction.HOSTILE and not unit.is_in_group("protesters") and not unit.is_in_group("strays")
 	if hostile and speed >= ram_min_speed and rams_units():
 		Sfx.play(&"car_crash", global_position, minf(-8.0 + speed, 4.0))
 		unit.apply_damage(speed * ram_damage_per_mps, global_position, &"impact")
+		if not unit.is_alive():
+			# Ran them over: a thump through the suspension (bodies don't collide).
+			apply_central_impulse(Vector3.UP * mass * 0.25)
+			Game.shake(global_position, 0.25)
+	if unit.is_alive() and speed >= 3.0:
+		unit.knock_down(1.2 if speed >= ram_min_speed else 0.7)
 	elif speed > 8.0 and unit.is_in_group("residents"):
 		Sfx.play(&"hit_soft", unit.global_position, 0.0)
 		unit.call(&"speak", ["Hey! Watch it!", "Slow down!", "Road hog!"].pick_random())

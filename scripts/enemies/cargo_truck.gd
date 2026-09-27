@@ -18,6 +18,8 @@ var _away_left := 0.0
 var _heading_in := true
 var _sign_left: Label3D
 var _sign_right: Label3D
+## The owning site's brand on both box sides and the back doors.
+var _brands: Array[Label3D] = []
 var _box: MeshInstance3D
 
 
@@ -47,13 +49,39 @@ func _decorate(visual_root: Node3D) -> void:
 		sign_label.font_size = 64
 		sign_label.pixel_size = 0.008
 		sign_label.outline_size = 8
-		sign_label.position = Vector3(side * (body_size.x * 0.52 + 0.02), 2.1, 0.55)
+		sign_label.position = Vector3(side * (body_size.x * 0.52 + 0.02), 1.95, 0.55)
 		sign_label.rotation.y = PI * 0.5 * side
 		visual_root.add_child(sign_label)
 		if side < 0.0:
 			_sign_left = sign_label
 		else:
 			_sign_right = sign_label
+		var brand := Label3D.new()
+		brand.pixel_size = 0.008
+		brand.outline_size = 10
+		brand.position = Vector3(side * (body_size.x * 0.52 + 0.02), 2.42, 0.55)
+		brand.rotation.y = PI * 0.5 * side
+		visual_root.add_child(brand)
+		_brands.append(brand)
+	var back := Label3D.new()
+	back.pixel_size = 0.008
+	back.outline_size = 10
+	back.position = Vector3(0.0, 2.3, 0.55 + body_size.z * 0.25 + 0.02)
+	visual_root.add_child(back)
+	_brands.append(back)
+	_brand_labels.call_deferred()
+
+
+## Owner's name and color (the DatacenterSite this truck serves).
+func _brand_labels() -> void:
+	var site_node := get_parent() as DatacenterSite
+	if site_node == null:
+		return
+	for brand in _brands:
+		brand.text = site_node.brand_name
+		brand.modulate = site_node.brand_color.lightened(0.2)
+		brand.outline_modulate = Color(0.02, 0.03, 0.04)
+		Models.fit_label(brand, Vector2(body_size.z * 0.5 if brand.rotation.y != 0.0 else body_size.x * 0.9, 0.3))
 
 
 func _set_cargo(value: Cargo) -> void:
@@ -63,7 +91,7 @@ func _set_cargo(value: Cargo) -> void:
 	for sign_label in [_sign_left, _sign_right]:
 		if sign_label:
 			sign_label.text = text
-			Models.fit_label(sign_label, Vector2(body_size.z * 0.5, 0.95))
+			Models.fit_label(sign_label, Vector2(body_size.z * 0.5, 0.6))
 			sign_label.modulate = Color(0.25, 0.2, 0.05) if cheese else Color(0.9, 1.0, 0.85)
 	if _box:
 		var mat := _box.material_override as StandardMaterial3D

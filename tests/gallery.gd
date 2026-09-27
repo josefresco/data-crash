@@ -452,6 +452,25 @@ func _ready() -> void:
 		print("saved stealth (suspicion %.2f, stance %s)" % [guard.suspicion, (player.get("_rig") as CharacterModel).stance_clip()])
 		player.set_crouching(false)
 		guard.queue_free()
+	if _want("trucks"):
+		# A site's cargo truck from the side, loaded both ways.
+		var felsa := level.get_node("FelsaSite") as DatacenterSite
+		var truck := felsa.truck
+		var cam := Camera3D.new()
+		level.add_child(cam)
+		for load_money in [false, true]:
+			truck.call(&"_set_cargo", CargoTruck.Cargo.MONEY if load_money else CargoTruck.Cargo.CHEESE)
+			truck.global_position = Vector3(-84, 0.2, 60)
+			truck.set_physics_process(false)
+			var side := truck.global_basis.x
+			cam.global_position = truck.global_position + side * 7.0 + Vector3.UP * 2.5
+			cam.look_at(truck.global_position + Vector3.UP * 1.6)
+			cam.make_current()
+			await _wait(0.4)
+			await RenderingServer.frame_post_draw
+			get_viewport().get_texture().get_image().save_png("res://tests/output/gallery_truck_%s.png" % ("money" if load_money else "cheese"))
+		print("saved trucks")
+		cam.queue_free()
 	if _want("stores"):
 		await _shot("store_hardware", Vector3(-8, 0.2, 31), Vector3(-14, 2.0, 21))
 		await _shot("store_row", Vector3(6, 0.2, 34), Vector3(-26, 4.0, 18))

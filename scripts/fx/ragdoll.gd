@@ -34,7 +34,7 @@ const PARTS := [
 const LIMITS := {"Spine": [30.0, 20.0], "Head": [45.0, 30.0], "LeftArm": [80.0, 40.0],
 	"RightArm": [80.0, 40.0], "LeftForeArm": [70.0, 10.0], "RightForeArm": [70.0, 10.0],
 	"LeftUpLeg": [55.0, 20.0], "RightUpLeg": [55.0, 20.0], "LeftLeg": [65.0, 5.0], "RightLeg": [65.0, 5.0]}
-const LAYER_DEBRIS := 8  # Game.LAYER_DEBRIS
+const LAYER_DEBRIS := 64  # Game.LAYER_BODIES: cars pass over bodies
 const MASK := 1 | 16  # world + destructibles
 
 static var active := 0

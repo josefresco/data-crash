@@ -319,12 +319,59 @@ func _explode(at: Vector3) -> void:
 	blast.detonate()
 
 
+## Wrecks left on the map (by instance id); past MAX_WRECKS the oldest goes.
+const MAX_WRECKS := 12
+const BURN_SECONDS := 18.0
+static var _wrecks: Array[int] = []
+static var _burnt: StandardMaterial3D
+
+
+## Blown up: the explosion (in _on_death), then a charred shell that burns
+## for a while and stays on the map (solid to cars, not to people).
 func _play_death() -> void:
-	_material.albedo_color = Color(0.12, 0.12, 0.12)
+	if _burnt == null:
+		_burnt = StandardMaterial3D.new()
+		_burnt.albedo_color = Color(0.08, 0.07, 0.07)
+		_burnt.roughness = 1.0
+	for mesh in _visual.find_children("*", "MeshInstance3D", true, false):
+		(mesh as MeshInstance3D).material_override = _burnt
+	for light in _visual.find_children("*", "Light3D", true, false):
+		(light as Light3D).visible = false
+	if _motor:
+		_motor.stop()
+	collision_layer = Game.LAYER_VEHICLES
+	collision_mask = Game.LAYER_WORLD
+	var top := Vector3.UP * (body_size.y * 0.7 + CLEARANCE)
+	var fire := Vfx.fire_patch(self, top, 0.9)
+	fire.emitting = true
+	var smoke := Vfx.smoke_column(self, top + Vector3.UP * 0.6, 1.4)
+	smoke.emitting = true
+	var crackle := Sfx.loop(self, &"fire_loop", -6.0)
+	var burn_light := OmniLight3D.new()
+	burn_light.light_color = Color(1.0, 0.5, 0.15)
+	burn_light.light_energy = 3.0
+	burn_light.omni_range = 7.0
+	burn_light.position = top + Vector3.UP * 0.5
+	add_child(burn_light)
 	var tween := create_tween()
-	tween.tween_interval(3.0)
-	tween.tween_property(_visual, "position:y", -2.0, 1.0)
-	tween.tween_callback(queue_free)
+	tween.tween_interval(BURN_SECONDS)
+	tween.tween_callback(func() -> void:
+		fire.emitting = false
+		if crackle:
+			crackle.stop())
+	tween.tween_property(burn_light, "light_energy", 0.0, 3.0)
+	tween.tween_interval(20.0)
+	tween.tween_callback(func() -> void: smoke.emitting = false)
+	_wrecks.append(get_instance_id())
+	while _wrecks.size() > MAX_WRECKS:
+		var oldest := instance_from_id(_wrecks.pop_front())
+		if oldest:
+			(oldest as Node).queue_free()
+
+
+func _exit_tree() -> void:
+	super()
+	_wrecks.erase(get_instance_id())
 
 
 func _build_body() -> void:
