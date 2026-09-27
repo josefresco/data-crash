@@ -5,6 +5,8 @@ signal cash_changed(cash: int)
 signal objective_changed(text: String)
 ## Keyed HUD lines ("deeds", "boss", "wave", "core", "build", "bribe", "notice"). Empty text hides the line.
 signal info_changed(key: String, text: String)
+## The boss health bar: name ("" hides it), 0..1 health, and a short hint.
+signal boss_changed(boss_name: String, ratio: float, hint: String)
 ## A titled checklist on the HUD's right column ("sites", "deeds"). Each row is
 ## [text, state] with state &"todo", &"done", &"alert", or &"info". No rows hides it.
 signal checklist_changed(key: String, title: String, rows: Array)
@@ -165,6 +167,11 @@ func reset() -> void:
 		set_info(key, "")
 	for key in ["sites", "deeds"]:
 		set_checklist(key, "", [])
+	set_boss("")
+
+
+func set_boss(boss_name: String, ratio := 0.0, hint := "") -> void:
+	boss_changed.emit(boss_name, ratio, hint)
 
 
 func set_info(key: String, text: String) -> void:

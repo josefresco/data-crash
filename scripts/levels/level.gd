@@ -905,24 +905,22 @@ func _update_boss_bar() -> void:
 	if boss == null:
 		if _boss_bar_shown:
 			_boss_bar_shown = false
-			Game.set_info("boss", "")
+			Game.set_boss("")
 		return
 	_boss_bar_shown = true
 	var ratio := clampf(float(boss.get("health")) / float(boss.get("max_health")), 0.0, 1.0)
-	var filled := roundi(ratio * 30.0)
-	var bar := "#".repeat(filled) + "-".repeat(30 - filled)
-	var extra := ""
+	var hint := ""
 	if boss is ElmoOnFoot and (boss as ElmoOnFoot).is_posting:
-		extra = "   TWATTING: x2.5 damage!"
+		hint = "TWATTING: x2.5 damage!"
 	elif boss is ShamCrapman and (boss as ShamCrapman).is_field_shielded():
-		extra = "   FORCE FIELD: shoot the drones!"
+		hint = "FORCE FIELD: shoot the drones!"
 	elif boss is FarkPod and (boss as FarkPod).is_tracking():
-		extra = "   TRACKED: shoot the surveillance drones!"
+		hint = "TRACKED: shoot the surveillance drones!"
 	elif boss is HarryPerckerson and not (boss as HarryPerckerson).is_exposed():
-		extra = "   BEHIND GLASS: heavy explosives only!"
+		hint = "BEHIND GLASS: heavy explosives only!"
 	elif boss is CrapyaControlRoom:
-		extra = "   bullets bounce: rifle, explosives, or the dozer"
-	Game.set_info("boss", "%s  [%s]%s" % [boss.get("boss_name"), bar, extra])
+		hint = "Bullets bounce: rifle, explosives, or the dozer"
+	Game.set_boss(String(boss.get("boss_name")), ratio, hint)
 
 
 ## Phase 1 rewards. Trust gains shrink while the datacenter's noise saps morale.

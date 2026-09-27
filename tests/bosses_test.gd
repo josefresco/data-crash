@@ -125,6 +125,9 @@ func _test_sham() -> void:
 	var hp := sham.health
 	sham.apply_damage(100.0, FIELD, &"bullet")
 	check(hp - sham.health < 50.0, "force field blocks most damage (%.0f)" % (hp - sham.health))
+	await seconds(0.2)
+	var bar := (level.get_node("Hud") as Hud).boss_bar()
+	check(not (bar[0] as String).is_empty() and (bar[1] as float) > 0.0, "the HUD shows a boss health bar (%s %.2f)" % [bar[0], bar[1]])
 	for drone in sham.drones:
 		drone.apply_damage(9999.0, FIELD)
 	await seconds(0.5)

@@ -13,7 +13,7 @@ extends CanvasLayer
 ## - CameraFx: FOV kick, explosion shake, dust motes
 
 const TIP_SECONDS := 9.0
-const INFO_KEYS: Array[String] = ["boss", "wave", "core", "notice", "build", "bribe", "shop", "drone"]
+const INFO_KEYS: Array[String] = ["wave", "core", "notice", "build", "bribe", "shop", "drone"]
 ## Info keys that are key menus: shown bottom-center instead of under the objective.
 const MENU_KEYS: Array[String] = ["build", "bribe", "shop", "drone"]
 const CHECKLIST_KEYS: Array[String] = ["sites", "deeds"]
@@ -46,6 +46,12 @@ var _tip_left := 0.0
 var _health: HudBar
 var _turbo: HudBar
 var _car_health: HudBar
+## Boss health bar, top center: name, a draining bar, a hint.
+var _boss_box: VBoxContainer
+var _boss_name: Label
+var _boss_bar: HudBar
+var _boss_hint: Label
+var _boss_ratio := 1.0
 var _kit: Label
 var _weapon_name: Label
 var _ammo: Label
@@ -153,6 +159,7 @@ func _ready() -> void:
 	root.add_child(_menu_box)
 	_place(_menu_box, Control.PRESET_CENTER_BOTTOM, Rect2(-450, -200, 900, 0))
 	_menu_box.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	_build_boss_bar()
 	for key in INFO_KEYS:
 		var menu := key in MENU_KEYS
 		var line := _make_label(_menu_box if menu else _info_box, 17, HORIZONTAL_ALIGNMENT_CENTER)
@@ -510,6 +517,46 @@ func _on_checklist_changed(key: String, title: String, rows: Array) -> void:
 				line.add_theme_color_override("font_color", Color(1.0, 0.45, 0.35))
 			&"info":
 				line.add_theme_color_override("font_color", UiTheme.MUTED)
+
+
+func _build_boss_bar() -> void:
+	_boss_box = VBoxContainer.new()
+	_boss_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_boss_box.add_theme_constant_override("separation", 2)
+	_boss_box.visible = false
+	_info_box.add_child(_boss_box)
+	_boss_name = _make_label(_boss_box, 20, HORIZONTAL_ALIGNMENT_CENTER)
+	_boss_name.add_theme_color_override("font_color", Color(1.0, 0.55, 0.45))
+	_boss_bar = HudBar.new()
+	_boss_bar.icon = &"skull"
+	_boss_bar.icon_color = Color(1.0, 0.85, 0.8)
+	_boss_bar.fill_color = Color(0.75, 0.1, 0.1)
+	_boss_bar.text_size = 14
+	_boss_bar.custom_minimum_size = Vector2(CENTER_WIDTH - 40.0, 24)
+	_boss_box.add_child(_boss_bar)
+	_boss_hint = _make_label(_boss_box, 15, HORIZONTAL_ALIGNMENT_CENTER)
+	_boss_hint.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3))
+	Game.boss_changed.connect(_on_boss_changed)
+
+
+func _on_boss_changed(boss_name: String, ratio: float, hint: String) -> void:
+	_boss_box.visible = not boss_name.is_empty()
+	if boss_name.is_empty():
+		_boss_ratio = 1.0
+		return
+	_boss_name.text = boss_name
+	if ratio < _boss_ratio - 0.001:
+		_boss_bar.flash()
+	_boss_ratio = ratio
+	_boss_bar.value = ratio
+	_boss_bar.text = "%d%%" % ceili(ratio * 100.0)
+	_boss_hint.text = hint
+	_boss_hint.visible = not hint.is_empty()
+
+
+## The boss bar as shown: [name, 0..1] ("" when hidden). Tests read it.
+func boss_bar() -> Array:
+	return [_boss_name.text if _boss_box.visible else "", _boss_bar.value]
 
 
 func _on_info_changed(key: String, text: String) -> void:

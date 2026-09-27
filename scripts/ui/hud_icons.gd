@@ -1,7 +1,7 @@
 class_name HudIcons
 extends RefCounted
 ## Small vector icons drawn with CanvasItem primitives (no image assets):
-## heart, coin, smog, noise, water, trust, turbo, ammo, c4, treat. Static.
+## heart, coin, smog, noise, water, trust, turbo, ammo, c4, treat, skull. Static.
 
 
 ## Draws `kind` centered at `at`, `size` px tall.
@@ -55,5 +55,12 @@ static func draw(ci: CanvasItem, kind: StringName, at: Vector2, size: float, col
 			for x in [-0.6, 0.6]:
 				for y in [-0.25, 0.25]:
 					ci.draw_circle(at + Vector2(x * s, y * s), s * 0.25, color)
+		&"skull":
+			ci.draw_circle(at + Vector2(0.0, -s * 0.15), s * 0.72, color)
+			ci.draw_rect(Rect2(at + Vector2(-s * 0.45, s * 0.25), Vector2(s * 0.9, s * 0.6)), color)
+			for x in [-0.3, 0.3]:
+				ci.draw_circle(at + Vector2(x * s, -s * 0.15), s * 0.2, Color(0.05, 0.05, 0.06))
+			for x in [-0.22, 0.0, 0.22]:
+				ci.draw_line(at + Vector2(x * s, s * 0.5), at + Vector2(x * s, s * 0.85), Color(0.05, 0.05, 0.06), maxf(size * 0.05, 1.0))
 		_:
 			ci.draw_circle(at, s * 0.5, color)
