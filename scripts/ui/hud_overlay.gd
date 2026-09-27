@@ -29,6 +29,8 @@ var _scan_left := 0.0
 var _units: Array[Enemy] = []
 ## Hostiles marked by the recon drone (drawn through walls, any distance).
 var _spotted: Array[Enemy] = []
+## Quiet site security getting suspicious of the player (stealth).
+var _suspicious: Array[Enemy] = []
 ## instance id -> seconds of "!" left; instance id -> was fighting last scan.
 var _alerts := {}
 var _engaged := {}
@@ -111,10 +113,14 @@ func _scan() -> void:
 		return
 	var eye := camera.global_position
 	_spotted.clear()
+	_suspicious.clear()
 	for node in get_tree().get_nodes_in_group("hostiles"):
 		var unit := node as Enemy
 		if unit and unit.is_alive() and unit.spotted_left > 0.0:
 			_spotted.append(unit)
+		if unit and unit.is_alive() and unit.suspicion > 0.02 and unit.is_dormant() \
+				and unit.global_position.distance_to(eye) < BAR_RANGE:
+			_suspicious.append(unit)
 		if unit == null or not unit.is_alive() or unit.is_dormant() or unit.boss_name != "":
 			continue
 		var id := unit.get_instance_id()
@@ -161,6 +167,9 @@ func _draw() -> void:
 	for unit in _spotted:
 		if is_instance_valid(unit):
 			_draw_spotted(camera, unit)
+	for unit in _suspicious:
+		if is_instance_valid(unit):
+			_draw_suspicion(camera, unit)
 	for unit in _units:
 		if is_instance_valid(unit):
 			_draw_unit(camera, unit)
@@ -218,6 +227,27 @@ func _draw_spotted(camera: Camera3D, unit: Enemy) -> void:
 		var text := "%dm" % roundi(distance)
 		draw_string_outline(_font, p + Vector2(-12, -s - 4), text, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, 4, Color(0, 0, 0, 0.7 * alpha))
 		draw_string(_font, p + Vector2(-12, -s - 4), text, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, color)
+
+
+## Stealth: a "?" over a suspicious guard, with a meter that fills yellow to
+## red as they close in on raising the alarm.
+func _draw_suspicion(camera: Camera3D, unit: Enemy) -> void:
+	var head := unit.global_position + Vector3.UP * (unit.body_height + 0.7)
+	if camera.is_position_behind(head):
+		return
+	var p := camera.unproject_position(head)
+	var level := clampf(unit.suspicion, 0.0, 1.0)
+	var color := Color(1.0, 0.85, 0.2).lerp(Color(1.0, 0.25, 0.15), level)
+	draw_string_outline(_font, p + Vector2(-7, -8), "?", HORIZONTAL_ALIGNMENT_LEFT, -1, 26, 6, Color(0, 0, 0, 0.8))
+	draw_string(_font, p + Vector2(-7, -8), "?", HORIZONTAL_ALIGNMENT_LEFT, -1, 26, color)
+	var rect := Rect2(p + Vector2(-16, 0), Vector2(32, 4))
+	draw_rect(rect.grow(1.5), Color(0, 0, 0, 0.7))
+	draw_rect(Rect2(rect.position, Vector2(32 * level, 4)), color)
+
+
+## Quiet units currently suspicious of the player (tests read it).
+func suspicious_units() -> Array[Enemy]:
+	return _suspicious
 
 
 ## Units the drone has marked (tests read it).

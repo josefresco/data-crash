@@ -234,6 +234,12 @@ EMPLOYEES OF THE MONTH ONLY"
 			controller.controlled.append(head)
 			irrigation.append(head)
 
+## True when `point` (world) is inside the fenced compound, grown by `margin`.
+func contains(point: Vector3, margin := 0.0) -> bool:
+	var local := to_local(point)
+	return absf(local.x) <= compound.x * 0.5 + margin and absf(local.z) <= compound.y * 0.5 + margin
+
+
 func at(local: Vector3) -> Vector3:
 	return to_global(local)
 

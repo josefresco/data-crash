@@ -227,6 +227,10 @@ static func _flat(v: Vector3) -> Vector3:
 	return Vector3(v.x, 0.0, v.z)
 
 
+func _watches() -> bool:
+	return uses_cover  # people, not the roof cannons or holo decoys
+
+
 func _stance() -> StringName:
 	var hiding := tactic == Tactic.COVER and _settled and velocity.length_squared() < 0.5
 	return &"crouch_idle" if hiding else &""

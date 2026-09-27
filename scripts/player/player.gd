@@ -72,6 +72,9 @@ var _punch_left := false
 var _protected_left := 0.0
 ## Seconds since leaving the ground (0 while grounded).
 var _air_time := 0.0
+## Sneaking ([C]): slow, low, and much harder for site security to notice.
+var crouching := false
+const CROUCH_SPEED := 2.3
 ## The recon drone in the air (null on foot); relaunch cooldown after it ends.
 var drone: ReconDrone = null
 var _drone_cooldown := 0.0
@@ -161,6 +164,8 @@ func _physics_process(delta: float) -> void:
 		give_treat()
 	if Input.is_action_just_pressed("drone") and not build_mode:
 		launch_drone()
+	if Input.is_action_just_pressed("crouch"):
+		set_crouching(not crouching)
 	if Input.is_action_just_pressed("interact") and Engine.get_physics_frames() != _vehicle_change_frame:
 		if not talk_down():
 			var thing := nearest_interactable()
@@ -341,7 +346,10 @@ func _move(delta: float) -> void:
 	direction.y = 0.0
 	direction = direction.normalized()
 
-	var speed := sprint_speed if Input.is_action_pressed("sprint") else walk_speed
+	var sprinting := Input.is_action_pressed("sprint")
+	if crouching and (sprinting or (is_on_floor() and Input.is_action_just_pressed("jump"))):
+		set_crouching(false)
+	var speed := CROUCH_SPEED if crouching else (sprint_speed if sprinting else walk_speed)
 	if _slow_timer > 0.0:
 		_slow_timer -= delta
 		speed *= _slow_factor
@@ -368,6 +376,8 @@ func _move(delta: float) -> void:
 		_air_time = 0.0
 		_rig.set_airborne(false)
 		_rig.set_motion(ground_speed / Enemy.RUN_CLIP_SPEED)
+		if crouching:
+			_rig.set_stance(&"crouch_walk" if ground_speed > 0.4 else &"crouch_idle")
 	else:
 		if _air_time == 0.0 and velocity.y > 0.5:
 			_rig.play_jump()
@@ -761,6 +771,42 @@ func _spray(weapon: Weapon) -> void:
 		if flat.length() < 2.5 and absf(on_line.y - fire.global_position.y) < 3.0:
 			fire.call(&"douse", weapon.douse * tick)
 	Game.tip("hose", "Hoses push people back and put out fires: burning cars, molotov patches. Protesters just scatter, soaked but unharmed.")
+
+
+func set_crouching(on: bool) -> void:
+	if crouching == on:
+		return
+	crouching = on
+	if not on:
+		_rig.set_stance(&"")
+
+
+## Stealth: how far away site security can notice you (x their view range).
+func stealth_visibility() -> float:
+	if vehicle:
+		return 1.5
+	if crouching:
+		return 0.55
+	return 1.2 if Input.is_action_pressed("sprint") else 1.0
+
+
+## Stealth: how fast site security that sees you gets suspicious.
+func stealth_rate() -> float:
+	var rate := 1.0
+	if vehicle:
+		rate = 2.0
+	elif crouching:
+		rate = 0.45
+	elif Input.is_action_pressed("sprint"):
+		rate = 1.4
+	if is_threatening():
+		rate *= 1.5
+	return rate
+
+
+## A gun (or launcher) up and aimed, or just fired.
+func is_threatening() -> bool:
+	return vehicle == null and _aim_hold > 0.0 and current_weapon().aims()
 
 
 ## Launches the recon drone from overhead (needs the Recon drone kit).

@@ -422,6 +422,36 @@ func _ready() -> void:
 		get_viewport().get_texture().get_image().save_png("res://tests/output/gallery_batch_after.png")
 		print("saved batch (%d walls)" % hit)
 		cam.queue_free()
+	if _want("stealth"):
+		# Sneaking inside ForProfitSI: the player crouch-walking, a guard ahead
+		# turning suspicious (the ? meter).
+		var site := level.get_node("ForProfitSite") as DatacenterSite
+		var edge := site.compound.y * 0.5
+		Game.alarms.erase(site.site_id)  # the gallery's setup sets every site off
+		var guard := SecurityGuard.new()
+		guard.site = site.site_id
+		guard.position = site.at(Vector3(-22, 0.1, edge - 14.0))
+		level.add_child(guard)
+		await _wait(0.3)
+		var outward := site.global_basis.z
+		(guard.get("_visual") as Node3D).global_rotation.y = atan2(-outward.x, -outward.z)
+		guard.set("_wander_timer", 9999.0)
+		player.set_crouching(true)
+		player.global_position = site.at(Vector3(-22, 0.2, edge - 6.0))
+		player.aim_at(guard.global_position + Vector3.UP * 1.2)
+		for i in 14:
+			Input.action_press("move_forward")
+			guard.velocity = Vector3.ZERO
+			(guard.get("_nav") as NavigationAgent3D).target_position = guard.global_position
+			(guard.get("_visual") as Node3D).global_rotation.y = atan2(-outward.x, -outward.z)
+			await _wait(0.1)
+		Input.action_release("move_forward")
+		await _wait(0.05)
+		await RenderingServer.frame_post_draw
+		get_viewport().get_texture().get_image().save_png("res://tests/output/gallery_stealth.png")
+		print("saved stealth (suspicion %.2f, stance %s)" % [guard.suspicion, (player.get("_rig") as CharacterModel).stance_clip()])
+		player.set_crouching(false)
+		guard.queue_free()
 	if _want("stores"):
 		await _shot("store_hardware", Vector3(-8, 0.2, 31), Vector3(-14, 2.0, 21))
 		await _shot("store_row", Vector3(6, 0.2, 34), Vector3(-26, 4.0, 18))

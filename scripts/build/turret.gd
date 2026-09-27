@@ -7,7 +7,7 @@ const SHOT_MASK := 1 | 32  # world + units
 
 @export var fire_range := 18.0
 @export var shot_damage := 7.0
-@export var fire_interval := 0.35
+@export var fire_interval := 0.5
 
 var _head: Node3D
 var _target: Enemy

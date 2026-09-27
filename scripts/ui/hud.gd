@@ -390,6 +390,8 @@ func _refresh_status() -> void:
 	var allies := ally_count()
 	if allies > 0:
 		_kit.text += "      Allies x%d" % allies
+	if _player.crouching:
+		_kit.text += "      SNEAKING"
 	var weapon := _player.current_weapon()
 	_weapon_name.text = "[Q] %s" % weapon.display_name
 	_ammo.text = "--" if weapon.ammo < 0 else "%d / %d" % [weapon.ammo, weapon.max_ammo]

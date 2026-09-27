@@ -20,9 +20,13 @@ static var unit_types := {
 	"harry": HarryPerckerson,
 }
 
-@export var spawn_interval := 1.2
+## Units arrive in squads from one entry point at a time: `squad_interval`
+## seconds apart, 2 + wave number strong (at most `max_squad`). One at a
+## time, turrets picked them off before they could ever threaten the core.
+@export var squad_interval := 5.0
+@export var max_squad := 6
 ## Seconds into a wave after which survivors charge the objective (no stalemates).
-@export var rush_after := 75.0
+@export var rush_after := 60.0
 ## Seconds a targetless unit may stay within `STUCK_RADIUS` before it's
 ## nudged back onto the navmesh (first strike) or withdraws (second).
 @export var stuck_seconds := 20.0
@@ -31,10 +35,10 @@ const STUCK_CHECK := 2.0
 ## One entry per wave: unit key -> count (see unit_types).
 @export var waves: Array[Dictionary] = [
 	{"guard": 4, "dog": 3},
-	{"guard": 5, "dog": 3, "orange_hat": 2},
-	{"guard": 7, "police": 4, "frost": 1, "orange_hat": 3, "felsa": 2},
-	{"guard": 11, "police": 6, "dog": 4, "frost": 3, "orange_hat": 4, "felsa": 2, "fark": 1},
-	{"guard": 12, "police": 8, "dog": 6, "frost": 4, "orange_hat": 5, "felsa": 2, "harry": 1},
+	{"guard": 6, "dog": 3, "orange_hat": 2},
+	{"guard": 9, "police": 5, "frost": 2, "orange_hat": 3, "felsa": 3},
+	{"guard": 13, "police": 7, "dog": 5, "frost": 3, "orange_hat": 4, "felsa": 3, "fark": 1},
+	{"guard": 14, "police": 9, "dog": 7, "frost": 4, "orange_hat": 5, "felsa": 4, "harry": 1},
 ]
 
 var objective: Node3D
@@ -111,19 +115,32 @@ func _physics_process(delta: float) -> void:
 		return
 	_spawn_timer -= delta
 	if _spawn_timer <= 0.0:
-		_spawn_timer = spawn_interval
-		_spawn(_queue.pop_back())
+		_spawn_timer = squad_interval
+		var entry := _entry_point()
+		for i in mini(squad_size(), _queue.size()):
+			_spawn(_queue.pop_back(), entry)
 
 
-func _spawn(kind: GDScript) -> void:
-	# Markers with metadata "reserved" (BoardroomSite) are only used by units that name them.
+## How many units spawn together this wave.
+func squad_size() -> int:
+	return mini(2 + current_wave, max_squad)
+
+
+## A random open entry point (markers with metadata "reserved", like Harry's
+## BoardroomSite, are only used by units that name them).
+func _entry_point() -> Marker3D:
 	var points: Array[Node] = get_children().filter(func(child: Node) -> bool:
 		return child is Marker3D and not child.get_meta(&"reserved", false))
-	if points.is_empty():
+	return points.pick_random() as Marker3D if not points.is_empty() else null
+
+
+func _spawn(kind: GDScript, point: Marker3D = null) -> void:
+	if point == null:
+		point = _entry_point()
+	if point == null:
 		push_warning("WaveSpawner has no Marker3D spawn points")
 		_on_unit_defeated(null)
 		return
-	var point := points.pick_random() as Marker3D
 	# Some units (Harry's boardroom) insist on a named marker.
 	var wanted: String = kind.get_script_constant_map().get("SPAWN_MARKER", "")
 	if not wanted.is_empty() and has_node(wanted):
@@ -131,7 +148,7 @@ func _spawn(kind: GDScript) -> void:
 	var enemy := kind.new() as Enemy
 	enemy.objective = objective
 	# Set before add_child so _ready records the right home position.
-	var jitter := Vector3.ZERO if not wanted.is_empty() else Vector3(randf_range(-2.0, 2.0), 0.0, randf_range(-2.0, 2.0))
+	var jitter := Vector3.ZERO if not wanted.is_empty() else Vector3(randf_range(-3.5, 3.5), 0.0, randf_range(-3.5, 3.5))
 	enemy.position = point.global_position + jitter
 	enemy.defeated.connect(_on_unit_defeated)
 	get_parent().add_child(enemy)

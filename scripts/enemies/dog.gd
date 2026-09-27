@@ -66,6 +66,19 @@ func _faction_group() -> String:
 	return super()
 
 
+## Guard dogs sniff out trespassers all around, but only up close.
+func _watches() -> bool:
+	return not stray and faction == Faction.HOSTILE and site != &""
+
+
+func _view_range() -> float:
+	return 8.0
+
+
+func _view_cos() -> float:
+	return -1.0
+
+
 func _candidates() -> Array[Node3D]:
 	var list := super()
 	if faction == Faction.ALLY:
@@ -97,7 +110,8 @@ func _defending(list: Array[Node3D]) -> Array[Node3D]:
 	var threats: Array[Node3D] = []
 	for node in list:
 		var unit := node as Enemy
-		if unit and unit.target in guarded and unit.global_position.distance_to(near) < 20.0:
+		# `target` may be freed; typed arrays reject freed objects in `in`.
+		if unit and is_instance_valid(unit.target) and unit.target in guarded 				and unit.global_position.distance_to(near) < 20.0:
 			threats.append(unit)
 	return threats
 

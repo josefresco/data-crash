@@ -82,6 +82,7 @@ const CLIPS := {
 	&"dance": ["UAL1", "Dance_Loop", true],
 	&"drive": ["UAL1", "Driving_Loop", true],
 	&"crouch_idle": ["UAL1", "Crouch_Idle_Loop", true],
+	&"crouch_walk": ["UAL1", "Crouch_Fwd_Loop", true],
 	&"phone": ["UAL2", "Idle_TalkingPhone_Loop", true],
 	&"fold_arms": ["UAL2", "Idle_FoldArms_Loop", true],
 	&"shield_idle": ["UAL2", "Idle_Shield_Loop", true],

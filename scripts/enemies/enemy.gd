@@ -99,6 +99,11 @@ var _sidestep_left := 0.0
 var _sidestep := Vector3.ZERO
 ## Multiplies move_speed (formations hold back their fastest members).
 var speed_scale := 1.0
+## Stealth: 0..1 while quiet site security watches the player trespass (see
+## _watch_for_player); full raises the site alarm.
+var suspicion := 0.0
+var _voiced_suspicion := false
+var _site_node: Variant = null
 ## Seconds left marked by the player's recon drone (HUD shows it through walls).
 var spotted_left := 0.0
 var _gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
@@ -492,6 +497,8 @@ func stand_down() -> void:
 		return
 	target = null
 	rushing = false
+	suspicion = 0.0
+	_voiced_suspicion = false
 	_investigate_left = 0.0
 	_has_los = false
 	if _nav:
@@ -541,6 +548,8 @@ func _decorate(_visual_root: Node3D) -> void:
 
 
 func _think() -> void:
+	if is_dormant() and _watches():
+		_watch_for_player(THINK_INTERVAL * (2.0 if _lod_far else 1.0))
 	target = _pick_target()
 	if _is_valid(target):
 		_has_los = _can_see(target)
@@ -551,6 +560,71 @@ func _think() -> void:
 		_investigate_left -= THINK_INTERVAL
 		return
 	_idle()
+
+
+## Override: quiet site security that keeps an eye out for trespassers.
+func _watches() -> bool:
+	return false
+
+
+## Override: how far this unit notices the player, and the cosine of its
+## view cone's half-angle (-1 = all around, like a dog's nose).
+func _view_range() -> float:
+	return 18.0
+
+
+func _view_cos() -> float:
+	return 0.5
+
+
+## Stealth. While quiet, a watcher that sees the player inside its site's
+## compound (or aiming a weapon close by) grows suspicious, faster up close
+## and scaled by Player.stealth_rate(); unseen, suspicion fades. Over 0.35 it
+## comes to look; at 1 it raises the site alarm.
+func _watch_for_player(step: float) -> void:
+	var player := get_tree().get_first_node_in_group("player") as Player
+	var rate := 0.0
+	if player and (player.is_visible_in_tree() or player.vehicle):
+		var body: Node3D = player.vehicle if player.vehicle else player
+		var offset := body.global_position - global_position
+		offset.y = 0.0
+		var distance := offset.length()
+		var reach := _view_range() * player.stealth_visibility()
+		if distance < reach:
+			var facing := -_visual.global_basis.z
+			facing.y = 0.0
+			var in_view := distance < 2.0 or _view_cos() <= -0.99 \
+				or facing.normalized().dot(offset.normalized()) >= _view_cos()
+			if in_view and _can_see(body):
+				var trespassing := _site_contains(body.global_position)
+				if trespassing or (player.is_threatening() and distance < 12.0):
+					rate = lerpf(1.0 / 1.2, 1.0 / 5.0, clampf(distance / reach, 0.0, 1.0)) * player.stealth_rate()
+		if rate > 0.0:
+			suspicion = minf(suspicion + rate * step, 1.0)
+			if suspicion > 0.35:
+				investigate(body.global_position)
+				if not _voiced_suspicion:
+					_voiced_suspicion = true
+					speak(["Huh? Who's there?", "Hey... you're not staff.", "Did something move?"].pick_random())
+				Game.tip("stealth", "Security noticed something (the ? over them). Inside a datacenter compound, guards and dogs that see you grow suspicious: crouch [C], stay behind them, and keep out of sight to sneak in.")
+			if suspicion >= 1.0:
+				speak("INTRUDER!")
+				get_tree().call_group(&"site_alarm", &"raise_alarm", site, label_for_alarm(), label_for_alarm())
+			return
+	suspicion = maxf(suspicion - 0.12 * step, 0.0)
+	if suspicion <= 0.0:
+		_voiced_suspicion = false
+
+
+func _site_contains(point: Vector3) -> bool:
+	if _site_node == null or not is_instance_valid(_site_node):
+		_site_node = null
+		for node in get_tree().get_nodes_in_group("datacenter_sites"):
+			if (node as DatacenterSite).site_id == site:
+				_site_node = node
+		if _site_node == null:
+			return false
+	return (_site_node as DatacenterSite).contains(point, 1.0)
 
 
 ## Override: what to do with no target. Allies tag along with the player,

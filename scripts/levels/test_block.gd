@@ -829,14 +829,18 @@ func _on_stray_dog_defeated(dog: Enemy) -> void:
 
 ## Everyone on `site_id`'s payroll engages. Idempotent. Group "site_alarm"
 ## routes hits on site units and property here.
-func raise_alarm(site_id: StringName, reason := "") -> void:
+## `reason` names what the player hit; `seen_by` (stealth) names who spotted them.
+func raise_alarm(site_id: StringName, reason := "", seen_by := "") -> void:
 	if Game.is_alarmed(site_id):
 		return
 	Game.alarms[site_id] = true
 	var site_node := site(site_id)
 	var site_name := site_node.display_name if site_node else "the police"
-	Game.notify("ALARM at %s! You hit the %s. Its security is engaging." % [site_name,
-		reason.to_lower() if not reason.is_empty() else "site"], 7.0)
+	if not seen_by.is_empty():
+		Game.notify("ALARM at %s! A %s spotted you. Its security is engaging." % [site_name, seen_by.to_lower()], 7.0)
+	else:
+		Game.notify("ALARM at %s! You hit the %s. Its security is engaging." % [site_name,
+			reason.to_lower() if not reason.is_empty() else "site"], 7.0)
 	if site_node:
 		Sfx.play(&"alarm", site_node.datacenter.global_position + Vector3.UP * 11.0, 8.0, 1.0, 0.0)
 		if site_node.boss == DatacenterSite.Boss.CRAPYA:

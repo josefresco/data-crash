@@ -66,7 +66,28 @@ func quit_cleanly(code := 0) -> void:
 		scene.queue_free()
 	for i in 3:
 		await get_tree().process_frame
+	_release_static_caches()
+	await get_tree().process_frame
 	get_tree().quit(code)
+
+
+## Static caches of materials, meshes, and textures would otherwise be freed
+## during script unload, after the rendering server is already gone.
+func _release_static_caches() -> void:
+	Models._materials.clear()
+	Models._scenes.clear()
+	Models._retextured.clear()
+	Models._textures.clear()
+	Models._beam_materials.clear()
+	Fx._streak_mats.clear()
+	Vfx._quads.clear()
+	Vfx._flame_mats.clear()
+	Vfx._scorches.clear()
+	Vfx._holes.clear()
+	CharacterModel._library = null
+	Car._skid_material = null
+	UiTheme._theme = null
+	Enemy._talkers.clear()
 
 
 func _notification(what: int) -> void:
@@ -246,6 +267,7 @@ func _register_input_actions() -> void:
 		"map": KEY_M,
 		"drone": KEY_X,
 		"descend": KEY_C,
+		"crouch": KEY_C,
 	}
 	for action: String in keys:
 		_ensure_action(action)
