@@ -102,6 +102,10 @@ var _litter_total := 0
 var _litter_left := 0
 var _end_screen: EndScreen
 var _waves_cleared := 0
+## Continue: the Felsa lot's position once the sites are removed.
+var _lot_override := Vector3.INF
+## Stats at the start of the current wave (for the summary card).
+var _wave_start := {}
 var _cameras_smashed := 0
 
 @onready var _env_driver: EnvironmentDriver = $EnvironmentDriver
@@ -118,6 +122,13 @@ func _ready() -> void:
 
 	add_to_group("site_alarm")
 	add_to_group("level")
+	if Game.pending_intro:
+		Game.pending_intro = false
+		add_child(IntroOverlay.new())
+	if not Game.pending_save.is_empty():
+		var save := Game.pending_save
+		Game.pending_save = {}
+		_resume.call_deferred(save)
 	var life := GroundLife.new()
 	life.name = "GroundLife"
 	add_child(life)
@@ -207,9 +218,9 @@ func start_defense() -> void:
 		return
 	phase = Phase.BUILD
 	_update_deeds()
-	_clear_rubble_near(_felsa.datacenter.global_position if _felsa else Vector3.ZERO, 60.0)
+	var lot := _defense_lot()
+	_clear_rubble_near(lot, 60.0)
 	core = GreenCore.new()
-	var lot := _felsa.datacenter.global_position if _felsa else Vector3.ZERO
 	core.position = Vector3(lot.x, 0.0, lot.z)
 	add_child(core)
 	core.damaged.connect(_on_core_damaged)
@@ -232,6 +243,7 @@ func start_defense() -> void:
 	_auto_wave_left = auto_wave_delay
 	Game.set_objective("Defend the green datacenter. Build defenses, then hold off %d waves."
 		% _spawner.total_waves())
+	save_checkpoint()
 
 
 ## Where the player should head next (world space), or null. Drives the
@@ -418,6 +430,106 @@ func _clear_rubble_near(center: Vector3, radius: float) -> void:
 	for node in get_tree().get_nodes_in_group("rubble"):
 		if (node as Node3D).global_position.distance_to(center) < radius:
 			node.queue_free()
+
+
+## Where Phase 3 is built: the Felsa lot (remembered if the site is gone).
+func _defense_lot() -> Vector3:
+	if _lot_override != Vector3.INF:
+		return _lot_override
+	return _felsa.datacenter.global_position if _felsa and is_instance_valid(_felsa) else Vector3.ZERO
+
+
+## Player-built pieces (not the core or the auto solar field), for saving.
+func _built_structures() -> Array:
+	var built := []
+	var kinds := [Barricade, Turret, SolarPanel, EmpTrap]
+	for node in get_tree().get_nodes_in_group("structures") + get_tree().get_nodes_in_group("traps"):
+		if node is GreenCore or node is SolarArray or not is_instance_valid(node):
+			continue
+		for index in kinds.size():
+			if is_instance_of(node, kinds[index]) and not (index == 2 and node is SolarArray):
+				var piece := node as Node3D
+				var steps := posmod(roundi(piece.rotation.y / (PI * 0.5)), 4)
+				var hp: float = node.get("health") if node.get("health") != null else 0.0
+				built.append([index, piece.global_position.x, piece.global_position.y, piece.global_position.z, steps, hp])
+				break
+	return built
+
+
+## Writes the defense checkpoint (see SaveGame).
+func save_checkpoint() -> void:
+	var district := Game.district
+	SaveGame.write({
+		"waves_cleared": _spawner.current_wave,
+		"cash": Game.cash,
+		"district": [district.smog, district.noise, district.water_table, district.trust],
+		"bribes": Game.bribes.keys(),
+		"stats": Game.stats,
+		"core_health": core.health if is_instance_valid(core) else 0.0,
+		"structures": _built_structures(),
+		"difficulty": Game.difficulty,
+	})
+
+
+## Continue: skip straight to the defense on the (already fallen) Felsa lot
+## and restore the checkpoint.
+func _resume(save: Dictionary) -> void:
+	_lot_override = _defense_lot()
+	for site_node in sites:
+		site_node.queue_free()
+	sites.clear()
+	_felsa = null
+	for node in get_tree().get_nodes_in_group("hostiles"):
+		var unit := node as Enemy
+		if unit and unit.site != &"police":
+			unit.queue_free()
+	await get_tree().process_frame
+	start_defense()
+	Game.cash = int(save.get("cash", Game.cash))
+	Game.cash_changed.emit(Game.cash)
+	var values: Array = save.get("district", [])
+	if values.size() == 4:
+		Game.district.smog = values[0]
+		Game.district.noise = values[1]
+		Game.district.water_table = values[2]
+		Game.district.trust = values[3]
+	for key in save.get("bribes", []):
+		Game.bribes[String(key)] = true
+	var stats: Dictionary = save.get("stats", {})
+	for key in stats:
+		Game.stats[key] = stats[key]
+	var cleared := int(save.get("waves_cleared", 0))
+	_spawner.current_wave = cleared
+	_waves_cleared = cleared
+	if is_instance_valid(core):
+		core.health = clampf(float(save.get("core_health", core.max_health)), 1.0, core.max_health)
+		_on_core_damaged(0.0, core.health)
+	for entry: Array in save.get("structures", []):
+		var node := _build.place(int(entry[0]), Vector3(entry[1], entry[2], entry[3]), int(entry[4]), true)
+		if node and float(entry[5]) > 0.0 and node.get("health") != null:
+			node.set("health", minf(float(entry[5]), float(node.get("max_health"))))
+	get_tree().call_group(&"nav_baker", &"request_rebake")
+	Game.show_banner("CONTINUE", "Wave %d of %d is next" % [cleared + 1, _spawner.total_waves()])
+	Game.set_objective("Continuing: repair and rebuild, then [N] for wave %d." % (cleared + 1))
+
+
+## A card after each cleared wave: what it cost and what's coming.
+func _show_wave_summary(number: int) -> void:
+	var hud := get_node_or_null("Hud") as Hud
+	if hud == null:
+		return
+	var before: Dictionary = _wave_start
+	var lost_structures := maxi(int(before.get("structures", 0)) - _built_structures().size(), 0)
+	var rows := [
+		["Hostiles stopped", str(int(Game.stat("kills") - float(before.get("kills", 0.0))))],
+		["Core damage taken", str(maxi(int(float(before.get("core", 0.0)) - (core.health if is_instance_valid(core) else 0.0)), 0))],
+		["Cash earned", "$%d" % int(Game.stat("cash_earned") - float(before.get("cash", 0.0)))],
+		["Structures lost", str(lost_structures)],
+	]
+	var next := _spawner.describe_wave(number + 1)
+	if next != "":
+		rows.append(["Next wave", next])
+	hud.show_wave_summary("WAVE %d CLEARED" % number, rows)
 
 
 ## Title card on each phase change.
@@ -933,6 +1045,11 @@ func _refill_player() -> void:
 
 func _on_wave_started(number: int, total: int) -> void:
 	phase = Phase.WAVE
+	_wave_start = {"kills": Game.stat("kills"), "cash": Game.stat("cash_earned"),
+		"core": core.health if is_instance_valid(core) else 0.0, "structures": _built_structures().size()}
+	var hud := get_node_or_null("Hud") as Hud
+	if hud:
+		hud.hide_wave_summary()
 	Sfx.ui(&"jingle_wave", -4.0, "Music")
 	_auto_wave_left = -1.0
 	Game.set_info("wave", "Wave %d/%d" % [number, total])
@@ -961,11 +1078,14 @@ func _on_wave_cleared(number: int, total: int) -> void:
 	if Game.district.trust >= 0.6 and get_tree().get_nodes_in_group("townspeople").size() < 8:
 		_spawn_townspeople(1)
 	Game.set_objective("Wave %d cleared. Repair, rebuild, then [N] for the next one." % number)
+	_show_wave_summary(number)
+	save_checkpoint()
 
 
 func _on_all_waves_cleared() -> void:
 	if phase == Phase.LOST:
 		return
+	SaveGame.clear()
 	phase = Phase.WON
 	# Harry's hires: their contracts are void. Everyone left goes home.
 	for node in get_tree().get_nodes_in_group("hostiles"):
@@ -1086,6 +1206,7 @@ func _on_core_damaged(_amount: float, health: float) -> void:
 
 
 func _on_core_destroyed(_core: Destructible) -> void:
+	SaveGame.clear()
 	phase = Phase.LOST
 	_build.enabled = false
 	_build.set_active(false)

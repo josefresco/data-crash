@@ -33,6 +33,16 @@ func _ready() -> void:
 		get_tree().call_group(&"environment_drivers", &"set_quality", index))
 	_row(grid, "Graphics quality (F10)", quality)
 
+	var difficulty := OptionButton.new()
+	for name: String in Game.DIFFICULTY_NAMES:
+		difficulty.add_item(name)
+	difficulty.selected = Game.difficulty
+	difficulty.item_selected.connect(func(index: int) -> void:
+		Sfx.ui(&"click")
+		Game.difficulty = index
+		Game.save_settings())
+	_row(grid, "Difficulty (next load)", difficulty)
+
 	var fullscreen := CheckBox.new()
 	fullscreen.button_pressed = Game.fullscreen
 	fullscreen.toggled.connect(func(on: bool) -> void:

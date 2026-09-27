@@ -534,10 +534,12 @@ func _collapse(origin: Vector3) -> void:
 		var host := get_parent() as Node3D
 		var smoke := Vfx.smoke_column(host, host.to_local(center + Vector3(randf_range(-8, 8), -3.0, randf_range(-5, 5))), 2.0)
 		smoke.emitting = true
+		var plume: WeakRef = weakref(smoke)
 		get_tree().create_timer(25.0 + k * 5.0).timeout.connect(func() -> void:
-			if is_instance_valid(smoke):
-				smoke.emitting = false
-				smoke.get_tree().create_timer(6.0).timeout.connect(smoke.queue_free))
+			var column := plume.get_ref() as GPUParticles3D
+			if column:
+				column.emitting = false
+				column.get_tree().create_timer(6.0).timeout.connect(column.queue_free))
 	# Roof drops first, then the walls fold in from the side that was hit.
 	var delay := 0.3
 	for piece in _roof:

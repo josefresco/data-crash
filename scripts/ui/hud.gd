@@ -381,6 +381,63 @@ func _refresh_status() -> void:
 	_ammo.add_theme_color_override("font_color", Color(1.0, 0.4, 0.35) if weapon.ammo == 0 else Color.WHITE)
 
 
+## The between-waves card: a title and [label, value] rows, until the next
+## wave starts or 14 s pass.
+func show_wave_summary(title: String, rows: Array) -> void:
+	hide_wave_summary()
+	var panel := PanelContainer.new()
+	panel.name = "WaveSummary"
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.03, 0.06, 0.05, 0.86)
+	style.border_color = UiTheme.ACCENT
+	style.set_border_width_all(2)
+	style.set_corner_radius_all(8)
+	style.content_margin_left = 22
+	style.content_margin_right = 22
+	style.content_margin_top = 14
+	style.content_margin_bottom = 16
+	panel.add_theme_stylebox_override("panel", style)
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 6)
+	panel.add_child(box)
+	var header := _make_label(box, 26, HORIZONTAL_ALIGNMENT_CENTER)
+	header.text = title
+	header.add_theme_color_override("font_color", UiTheme.ACCENT)
+	var grid := GridContainer.new()
+	grid.columns = 2
+	grid.add_theme_constant_override("h_separation", 28)
+	box.add_child(grid)
+	for row: Array in rows:
+		var key := _make_label(grid, 17, HORIZONTAL_ALIGNMENT_LEFT)
+		key.text = str(row[0])
+		key.add_theme_color_override("font_color", UiTheme.MUTED)
+		var value := _make_label(grid, 17, HORIZONTAL_ALIGNMENT_RIGHT)
+		value.text = str(row[1])
+		value.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		value.custom_minimum_size = Vector2(260, 0)
+	get_child(0).add_child(panel)
+	_place(panel, Control.PRESET_CENTER_TOP, Rect2(-280, 150, 560, 0))
+	panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	# Weak ref: the next wave may already have removed the card.
+	var card: WeakRef = weakref(panel)
+	get_tree().create_timer(14.0).timeout.connect(func() -> void:
+		var node := card.get_ref() as Node
+		if node:
+			node.queue_free())
+
+
+func hide_wave_summary() -> void:
+	var old := get_child(0).get_node_or_null("WaveSummary")
+	if old:
+		old.queue_free()
+
+
+func wave_summary_visible() -> bool:
+	var panel := get_child(0).get_node_or_null("WaveSummary")
+	return panel != null and not panel.is_queued_for_deletion()
+
+
 ## Rows currently shown for a checklist (tests read this).
 func checklist_rows(key: String) -> Array:
 	var entry: Array = _checklists.get(key, [null, []])

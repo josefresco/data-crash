@@ -31,8 +31,12 @@ func _ready() -> void:
 	_menu.add_child(title)
 	_menu.add_child(UiTheme.label("Sabotage the server farm. Save the suburb.", 24, UiTheme.ACCENT))
 	_menu.add_child(Control.new())
-	for entry in [["Play", _play], ["Settings", _show_panel.bind(SettingsPanel)],
-			["Controls", _show_panel.bind(ControlsPanel)], ["Quit", func() -> void: get_tree().quit()]]:
+	var entries := [["Play", _play], ["Settings", _show_panel.bind(SettingsPanel)],
+			["Controls", _show_panel.bind(ControlsPanel)], ["Quit", func() -> void: get_tree().quit()]]
+	var save := SaveGame.read()
+	if not save.is_empty():
+		entries.insert(0, ["Continue (wave %d of 5)" % (int(save.get("waves_cleared", 0)) + 1), _continue.bind(save)])
+	for entry in entries:
 		var node := UiTheme.button(entry[0], entry[1], 340.0)
 		node.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		_menu.add_child(node)
@@ -65,6 +69,15 @@ func _process(delta: float) -> void:
 
 
 func _play() -> void:
+	Game.pending_intro = true
+	Game.pending_save = {}
+	get_tree().change_scene_to_file(LEVEL_SCENE)
+
+
+## Resume the defense from the checkpoint.
+func _continue(save: Dictionary) -> void:
+	Game.pending_intro = false
+	Game.pending_save = save
 	get_tree().change_scene_to_file(LEVEL_SCENE)
 
 

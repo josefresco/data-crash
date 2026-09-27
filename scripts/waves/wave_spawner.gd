@@ -70,7 +70,10 @@ func start_next_wave() -> bool:
 		if not unit_types.has(key):
 			push_warning("WaveSpawner: unknown unit type '%s'" % key)
 			continue
-		for i in int(wave[key]):
+		var count := int(wave[key])
+		if key != "harry" and key != "fark":  # bosses stay one each
+			count = maxi(roundi(count * Game.wave_size_scale()), 1 if count > 0 else 0)
+		for i in count:
 			_queue.append(unit_types[key])
 	_queue.shuffle()
 	remaining = _queue.size()
@@ -133,6 +136,18 @@ func _spawn(kind: GDScript) -> void:
 	enemy.defeated.connect(_on_unit_defeated)
 	get_parent().add_child(enemy)
 	_spawned.append(enemy)
+
+
+## "7 guards, 4 police, ..." for wave `number` (1-based), or "".
+func describe_wave(number: int) -> String:
+	if number < 1 or number > waves.size():
+		return ""
+	var parts: PackedStringArray = []
+	var names := {"guard": "guards", "dog": "dogs", "police": "riot police", "frost": "FROST", "orange_hat": "protesters",
+		"felsa": "Cyberdouches", "fark": "Fark's pod", "harry": "Harry Perckerson"}
+	for key: String in waves[number - 1]:
+		parts.append("%d %s" % [int(waves[number - 1][key]), names.get(key, key)])
+	return ", ".join(parts)
 
 
 func queue_empty() -> bool:

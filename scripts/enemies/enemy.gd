@@ -105,6 +105,8 @@ func _ready() -> void:
 	# Not vehicles: bodies collide if either side's mask matches, and a crowd
 	# must never wedge a car. Vehicles shove units with a Bumper instead.
 	collision_mask = Game.LAYER_WORLD | Game.LAYER_PLAYER | Game.LAYER_DESTRUCTIBLE | Game.LAYER_ENEMIES
+	if faction == Faction.HOSTILE and boss_name.is_empty():
+		max_health *= Game.enemy_health_scale()
 	health = max_health
 	home = global_position
 	_build_body()

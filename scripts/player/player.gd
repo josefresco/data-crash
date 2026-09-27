@@ -158,6 +158,7 @@ func _physics_process(delta: float) -> void:
 func apply_damage(amount: float, from: Vector3, _kind: StringName = &"generic") -> void:
 	if _protected_left > 0.0:
 		return
+	amount *= Game.damage_taken_scale()
 	if amount > 0.0:
 		hurt_from.emit(from, amount)
 	if amount >= 3.0:

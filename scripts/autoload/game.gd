@@ -43,6 +43,13 @@ var alarms := {}
 ## Radians per pixel of mouse motion (settings menu).
 var mouse_sensitivity := DEFAULT_SENSITIVITY
 var fullscreen := false
+## 0 Easy, 1 Normal, 2 Hard (settings menu): scales damage the player takes,
+## hostile health, and wave sizes.
+var difficulty := 1
+const DIFFICULTY_NAMES := ["Easy", "Normal", "Hard"]
+## Set by the title screen for the next level load.
+var pending_intro := false
+var pending_save := {}
 
 
 func _ready() -> void:
@@ -57,6 +64,7 @@ func load_settings() -> void:
 	mouse_sensitivity = float(config.get_value("game", "mouse_sensitivity", mouse_sensitivity))
 	show_tips = bool(config.get_value("game", "show_tips", show_tips))
 	fullscreen = bool(config.get_value("game", "fullscreen", fullscreen))
+	difficulty = clampi(int(config.get_value("game", "difficulty", difficulty)), 0, 2)
 	apply_display()
 
 
@@ -66,6 +74,7 @@ func save_settings() -> void:
 	config.set_value("game", "mouse_sensitivity", mouse_sensitivity)
 	config.set_value("game", "show_tips", show_tips)
 	config.set_value("game", "fullscreen", fullscreen)
+	config.set_value("game", "difficulty", difficulty)
 	var err := config.save(SETTINGS_PATH)
 	if err != OK:
 		push_warning("Couldn't save settings (error %d)" % err)
@@ -77,6 +86,18 @@ func apply_display() -> void:
 	var mode := DisplayServer.WINDOW_MODE_FULLSCREEN if fullscreen else DisplayServer.WINDOW_MODE_WINDOWED
 	if DisplayServer.window_get_mode() != mode:
 		DisplayServer.window_set_mode(mode)
+
+
+func damage_taken_scale() -> float:
+	return [0.6, 1.0, 1.4][difficulty]
+
+
+func enemy_health_scale() -> float:
+	return [0.8, 1.0, 1.25][difficulty]
+
+
+func wave_size_scale() -> float:
+	return [0.75, 1.0, 1.25][difficulty]
 
 
 ## Fresh state for a (re)loaded level.
