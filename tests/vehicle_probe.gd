@@ -27,14 +27,17 @@ func _run() -> void:
 	print("%-18s | %8s | %9s | %8s | %5s | %6s" % ["maneuver", "max tilt", "airborne", "max up v", "flips", "speed"])
 	var worst_flips := 0
 	var worst_air := 0.0
+	var top_speed := 0.0
 	for maneuver in ["straight+turbo", "slalom", "full-lock turn", "hard brake", "curb crossing", "reverse turn"]:
 		var result: Array = await _drive(maneuver)
 		print("%-18s | %7.0f° | %8.2fs | %7.1f  | %5d | %5.1f" % [maneuver, result[0], result[1], result[2], result[3], result[4]])
 		worst_flips = maxi(worst_flips, result[3])
+		top_speed = maxf(top_speed, result[4])
 		if maneuver != "curb crossing":
 			worst_air = maxf(worst_air, result[1])
 	await _collisions()
 	check(worst_flips == 0, "no flips in normal driving")
+	check(top_speed <= car.max_speed * 1.4 + 1.0, "turbo respects the top speed (%.1f m/s, cap %.1f)" % [top_speed, car.max_speed * 1.4])
 	check(worst_air < 0.3, "wheels stay on flat ground (worst airborne %.2fs)" % worst_air)
 
 

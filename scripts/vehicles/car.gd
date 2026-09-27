@@ -194,9 +194,6 @@ func _physics_process(delta: float) -> void:
 	else:
 		engine_force = throttle * max_engine_force
 		brake = 0.0
-	var top := max_speed * (1.4 if Input.is_action_pressed("sprint") and turbo_left > 0.0 else 1.0)
-	if max_speed > 0.0 and absf(forward_speed) > top and signf(throttle) == signf(forward_speed):
-		engine_force = 0.0
 	if Input.is_action_pressed("jump"):
 		brake = max_brake
 
@@ -215,6 +212,11 @@ func _physics_process(delta: float) -> void:
 			Vfx.fire_puff(get_parent(), global_transform * Vector3(0.0, 0.6, -2.4), 0.35, -global_basis.z)
 	else:
 		turbo_left = minf(turbo_left + delta * turbo_seconds / turbo_recharge, turbo_seconds)
+
+	# Top speed last, so the turbo can't push past it (x1.4 while boosting).
+	var top := max_speed * (1.4 if boosting else 1.0)
+	if max_speed > 0.0 and absf(forward_speed) > top and signf(engine_force) == signf(forward_speed):
+		engine_force = 0.0
 
 	_last_speed = speed
 

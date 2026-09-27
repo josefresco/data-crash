@@ -235,10 +235,9 @@ func _dress_town_hall(body: Node3D, bounds: AABB) -> void:
 		var x := -width * 0.5 + 0.4 + k * (width - 0.8) / 5.0
 		Models.cylinder(body, 0.28, 3.6, Vector3(x, 1.9, front + 1.4), marble, 12)
 	Models.box(body, Vector3(width + 0.6, 0.5, 2.2), Vector3(0.0, 3.95, front + 1.1), marble)
-	var pediment := Models.extrude(body, PackedVector2Array([Vector2(-1.1, 0.0), Vector2(1.1, 0.0), Vector2(0.0, 1.2)]),
+	# Triangular prism across the facade (extrude runs along X; the profile is (z, y)).
+	Models.extrude(body, PackedVector2Array([Vector2(-1.1, 0.0), Vector2(1.1, 0.0), Vector2(0.0, 1.2)]),
 		width + 0.6, marble, Vector3(0.0, 4.2, front + 1.1))
-	pediment.rotation.y = PI * 0.5
-	pediment.scale = Vector3(1.0, 1.0, 1.0)
 	for step in 3:
 		Models.box(body, Vector3(width + 0.4 - step * 0.4, 0.15, 2.6 - step * 0.5),
 			Vector3(0.0, 0.075 + step * 0.15, front + 1.3 - step * 0.1), marble)

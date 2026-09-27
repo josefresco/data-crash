@@ -463,6 +463,15 @@ func _test_town_hall() -> void:
 	player.global_position = hall + Vector3(0.0, 0.0, 30.0)
 	await seconds(0.5)
 	check(not menu.is_open, "walking away closes the bribe menu")
+	# Driving: the check follows the car, not where the player got in.
+	var car := level.get_node("Car") as Car
+	player.global_position = hall + Vector3(3.0, 0.0, 0.0)
+	car.global_transform = Transform3D(Basis.IDENTITY, hall + Vector3(0.0, 0.6, -60.0))
+	car.linear_velocity = Vector3.ZERO
+	await seconds(0.3)
+	player.vehicle = car
+	check(not menu.near_town_hall(), "driving away from the Town Hall turns bribes off")
+	player.vehicle = null
 
 
 func _test_solid_props() -> void:

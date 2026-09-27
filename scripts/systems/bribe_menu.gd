@@ -46,8 +46,12 @@ func _process(delta: float) -> void:
 func near_town_hall() -> bool:
 	if not Game.has_meta(&"town_hall_door"):
 		return false
-	var player := get_tree().get_first_node_in_group("player") as Node3D
-	return player != null and player.global_position.distance_to(Game.get_meta(&"town_hall_door")) <= TOWN_HALL_RANGE
+	var player := get_tree().get_first_node_in_group("player") as Player
+	if player == null:
+		return false
+	# While driving, the (hidden) player node stays where they got in: use the car.
+	var at := player.vehicle.global_position if player.vehicle else player.global_position
+	return at.distance_to(Game.get_meta(&"town_hall_door")) <= TOWN_HALL_RANGE
 
 
 func set_open(value: bool) -> void:
