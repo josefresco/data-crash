@@ -67,6 +67,11 @@ func _run() -> void:
 	await _test_market_and_residents()
 	await _test_canadians()
 	check(hud.ally_count() >= 2, "the HUD counts recruited Canadians as allies (%d)" % hud.ally_count())
+	check(level.call("canadian_allies") >= 2, "the level counts recruited Canadians toward the RV cap")
+	level.call("_send_canadians_home")
+	await seconds(0.5)
+	check(level.call("canadian_allies") == 0 and get_tree().get_nodes_in_group("canadians").all(
+		func(n: Node) -> bool: return not n.is_in_group("allies")), "after a wave the Canadians say goodbye and head home")
 	await _test_vehicles()
 	await _test_reply_guys()
 	await _test_site_life()

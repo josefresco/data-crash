@@ -79,6 +79,16 @@ func _ready() -> void:
 		await _shot("townsfolk", Vector3(-84.5, 0.2, 66), Vector3(-84.5, 1.1, 60))
 		for unit in lineup:
 			unit.queue_free()
+	if _want("structures"):
+		# Build-phase pieces, side by side on the open strip.
+		var pieces: Array[Node3D] = [Barricade.new(), Turret.new(), SolarPanel.new(), EmpTrap.new()]
+		for i in pieces.size():
+			pieces[i].position = Vector3(-92.0 + i * 5.0, 0.0, 60.0)
+			level.add_child(pieces[i])
+		await _wait(1.0)
+		await _shot("structures", Vector3(-84.5, 2.4, 65.5), Vector3(-84.5, 0.6, 60))
+		for piece in pieces:
+			piece.queue_free()
 	if _want("parked"):
 		await _shot("parked", Vector3(-30, 0.2, 21), Vector3(-22, 0.8, 26.5))
 		await _shot("parked2", Vector3(46, 0.2, 21), Vector3(54, 0.8, 26.5))

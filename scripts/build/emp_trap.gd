@@ -35,6 +35,22 @@ func _ready() -> void:
 	core_mesh.material_override = _core_mat
 	core_mesh.position.y = 0.12
 	add_child(core_mesh)
+	# A copper coil ring and four emitter prongs.
+	var ring := MeshInstance3D.new()
+	var torus := TorusMesh.new()
+	torus.inner_radius = 0.48
+	torus.outer_radius = 0.58
+	torus.rings = 24
+	torus.ring_segments = 8
+	ring.mesh = torus
+	ring.position.y = 0.14
+	ring.material_override = Models.mat(Color(0.8, 0.45, 0.2), &"metal")
+	add_child(ring)
+	for i in 4:
+		var angle := PI * 0.25 + i * PI * 0.5
+		var prong := Models.cylinder(self, 0.03, 0.35, Vector3(cos(angle) * 0.62, 0.27, sin(angle) * 0.62),
+			Models.mat(Color(0.25, 0.27, 0.3), &"metal"), 6)
+		Models.ball(prong, 0.05, Vector3(0.0, 0.2, 0.0), _core_mat)
 
 
 func _physics_process(delta: float) -> void:

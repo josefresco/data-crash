@@ -56,6 +56,16 @@ static func glow(color: Color, energy := 2.0) -> StandardMaterial3D:
 ## Flat-shaded, for angular shapes like the Felsa Cyberdouche.
 static func extrude(parent: Node3D, profile: PackedVector2Array, width: float, material: Material,
 		at := Vector3.ZERO) -> MeshInstance3D:
+	var node := MeshInstance3D.new()
+	node.mesh = extrude_mesh(profile, width)
+	node.material_override = material
+	node.position = at
+	parent.add_child(node)
+	return node
+
+
+## The mesh `extrude()` builds, without a node.
+static func extrude_mesh(profile: PackedVector2Array, width: float) -> ArrayMesh:
 	var tool := SurfaceTool.new()
 	tool.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var half := width * 0.5
@@ -82,12 +92,7 @@ static func extrude(parent: Node3D, profile: PackedVector2Array, width: float, m
 		var out := Vector3(0.0, -d.x, d.y) * (1.0 if ccw else -1.0)
 		_add_face(tool, PackedVector3Array([Vector3(-half, a.y, a.x), Vector3(half, a.y, a.x), Vector3(half, b.y, b.x)]), out)
 		_add_face(tool, PackedVector3Array([Vector3(-half, a.y, a.x), Vector3(half, b.y, b.x), Vector3(-half, b.y, b.x)]), out)
-	var node := MeshInstance3D.new()
-	node.mesh = tool.commit()
-	node.material_override = material
-	node.position = at
-	parent.add_child(node)
-	return node
+	return tool.commit()
 
 
 ## Low-poly headwear sized for the Kenney character head (about 0.6 m wide at

@@ -18,8 +18,23 @@ func _init() -> void:
 	label = "Solar panel"
 
 
+## A low gravel pad instead of the full-height collider box.
+func _visual_mesh() -> Mesh:
+	var pad := BoxMesh.new()
+	pad.size = Vector3(size.x, 0.12, size.z)
+	var tool := SurfaceTool.new()
+	tool.append_from(pad, 0, Transform3D(Basis(), Vector3(0.0, 0.06, 0.0)))
+	return tool.commit()
+
+
 func _ready() -> void:
 	super()
+	if not Engine.is_editor_hint():
+		for side in [-1.0, 1.0]:
+			_add_box(Vector3(size.x - 0.2, 0.3, 0.3), Vector3(0.0, 0.27, side * (size.z * 0.5 - 0.35)),
+				Color(0.7, 0.7, 0.68), null, &"concrete")
+		_add_box(Vector3(0.4, 0.5, 0.2), Vector3(size.x * 0.5 - 0.3, 0.37, size.z * 0.5 - 0.1), Color(0.85, 0.87, 0.85), null, &"metal")
+		Models.ball(self, 0.04, Vector3(size.x * 0.5 - 0.3, 0.55, size.z * 0.5 + 0.0), Models.glow(Color(0.3, 1.0, 0.4), 3.0))
 	# Tilted photovoltaic panel sized to the base, on two legs.
 	var panel := _add_box(Vector3(size.x - 0.1, 0.08, size.z - 0.1), Vector3(0.0, size.y + 0.45, 0.0),
 		Color.WHITE, null, &"solar")

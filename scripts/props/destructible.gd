@@ -124,10 +124,15 @@ func _build() -> void:
 		_shape = CollisionShape3D.new()
 		add_child(_shape)
 
-	var box := BoxMesh.new()
-	box.size = size
-	_mesh.mesh = box
-	_mesh.position.y = size.y * 0.5
+	var custom := _visual_mesh()
+	if custom:
+		_mesh.mesh = custom
+		_mesh.position.y = 0.0
+	else:
+		var box := BoxMesh.new()
+		box.size = size
+		_mesh.mesh = box
+		_mesh.position.y = size.y * 0.5
 
 	_material = StandardMaterial3D.new()
 	_material.albedo_color = Color(color, opacity)
@@ -141,6 +146,12 @@ func _build() -> void:
 	box_shape.size = size
 	_shape.shape = box_shape
 	_shape.position.y = size.y * 0.5
+
+
+## Override: a mesh (origin at bottom center) to show instead of the plain
+## box. The collider and debris still use `size`; damage tints still apply.
+func _visual_mesh() -> Mesh:
+	return null
 
 
 func _show_damage() -> void:

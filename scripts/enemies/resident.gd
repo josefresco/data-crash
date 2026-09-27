@@ -169,6 +169,26 @@ func _stroll() -> void:
 	_nav.target_position = destinations.pick_random() + Vector3(randf_range(-2.0, 2.0), 0.0, randf_range(-2.0, 2.0))
 
 
+## Acoustic guitar across the chest: a figure-eight body (two bouts), a sound
+## hole, a neck angled up to the left, and a headstock.
+func _guitar(chest: Node3D, s: float) -> void:
+	var root := Node3D.new()
+	root.position = Vector3(0.0, -0.18, -0.2) * s
+	root.rotation = Vector3(0.0, 0.0, deg_to_rad(-60.0))
+	root.scale = Vector3.ONE * s
+	chest.add_child(root)
+	var wood := Models.mat(Color(0.72, 0.45, 0.2), &"paint")
+	var dark := Models.mat(Color(0.18, 0.12, 0.08), &"paint")
+	for bout in [[0.2, Vector3(0.0, -0.1, 0.0)], [0.15, Vector3(0.0, 0.14, 0.0)]]:
+		var disc := Models.cylinder(root, bout[0], 0.1, bout[1], wood, 16)
+		disc.rotation.x = PI * 0.5
+	var hole := Models.cylinder(root, 0.055, 0.02, Vector3(0.0, 0.03, -0.05), dark, 12)
+	hole.rotation.x = PI * 0.5
+	Models.box(root, Vector3(0.06, 0.5, 0.04), Vector3(0.0, 0.5, -0.02), dark)
+	Models.box(root, Vector3(0.09, 0.14, 0.03), Vector3(0.0, 0.8, -0.02), wood)
+	Models.box(root, Vector3(0.1, 0.03, 0.02), Vector3(0.0, -0.2, -0.06), dark)  # bridge
+
+
 func _danger_nearby() -> bool:
 	for node in get_tree().get_nodes_in_group("hostiles"):
 		var unit := node as Enemy
@@ -193,10 +213,11 @@ func _decorate(_visual_root: Node3D) -> void:
 			Models.hat(_anchor(&"head"), &"police", Color(0.3, 0.4, 0.62), _head_top(), s)
 			_add_box(_anchor(&"hips"), Vector3(0.35, 0.3, 0.12), Vector3(0.22, 0.0, 0.0), _solid(Color(0.45, 0.32, 0.18)))
 		&"busker":
-			var guitar := Models.box(_anchor(&"chest"), Vector3(0.36, 0.42, 0.1), Vector3(0.05, -0.3, -0.22), Models.mat(Color(0.6, 0.35, 0.15), &"paint"))
-			guitar.rotation.z = 0.5
-			Models.box(guitar, Vector3(0.06, 0.55, 0.05), Vector3(0.0, 0.45, 0.0), Models.mat(Color(0.3, 0.2, 0.1)))
-			Models.cylinder(_anchor(&"chest"), 0.2, 0.05, Vector3(0.0, -1.05, -0.6), Models.mat(Color(0.25, 0.2, 0.15), &"cloth"), 10)  # hat for tips
+			_guitar(_anchor(&"chest"), s)
+			# An upturned hat for tips, on the ground in front.
+			var tips := Models.cylinder(_visual, 0.17, 0.1, Vector3(0.0, 0.05, -0.75), Models.mat(Color(0.25, 0.2, 0.15), &"cloth"), 12)
+			Models.cylinder(tips, 0.26, 0.015, Vector3(0.0, 0.05, 0.0), Models.mat(Color(0.25, 0.2, 0.15), &"cloth"), 12)
+			Models.ball(tips, 0.04, Vector3(0.05, 0.04, 0.02), Models.mat(Color(0.85, 0.75, 0.3), &"metal"))
 		_:
 			pass
 

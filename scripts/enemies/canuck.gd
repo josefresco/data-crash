@@ -7,7 +7,7 @@ extends Enemy
 
 signal helped(group_rv: Node)
 
-enum State { LOST, ALLY, LEAVING }
+enum State { LOST, ALLY, LEAVING, HOME }
 
 const LOST_LINES := [
 	"Sorry, is this the road to Lake Louise?",
@@ -31,6 +31,8 @@ var mountie := false
 var rv: Variant = null
 
 var _line_left := 2.0
+var _home_exit := Vector3.ZERO
+var _home_left := 0.0
 var _speech_left := 0.0
 
 
@@ -86,6 +88,18 @@ func join() -> void:
 	_speech_left = 4.0
 
 
+## After a defense wave: allies say goodbye and walk off south.
+func go_home(exit: Vector3) -> void:
+	if state != State.ALLY or not is_alive():
+		return
+	state = State.HOME
+	_home_exit = exit
+	_home_left = 45.0
+	set_faction(Faction.ALLY)  # regroups as "tourists": out of the fight
+	speak(["Thanks for the adventure, eh!", "Sorry we can't stay longer!", "Visit us in Moose Jaw, eh!"].pick_random())
+	_speech_left = 4.0
+
+
 ## Unhelped: back to the RV.
 func leave() -> void:
 	if state == State.LOST:
@@ -122,6 +136,12 @@ func _idle() -> void:
 					_nav.target_position = spot + Vector3(randf_range(-2.5, 2.5), 0.0, randf_range(-2.5, 2.5))
 			else:
 				_wander()
+		State.HOME:
+			_nav.target_position = _home_exit
+			_home_left -= THINK_INTERVAL
+			if global_position.distance_to(_home_exit) < 5.0 or _home_left <= 0.0:
+				_emit_defeated()
+				queue_free()
 		State.LEAVING:
 			if rv != null and is_instance_valid(rv):
 				_nav.target_position = (rv as Node3D).global_position
@@ -158,12 +178,26 @@ func _on_death() -> void:
 func _decorate(_visual_root: Node3D) -> void:
 	var s := body_height / 1.8
 	if mountie:
-		Models.hat(_anchor(&"head"), &"campaign", Color(0.45, 0.3, 0.15), _head_top(), s)
+		# Tan felt Stetson with a brown band.
+		Models.hat(_anchor(&"head"), &"campaign", Color(0.78, 0.63, 0.42), _head_top(), s)
 	else:
 		Models.hat(_anchor(&"head"), &"toque", [Color(0.8, 0.1, 0.1), Color(0.95, 0.95, 0.92)].pick_random(),
 			_head_top(), s, Color(0.8, 0.1, 0.1))
-	# Hockey stick: shaft down from the hand, blade at the end.
+	# Hockey stick held low: a wood shaft with a taped grip, down and forward
+	# from the hand, ending in a flat blade that curves off to the side.
 	var hand := _anchor(&"hand_r")
-	var shaft := _add_box(hand, Vector3(0.05, 1.3, 0.05), Vector3(0.0, -0.55, -0.05), _solid(Color(0.75, 0.6, 0.4)))
-	shaft.rotation.x = 0.35
-	_add_box(shaft, Vector3(0.06, 0.08, 0.35), Vector3(0.0, -0.62, -0.12), _solid(Color(0.15, 0.15, 0.17)))
+	var stick := Node3D.new()
+	stick.rotation = Vector3(deg_to_rad(40.0), 0.0, deg_to_rad(-10.0))
+	hand.add_child(stick)
+	var wood := _solid(Color(0.78, 0.62, 0.4))
+	var tape := _solid(Color(0.1, 0.1, 0.12))
+	_add_box(stick, Vector3(0.045, 1.35, 0.03), Vector3(0.0, -0.55, 0.0), wood)
+	_add_box(stick, Vector3(0.055, 0.14, 0.04), Vector3(0.0, 0.08, 0.0), tape)
+	var blade := Node3D.new()
+	blade.position = Vector3(0.0, -1.22, 0.0)
+	blade.rotation.x = deg_to_rad(-40.0)
+	stick.add_child(blade)
+	_add_box(blade, Vector3(0.28, 0.08, 0.02), Vector3(0.14, 0.0, 0.0), wood)
+	_add_box(blade, Vector3(0.12, 0.085, 0.025), Vector3(0.22, 0.0, 0.0), tape)
+	var tip := _add_box(blade, Vector3(0.1, 0.08, 0.02), Vector3(0.31, 0.0, -0.02), wood)
+	tip.rotation.y = deg_to_rad(25.0)

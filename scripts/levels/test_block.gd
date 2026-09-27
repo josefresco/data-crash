@@ -50,6 +50,8 @@ enum Phase { ACTIVISM, ASSAULT, BOSS, BUILD, WAVE, WON, LOST }
 @export var tourist_interval := 240.0
 @export var tourist_groups := 3
 ## Where the RVs pull over (main-road shoulder), in rotation.
+## No new RVs while this many recruited Canadians are still with you.
+@export var tourist_ally_cap := 6
 @export var tourist_stops: Array[Vector3] = [Vector3(3.8, 0.2, 92.0), Vector3(-3.8, 0.2, 52.0), Vector3(3.8, 0.2, 122.0)]
 ## The farmer's market stalls in the park (where the gun show used to be).
 @export var market_position := Vector3(-24.0, 0.0, 58.0)
@@ -160,7 +162,8 @@ func _process(delta: float) -> void:
 		_tourist_left -= delta
 		if _tourist_left <= 0.0:
 			_tourist_left = tourist_interval
-			spawn_tourists()
+			if canadian_allies() < tourist_ally_cap:
+				spawn_tourists()
 	if not _residents_bonus_spawned and Game.district and Game.district.trust >= 0.5:
 		_residents_bonus_spawned = true
 		_spawn_residents(resident_bonus)
@@ -272,6 +275,27 @@ func guidance_point() -> Variant:
 		if best == null or point.distance_to(here) < (best as Vector3).distance_to(here):
 			best = point
 	return best
+
+
+## Recruited Canadians still fighting with you.
+func canadian_allies() -> int:
+	var total := 0
+	for node in get_tree().get_nodes_in_group("canadians"):
+		if (node as Canuck).state == Canuck.State.ALLY and (node as Canuck).is_alive():
+			total += 1
+	return total
+
+
+## Canadians help through one defense wave, then head home.
+func _send_canadians_home() -> void:
+	var leaving := 0
+	for node in get_tree().get_nodes_in_group("canadians"):
+		var tourist := node as Canuck
+		if tourist.state == Canuck.State.ALLY:
+			tourist.go_home(Vector3(2.5, 0.2, 165.0))
+			leaving += 1
+	if leaving > 0:
+		Game.notify("The Canadians head home after the wave. \"Sorry we can't stay, eh!\"", 5.0)
 
 
 ## Title card on each phase change.
@@ -796,6 +820,7 @@ func _on_wave_cleared(number: int, total: int) -> void:
 	Sfx.ui(&"jingle_clear", -4.0, "Music")
 	phase = Phase.BUILD
 	_auto_wave_left = auto_wave_delay
+	_send_canadians_home()
 	Game.district.trust += 0.05
 	_refill_player()
 	if number + 1 >= breach_from_wave:
