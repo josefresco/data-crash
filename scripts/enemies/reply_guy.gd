@@ -19,7 +19,7 @@ const LINES := [
 
 const MAX_ALIVE := 8
 
-@export var slap_damage := 7.0
+@export var slap_damage := 4.0
 
 var _line_left := 0.0
 var _logging_off := false

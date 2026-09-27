@@ -30,6 +30,7 @@ func _init() -> void:
 	model_path = "res://assets/kenney/cars/van.glb"
 	model_scale = 1.45
 	thermal_runaway = false
+	bullet_factor = 1.0
 	explosion_damage = 30.0
 
 

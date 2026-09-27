@@ -23,6 +23,9 @@ const WEDGE_HEIGHT := 1.9
 ## reversals in 20 s). Gas vehicles built on this class (police cruisers,
 ## the tourist RV) turn it off.
 @export var thermal_runaway := true
+## Stainless panels: bullets and melee do this fraction of their damage
+## (EMP, explosives, fire, and rams hit in full). 1.0 for plain vehicles.
+@export var bullet_factor := 0.5
 @export var acceleration := 6.0
 ## Radians per second of steering.
 @export var turn_rate := 2.2
@@ -192,6 +195,12 @@ func _handle_collisions() -> void:
 				var push := -global_basis.z * signf(speed) * absf(speed) * 0.8 + Vector3.UP * 3.0
 				hit.call(&"apply_knockback", push)
 		_begin_reverse()
+
+
+func _modify_damage(amount: float, _from: Vector3, kind: StringName) -> float:
+	if kind == &"bullet" or kind == &"melee":
+		return amount * bullet_factor
+	return amount
 
 
 func _begin_reverse() -> void:

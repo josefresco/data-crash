@@ -38,6 +38,8 @@ func befriend() -> bool:
 		return false
 	set_faction(Faction.ALLY)
 	target = null
+	# A fed, loyal dog: sturdier than a hungry guard dog.
+	max_health = maxf(max_health, 70.0)
 	health = max_health
 	Sfx.play(&"bark", global_position, -2.0, 1.25)
 	speak("Good dog!")

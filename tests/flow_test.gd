@@ -369,7 +369,7 @@ func _test_site_life() -> void:
 		var deepest := 999.0
 		for i in 240:
 			saw_cheese = saw_cheese or (truck.cargo == CargoTruck.Cargo.CHEESE and truck.visible)
-			opened = opened or (saw_cheese and gate.open_amount > 0.6)
+			opened = opened or gate.open_amount > 0.6  # any sample: it may open before the cheese check
 			if truck.visible:
 				deepest = minf(deepest, truck.global_position.distance_to(site_node.datacenter.global_position))
 			if saw_cheese and truck.cargo == CargoTruck.Cargo.MONEY:

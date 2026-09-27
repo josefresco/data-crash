@@ -35,6 +35,7 @@ var _ring: MeshInstance3D
 
 
 func _init() -> void:
+	bullet_factor = 1.0  # plain panels / boss balance: full bullet damage
 	voice_pitch = 1.25
 	max_health = 1200.0
 	top_speed = 13.0
