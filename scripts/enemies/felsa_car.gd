@@ -327,7 +327,7 @@ static var _burnt: StandardMaterial3D
 
 
 ## Blown up: the explosion (in _on_death), then a charred shell that burns
-## for a while and stays on the map (solid to cars, not to people).
+## for a while and stays on the map (solid to the player's car only).
 func _play_death() -> void:
 	if _burnt == null:
 		_burnt = StandardMaterial3D.new()
@@ -339,7 +339,9 @@ func _play_death() -> void:
 		(light as Light3D).visible = false
 	if _motor:
 		_motor.stop()
-	collision_layer = Game.LAYER_VEHICLES
+	# Debris layer: the player's car still hits the wreck, but AI traffic and
+	# dispatched cruisers pass through it (a wreck mustn't jam the roads).
+	collision_layer = Game.LAYER_DEBRIS
 	collision_mask = Game.LAYER_WORLD
 	var top := Vector3.UP * (body_size.y * 0.7 + CLEARANCE)
 	var fire := Vfx.fire_patch(self, top, 0.9)

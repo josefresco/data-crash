@@ -194,6 +194,9 @@ func apply_damage(amount: float, from: Vector3, _kind: StringName = &"generic") 
 	health_changed.emit(health, max_health)
 	if health <= 0.0:
 		_respawn()
+		return
+	if amount > 0.0 and _kind not in [&"water", &"taser", &"emp"]:
+		_sync_wounds(from)
 
 
 ## Shoves the player (rams, shockwaves). Adds straight onto the velocity.
@@ -745,49 +748,8 @@ func _spray(weapon: Weapon) -> void:
 		_hiss = Sfx.loop(self, weapon.sound, -8.0)
 	if _hiss and not _hiss.playing:
 		_hiss.play()
-	var from := muzzle_point()
-	var aim := _aim_direction()
-	var flat_aim := Vector3(aim.x, 0.0, aim.z).normalized()
-	var tick := weapon.cooldown
-	var space := get_world_3d().direct_space_state
-	for group: String in ["hostiles", "protesters"]:
-		for node in get_tree().get_nodes_in_group(group):
-			var unit := node as Enemy
-			if unit == null or not unit.is_alive() or unit is FelsaCar or unit is Drone:
-				continue
-			var to := unit.aim_point() - from
-			var distance := to.length()
-			if distance > weapon.reach or to.normalized().dot(aim) < 0.93:
-				continue
-			var query := PhysicsRayQueryParameters3D.create(from, unit.aim_point(), 1 | 16, [get_rid()])
-			if not space.intersect_ray(query).is_empty():
-				continue
-			if unit is OrangeHat:
-				(unit as OrangeHat).scatter()
-				unit.apply_knockback(flat_aim * weapon.knockback * 0.5)
-				continue
-			var falloff := 1.0 - distance / weapon.reach * 0.5
-			unit.soak(3.0)
-			if randf() < 0.3:
-				Vfx.impact(get_parent(), unit.aim_point() - to.normalized() * 0.3, -to.normalized(), &"water", 0.8)
-			if unit.boss_name.is_empty():
-				unit.apply_knockback(flat_aim * weapon.knockback * falloff)
-				if weapon.stuns and distance < weapon.reach * 0.6:
-					unit.knock_down(0.4)
-				elif randf() < 0.08:
-					unit.call(&"_act", &"hit_chest")
-			if weapon.damage > 0.0:
-				var before := unit.health
-				unit.apply_damage(weapon.damage * tick, from, &"water")
-				_report_damage(unit, before)
-	for node in get_tree().get_nodes_in_group("extinguishable"):
-		var fire := node as Node3D
-		if fire == null:
-			continue
-		var on_line := Geometry3D.get_closest_point_to_segment(fire.global_position, from, from + aim * weapon.reach)
-		var flat := Vector2(on_line.x - fire.global_position.x, on_line.z - fire.global_position.z)
-		if flat.length() < 2.5 and absf(on_line.y - fire.global_position.y) < 3.0:
-			fire.call(&"douse", weapon.douse * tick)
+	for entry: Array in Hose.spray_tick(self, muzzle_point(), _aim_direction(), weapon, [get_rid()]):
+		_report_damage(entry[0] as Enemy, entry[1])
 	Game.tip("hose", "Hoses push people back and put out fires: burning cars, molotov patches. Protesters just scatter, soaked but unharmed.")
 
 
@@ -953,11 +915,7 @@ func _update_prompt() -> void:
 		return
 	var nearby := _nearest_vehicle()
 	if nearby:
-		if nearby.can_enter():
-			_set_prompt("[E] Drive")
-		else:
-			_set_prompt("Locked: the foreman wants more neighborhood trust (%d%% / %d%%)" % [
-				roundi(Game.district.trust * 100.0), roundi(nearby.required_trust * 100.0)])
+		_set_prompt("[E] Drive" if nearby.can_enter() else nearby.lock_text())
 		return
 	var thing := nearest_interactable()
 	if thing:
@@ -1010,6 +968,20 @@ func _footsteps(delta: float) -> void:
 func heal(amount: float) -> void:
 	health = minf(health + amount, max_health)
 	health_changed.emit(health, max_health)
+	_sync_wounds(Vector3.INF)
+
+
+## One wound per WOUND_STEP of missing health (up to 8): hits add them on
+## the side they came from, healing takes them away.
+const WOUND_STEP := 12.0
+
+
+func _sync_wounds(from: Vector3) -> void:
+	var want := mini(int((max_health - health) / WOUND_STEP), 8)
+	while from != Vector3.INF and _rig.wound_count() < want:
+		_rig.add_wound(from - global_position)
+	if _rig.wound_count() > want:
+		_rig.clear_wounds(want)
 
 
 func _respawn() -> void:
@@ -1018,6 +990,7 @@ func _respawn() -> void:
 	global_transform = _spawn
 	velocity = Vector3.ZERO
 	health = max_health
+	_rig.clear_wounds()
 	health_changed.emit(health, max_health)
 	_protected_left = SPAWN_PROTECTION
 	Game.count("knockouts")

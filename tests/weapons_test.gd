@@ -32,6 +32,7 @@ func _run() -> void:
 	await _test_shovel()
 	await _test_held_models()
 	await _test_hit_feedback()
+	await _test_wounds()
 	await _test_hoses()
 	await _test_drone()
 	await _test_drone_recon()
@@ -67,6 +68,25 @@ func _test_held_models() -> void:
 	var muzzle := player.muzzle_point()
 	check(muzzle.distance_to(player.global_position + Vector3.UP * 1.4) < 1.2 and muzzle != player.global_position + Vector3.UP * 1.4,
 		"shots leave from the pistol's muzzle (%s)" % (muzzle - player.global_position))
+
+
+func _test_wounds() -> void:
+	player.heal(9999.0)
+	var model := player.get("_rig") as CharacterModel
+	check(model.wound_count() == 0, "a healthy player shows no wounds")
+	player.apply_damage(40.0, player.global_position + Vector3(4, 1, 0), &"bullet")
+	await seconds(0.1)
+	var hurt := model.wound_count()
+	check(hurt >= 2, "getting shot leaves wounds on the model (%d)" % hurt)
+	player.heal(25.0)
+	check(model.wound_count() < hurt, "healing closes wounds (%d -> %d)" % [hurt, model.wound_count()])
+	player.heal(9999.0)
+	check(model.wound_count() == 0, "full health, no wounds")
+	var guard := _dummy(SecurityGuard.new(), player.global_position + Vector3(0, 0, -5)) as SecurityGuard
+	await seconds(0.1)
+	guard.apply_damage(20.0, player.global_position, &"bullet")
+	check((guard.get("_rig") as CharacterModel).wound_count() == 1, "a shot guard shows the wound")
+	guard.queue_free()
 
 
 ## Sprays the current hose at `point` for `ticks` spray ticks (0.1 s each).

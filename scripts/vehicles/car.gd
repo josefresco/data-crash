@@ -13,6 +13,9 @@ extends VehicleBody3D
 @export var max_speed := 18.0
 ## Neighborhood trust needed before the owner hands over the keys.
 @export var required_trust := 0.0
+## Non-empty: locked until unlock() (a deed hands over the keys); shown as
+## the prompt, e.g. "pick up all the litter".
+@export var locked_hint := ""
 ## Optional imported model (Kenney Car Kit, faces +Z like this body). When
 ## set, the scene's placeholder meshes are hidden and this is shown instead.
 @export_file("*.glb") var model_path := ""
@@ -158,7 +161,23 @@ func _dress_materials() -> void:
 
 
 func can_enter() -> bool:
-	return not wrecked and driver == null and (Game.district == null or Game.district.trust >= required_trust)
+	return not wrecked and driver == null and locked_hint.is_empty() \
+		and (Game.district == null or Game.district.trust >= required_trust)
+
+
+## Hands over the keys (clears `locked_hint`).
+func unlock() -> void:
+	locked_hint = ""
+
+
+## Why [E] doesn't work right now.
+func lock_text() -> String:
+	if wrecked:
+		return "Wrecked"
+	if not locked_hint.is_empty():
+		return "Locked: %s" % locked_hint
+	return "Locked: the foreman wants more neighborhood trust (%d%% / %d%%)" % [
+		roundi(Game.district.trust * 100.0), roundi(required_trust * 100.0)]
 
 
 func enter(player: Player) -> bool:

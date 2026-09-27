@@ -66,6 +66,13 @@ var _step_count := 0
 var _step_delta := 0.0
 var _anchors := {}
 var _scale := 1.0
+## Wounds: blood decals projected only onto this character (render layer
+## WOUND_LAYER), parented to bones so they move with the body.
+const WOUND_LAYER := 1 << 11
+const BLOOD := ["res://assets/decals/blood_0.png", "res://assets/decals/blood_1.png", "res://assets/decals/blood_2.png"]
+const WOUND_SPOTS: Array[StringName] = [&"chest", &"chest", &"chest", &"hips", &"head", &"forearm_l", &"hand_r"]
+var _wounds: Array[Decal] = []
+var _wound_layer_set := false
 
 
 ## `tone` < 0 picks a random skin tone.
@@ -177,6 +184,47 @@ func play_jump() -> void:
 ## Holds the mid-air pose (full body) while `on`; blends back when landing.
 func set_airborne(on: bool) -> void:
 	_air_target = 1.0 if on else 0.0
+
+
+## Adds a bloody wound on a random body spot, on the side facing
+## `toward_attacker` (world direction from the character to the hit).
+func add_wound(toward_attacker: Vector3) -> void:
+	if not _wound_layer_set:
+		_wound_layer_set = true
+		for node in find_children("*", "MeshInstance3D", true, false):
+			(node as VisualInstance3D).layers |= WOUND_LAYER
+	var up := Vector3(toward_attacker.x, toward_attacker.y * 0.3, toward_attacker.z)
+	if up.length_squared() < 0.0001:
+		up = global_basis.z
+	up = up.normalized()
+	var side := up.cross(Vector3.UP)
+	if side.length_squared() < 0.0001:
+		side = Vector3.RIGHT
+	side = side.normalized()
+	var holder := anchor(WOUND_SPOTS.pick_random())
+	var decal := Decal.new()
+	decal.texture_albedo = load(BLOOD.pick_random())
+	var width := randf_range(0.2, 0.32)
+	decal.size = Vector3(width, 0.7, width)
+	decal.cull_mask = WOUND_LAYER
+	decal.normal_fade = 0.5  # not through to the far side of the body
+	holder.add_child(decal)
+	decal.global_basis = Basis(side, up, side.cross(up)).rotated(up, randf() * TAU)
+	decal.global_position = holder.global_position + up * 0.12 \
+		+ side * randf_range(-0.07, 0.07) + Vector3.UP * randf_range(-0.08, 0.08)
+	_wounds.append(decal)
+
+
+func wound_count() -> int:
+	return _wounds.size()
+
+
+## Heals wounds down to `keep` (newest first).
+func clear_wounds(keep := 0) -> void:
+	while _wounds.size() > keep:
+		var decal: Decal = _wounds.pop_back()
+		if is_instance_valid(decal):
+			decal.queue_free()
 
 
 ## A node that follows `name`'s bone (see BONES), in meters and unscaled.

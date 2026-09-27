@@ -148,9 +148,10 @@ func _test_dogs() -> void:
 	await seconds(2.0)
 	check(hurt[0] == 0, "strays never bite")
 	player.health_changed.disconnect(on_hurt)
-	# Inside the fence: nothing happens until the player attacks the site.
+	# Inside the fence: quiet site dogs don't attack on sight (they sniff
+	# first; stealth_test covers being noticed and the alarm).
 	player.global_position = Vector3(5, 0.2, -20)
-	await seconds(1.5)
+	await seconds(0.5)
 	check(dog.target != player and not Game.is_alarmed(&"felsa"), "guard dog holds off until the site is attacked")
 	var guard := level.get_node("FelsaSite/PatrolGuard") as Enemy
 	guard.apply_damage(5.0, player.global_position, &"bullet")

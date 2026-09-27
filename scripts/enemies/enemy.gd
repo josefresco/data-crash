@@ -184,6 +184,10 @@ func apply_damage(amount: float, from: Vector3, kind: StringName = &"generic") -
 	if health <= 0.0:
 		_die()
 		return
+	# Visible wounds (character models near the camera): up to 3.
+	if amount >= 10.0 and kind in [&"bullet", &"melee", &"impact", &"explosive", &"bite"] \
+			and _rig is CharacterModel and not _lod_far and (_rig as CharacterModel).wound_count() < 3:
+		(_rig as CharacterModel).add_wound((from - global_position) if from != Vector3.ZERO else -_visual.global_basis.z)
 	if _flinch and not _lod_far and from != Vector3.ZERO:
 		_flinch.hit(global_position - from, clampf(amount / 30.0, 0.25, 1.0))
 	if amount >= 15.0:

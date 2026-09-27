@@ -25,6 +25,7 @@ func _run() -> void:
 	await _test_grenade()
 	await _test_rockets()
 	await _test_bulldozer()
+	await _test_heavy_equipment()
 
 
 func _dummy(unit: Enemy, at: Vector3) -> Enemy:
@@ -144,3 +145,64 @@ func _test_bulldozer() -> void:
 	dozer.linear_velocity = Vector3(0, 0, -6)
 	await seconds(1.5)
 	check(intact.call() < before, "bulldozer smashes through a datacenter wall (%d -> %d)" % [before, intact.call()])
+
+
+## The fire truck (keys for the hydrant), the garbage truck (keys for the
+## litter), and the road roller (trust).
+func _test_heavy_equipment() -> void:
+	var fire := level.get_node("FireTruck") as FireTruck
+	var garbage := level.get_node("GarbageTruck") as Car
+	var roller := level.get_node("RoadRoller") as RoadRoller
+	check(not fire.can_enter() and "hydrant" in fire.lock_text(), "the fire truck is locked until the hydrant is capped")
+	check(not garbage.can_enter() and "litter" in garbage.lock_text(), "the garbage truck is locked until the litter is gone")
+	(level.get_node("WaterMain") as WaterMain).fixed.emit(level.get_node("WaterMain"))
+	check(fire.can_enter(), "capping the hydrant hands over the fire truck")
+	for piece in get_tree().get_nodes_in_group("litter"):
+		player.global_position = (piece as Node3D).global_position + Vector3.UP * 0.2
+		await seconds(0.05)
+	await seconds(0.1)
+	check(garbage.can_enter(), "clearing the litter hands over the garbage truck")
+
+	# The roof cannon knocks a guard flat and puts out a fire, 12 m ahead.
+	fire.global_transform = Transform3D(Basis(Vector3.UP, PI), Vector3(-84, 0.8, 70))
+	fire.linear_velocity = Vector3.ZERO
+	await seconds(0.8)
+	var ahead := fire.global_position + fire.global_basis.z * 12.0
+	var guard := SecurityGuard.new()
+	guard.position = Vector3(ahead.x, 0.1, ahead.z)
+	level.add_child(guard)
+	var blaze := FireZone.new()
+	level.add_child(blaze)
+	blaze.global_position = Vector3(ahead.x + 2.0, 0.0, ahead.z + 2.0)
+	await seconds(0.3)
+	var start := guard.global_position
+	for i in 15:
+		fire.fire_cannon()
+		await seconds(0.1)
+	check(guard.global_position.distance_to(start) > 1.5 and guard.soaked_left > 0.0,
+		"the fire truck's cannon blasts a guard back (%.1f m)" % guard.global_position.distance_to(start))
+	check(not is_instance_valid(blaze), "the cannon puts out a fire")
+	guard.queue_free()
+
+	# The roller flattens a guard at walking pace.
+	Game.district.trust = maxf(Game.district.trust, roller.required_trust)
+	check(roller.can_enter(), "the road roller opens up with enough trust")
+	roller.global_transform = Transform3D(Basis(Vector3.UP, PI), Vector3(-84, 0.8, 40))
+	roller.linear_velocity = Vector3.ZERO
+	await seconds(0.6)
+	player.global_position = roller.global_position + Vector3(2.5, 0.2, 0.0)
+	await seconds(0.1)
+	roller.enter(player)
+	var victim := SecurityGuard.new()
+	victim.position = roller.global_position + roller.global_basis.z * 5.0 + Vector3(0, -0.7, 0)
+	level.add_child(victim)
+	victim.set_physics_process(false)
+	Input.action_press("move_forward")
+	for i in 60:
+		await seconds(0.1)
+		if not victim.is_alive():
+			break
+	Input.action_release("move_forward")
+	check(not victim.is_alive(), "the road roller flattens a guard at walking pace (%.1f m/s)" % roller.linear_velocity.length())
+	roller.exit()
+

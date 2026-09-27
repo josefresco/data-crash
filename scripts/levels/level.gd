@@ -96,6 +96,13 @@ enum Phase { ACTIVISM, ASSAULT, BOSS, BUILD, WAVE, WON, LOST }
 ## Where the tourists' camper enters and leaves the map.
 @export var tourist_entry := Vector3(2.5, 0.2, 165.0)
 @export var tourist_exit := Vector3(2.5, 0.2, 170.0)
+## Heavy equipment: [x, y, z, yaw] for the fire truck (keys for capping the
+## hydrant), the garbage truck (keys for clearing the litter), and the road
+## roller at the construction site (trust-locked like the dozer).
+@export var fire_truck_spot := Vector4(12.0, 0.8, 73.0, -PI * 0.5)
+@export var garbage_truck_spot := Vector4(-70.0, 0.8, 73.0, PI * 0.5)
+@export var roller_spot := Vector4(33.0, 0.8, 57.0, PI)
+@export var roller_trust := 0.25
 ## Park spots residents stroll to.
 @export var park_spots: Array[Vector3] = [Vector3(-50, 0.2, 60), Vector3(-36, 0.2, 60), Vector3(-24, 0.2, 60)]
 @export_group("")
@@ -202,6 +209,7 @@ func _ready() -> void:
 	_spawn_pickups()
 	_spawn_hardware_store()
 	_spawn_police()
+	_spawn_heavy_equipment()
 	var market := FarmersMarket.new()
 	market.name = "FarmersMarket"
 	market.position = market_position
@@ -424,6 +432,54 @@ func _place_scout_points() -> void:
 				Game.notify("%s scouted: its cooling units are marked. (+$50, %d/%d)" % [
 					scouted_point.call("_site_name"), done, total], 4.0)
 			_update_deeds())
+
+
+const CAR_SCENE := preload("res://scenes/vehicles/car.tscn")
+
+
+## The fire truck, the garbage truck, and the road roller (see the spots).
+func _spawn_heavy_equipment() -> void:
+	var fire := FireTruck.new_from_scene()
+	fire.name = "FireTruck"
+	fire.locked_hint = "cap the burst hydrant and the fire crew lends you their truck"
+	_place_vehicle(fire, fire_truck_spot)
+	var garbage := CAR_SCENE.instantiate() as Car
+	garbage.name = "GarbageTruck"
+	garbage.model_path = "res://assets/kenney/cars/garbage-truck.glb"
+	garbage.model_scale = 1.7
+	garbage.fit_to_model = true
+	garbage.mass = 4500.0
+	garbage.max_engine_force = 9000.0
+	garbage.max_brake = 90.0
+	garbage.max_speed = 12.0
+	garbage.ram_min_speed = 2.5
+	garbage.ram_damage_per_mps = 24.0
+	garbage.max_health = 2000.0
+	garbage.lower_center_of_mass = 0.3
+	garbage.turbo_seconds = 0.0
+	garbage.engine_cue = &"dozer_loop"
+	garbage.locked_hint = "pick up all the litter and the sanitation crew lends you their truck"
+	_place_vehicle(garbage, garbage_truck_spot)
+	var roller := RoadRoller.new_from_scene()
+	roller.name = "RoadRoller"
+	roller.required_trust = roller_trust
+	_place_vehicle(roller, roller_spot)
+	# Deeds hand over the keys.
+	var main := get_node_or_null("WaterMain") as WaterMain
+	if main:
+		main.fixed.connect(func(_m: WaterMain) -> void:
+			fire.unlock()
+			Game.notify("The fire crew tossed you the keys to their truck: [E] to drive, click to use the roof cannon.", 5.0))
+	else:
+		fire.unlock()
+	if litter_spots.is_empty():
+		garbage.unlock()
+
+
+func _place_vehicle(vehicle: Car, spot: Vector4) -> void:
+	vehicle.position = Vector3(spot.x, spot.y, spot.z)
+	vehicle.rotation.y = spot.w
+	add_child(vehicle)
 
 
 ## The fire department's thank-you for capping the hydrant.
@@ -973,6 +1029,11 @@ func _on_lady_crossed(_lady: OldLady) -> void:
 
 
 func _on_litter_collected(_piece: Litter) -> void:
+	if _litter_left <= 1:
+		var garbage := get_node_or_null("GarbageTruck") as Car
+		if garbage and not garbage.can_enter() and not garbage.locked_hint.is_empty():
+			garbage.unlock()
+			Game.notify("The block is spotless. The sanitation crew left you their garbage truck: [E] to drive it.", 5.0)
 	_litter_left -= 1
 	if _litter_left == _litter_total - 1:
 		Game.tip("litter", "Walk over litter to pick it up. Clear all of it for a good deed.")

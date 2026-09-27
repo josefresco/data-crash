@@ -471,6 +471,48 @@ func _ready() -> void:
 			get_viewport().get_texture().get_image().save_png("res://tests/output/gallery_truck_%s.png" % ("money" if load_money else "cheese"))
 		print("saved trucks")
 		cam.queue_free()
+	if _want("wounds"):
+		# The player after a beating: wounds on the side the hits came from.
+		player.global_position = Vector3(-84, 0.1, 60)
+		player.heal(9999.0)
+		await _wait(0.3)
+		for i in 5:
+			player.apply_damage(14.0, player.global_position + Vector3(randf_range(-3, 3), 1.2, -4.0), &"bullet")
+		var cam := Camera3D.new()
+		level.add_child(cam)
+		var face := -(player.get("_body") as Node3D).global_basis.z
+		cam.global_position = player.global_position + face * 2.2 + Vector3.UP * 1.3
+		cam.look_at(player.global_position + Vector3.UP * 1.0)
+		cam.make_current()
+		await _wait(0.4)
+		await RenderingServer.frame_post_draw
+		get_viewport().get_texture().get_image().save_png("res://tests/output/gallery_wounds.png")
+		print("saved wounds (%d)" % (player.get("_rig") as CharacterModel).wound_count())
+		cam.queue_free()
+		player.heal(9999.0)
+	if _want("heavy"):
+		# The heavy equipment where it's parked, then the fire truck's cannon.
+		var cam := Camera3D.new()
+		level.add_child(cam)
+		for vehicle_name in ["FireTruck", "GarbageTruck", "RoadRoller", "Bulldozer"]:
+			var vehicle := level.get_node(vehicle_name) as Node3D
+			var side := vehicle.global_basis.x
+			cam.global_position = vehicle.global_position + side * 8.0 + vehicle.global_basis.z * 4.0 + Vector3.UP * 3.0
+			cam.look_at(vehicle.global_position + Vector3.UP * 1.2)
+			cam.make_current()
+			await _wait(0.4)
+			await RenderingServer.frame_post_draw
+			get_viewport().get_texture().get_image().save_png("res://tests/output/gallery_heavy_%s.png" % vehicle_name.to_snake_case())
+		var fire := level.get_node("FireTruck") as FireTruck
+		cam.global_position = fire.global_position - fire.global_basis.z * 7.0 + Vector3.UP * 6.0
+		cam.look_at(fire.global_position + fire.global_basis.z * 8.0 + Vector3.UP * 1.0)
+		for i in 12:
+			fire.fire_cannon()
+			await _wait(0.1)
+		await RenderingServer.frame_post_draw
+		get_viewport().get_texture().get_image().save_png("res://tests/output/gallery_heavy_cannon.png")
+		print("saved heavy")
+		cam.queue_free()
 	if _want("stores"):
 		await _shot("store_hardware", Vector3(-8, 0.2, 31), Vector3(-14, 2.0, 21))
 		await _shot("store_row", Vector3(6, 0.2, 34), Vector3(-26, 4.0, 18))
