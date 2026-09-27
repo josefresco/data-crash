@@ -19,6 +19,28 @@ extends Node3D
 ## Empty lots (no house within `reserved_radius`): Harry's boardroom site.
 @export var reserved_lots: Array[Vector3] = [Vector3(18.0, 0.0, 97.0)]
 @export var reserved_radius := 13.0
+## The street (index) whose north side is the park and the construction site
+## instead of houses (-1: houses on both sides of every street).
+@export var park_street := 1
+## The park's x range, and the construction site's center (x, and z offset
+## from the park street).
+@export var park_x := Vector2(-64.0, -10.0)
+@export var construction_site := Vector3(34.0, 0.0, -12.0)
+## Cars parked along the curbs: (x, z, yaw).
+@export var parked_cars: Array[Vector3] = [Vector3(-38, 27.3, PI * 0.5), Vector3(-22, 27.3, PI * 0.5),
+	Vector3(22, 27.3, PI * 0.5), Vector3(54, 27.3, PI * 0.5), Vector3(-46, 112.7, -PI * 0.5),
+	Vector3(-14, 112.7, -PI * 0.5), Vector3(38, 112.7, -PI * 0.5)]
+## Streets (by index) lined with street trees.
+@export var tree_streets: Array[int] = [0, 2]
+@export_group("River")
+## A river along X at `river_z` (bed, reedy banks, a water surface that
+## follows the water table, and bridges where the main road crosses). Lots,
+## lights, trees, and parked cars inside it are skipped.
+@export var has_river := false
+@export var river_z := 90.0
+@export var river_width := 18.0
+@export var river_length := 420.0
+@export_group("")
 ## Shops on house lots: [lot position, Kenney commercial model letter, sign, sign color].
 @export var store_lots: Array = [
 	[Vector3(-14.0, 0.0, 16.0), "e", "DUECE HARDWARE", Color(0.9, 0.2, 0.15)],
@@ -66,6 +88,7 @@ var _store_doors := {}
 ## Footprints on the ground plane (x, z) for the minimap: [Rect2, is_store].
 var _footprints: Array = []
 var _rng := RandomNumberGenerator.new()
+var _river: River
 
 
 func _ready() -> void:
@@ -95,6 +118,15 @@ func _record_footprint(body: Node3D, bounds: AABB, is_store: bool) -> void:
 	var center := body.position + bounds.get_center().rotated(Vector3.UP, body.rotation.y)
 	var extent := Vector2(bounds.size.x, bounds.size.z)
 	_footprints.append([Rect2(Vector2(center.x, center.z) - extent * 0.5, extent), is_store])
+
+
+## True when `point` (this node's space) is in the river, grown by `margin`.
+func in_river(point: Vector3, margin := 0.0) -> bool:
+	return has_river and absf(point.z - river_z) <= river_width * 0.5 + margin
+
+
+func river() -> River:
+	return _river
 
 
 ## Just outside a store's door (by its sign text), in this node's space.
@@ -136,13 +168,15 @@ func build() -> void:
 	for i in street_z.size():
 		var z: float = street_z[i]
 		var sides: Array[float] = [1.0]
-		if i != 1:
+		if i != park_street:
 			sides.append(-1.0)
 		for side: float in sides:
 			for column: float in house_columns:
 				for mirror in [-1.0, 1.0]:
 					var at := Vector3(column * mirror, 0.0, z + side * house_setback)
 					if reserved_lots.any(func(lot: Vector3) -> bool: return lot.distance_to(at) < reserved_radius):
+						continue
+					if in_river(at, 8.0):
 						continue
 					var store := _store_at(at)
 					if store.is_empty():
@@ -156,30 +190,35 @@ func build() -> void:
 	for z in range(0, int(main_road_end_z), 16):
 		if street_z.any(func(street: float) -> bool: return absf(z - street) < 7.0):
 			continue  # keep intersections clear
+		if in_river(Vector3(0.0, 0.0, z), 3.0):
+			continue
 		for side in [-1.0, 1.0]:
 			var lamp := Models.streetlight()
 			lamp.position = Vector3(side * (road_width * 0.5 + 1.6), 0.0, z)
 			lamp.rotation.y = PI * 0.5 * side
 			add_child(lamp)
 
-	# Parked cars along the curbs of the first and third streets.
-	for x in [-38.0, -22.0, 22.0, 54.0]:
-		_add_parked_car(Vector3(x, 0.0, street_z[0] - road_width * 0.5 + 1.3), PI * 0.5)
-	if street_z.size() > 2:
-		for x in [-46.0, -14.0, 38.0]:
-			_add_parked_car(Vector3(x, 0.0, street_z[2] + road_width * 0.5 - 1.3), -PI * 0.5)
+	# Parked cars along the curbs.
+	for car in parked_cars:
+		if not in_river(Vector3(car.x, 0.0, car.y), 2.0):
+			_add_parked_car(Vector3(car.x, 0.0, car.y), car.z)
 
-	_build_park(Vector2(-64.0, -10.0), Vector2(street_z[1] - 18.0, street_z[1] - 6.0))
-	_build_construction_site(Vector3(34.0, 0.0, street_z[1] - 12.0))
+	if park_street >= 0 and park_street < street_z.size():
+		var park_z: float = street_z[park_street]
+		_build_park(park_x, Vector2(park_z - 18.0, park_z - 6.0))
+		_build_construction_site(Vector3(construction_site.x, 0.0, park_z + construction_site.z))
 
 	# Street trees between houses.
-	var tree_rows: Array[float] = [street_z[0] - 6.5, street_z[0] + 6.5]
-	if street_z.size() > 2:
-		tree_rows.append_array([street_z[2] - 6.5, street_z[2] + 6.5])
+	var tree_rows: Array[float] = []
+	for index in tree_streets:
+		if index < street_z.size():
+			tree_rows.append_array([street_z[index] - 6.5, street_z[index] + 6.5])
 	for z: float in tree_rows:
 		for x in range(-70, 71, 16):
-			if absf(x) > 8.0:
+			if absf(x) > 8.0 and not in_river(Vector3(x, 0.0, z), 2.0):
 				_add_tree(Vector3(x, 0.0, z), _rng.randf_range(4.5, 6.0))
+	if has_river:
+		_build_river()
 	if not Engine.is_editor_hint():
 		_batch_details()
 
@@ -191,7 +230,7 @@ func _batch_details() -> void:
 	for child in get_children():
 		if child is StaticBody3D and child.get_script() == null:
 			Models.merge_static(child as Node3D)
-	Models.merge_static(self)
+	Models.merge_static(self, [_river] if _river else [])
 
 
 func _store_at(at: Vector3) -> Array:
@@ -373,7 +412,7 @@ func _build_park(x_range: Vector2, z_range: Vector2) -> void:
 			_rng.randf_range(z_range.x + 1.5, z_range.y - 1.5))
 		_add_tree(spot, _rng.randf_range(4.0, 7.0))
 	# Benches.
-	for x in [-50.0, -36.0, -24.0]:
+	for x in [x_range.x + 14.0, x_range.x + 28.0, x_range.x + 40.0]:
 		var bench := Node3D.new()
 		bench.position = Vector3(x, 0.0, z_range.y - 1.0)
 		add_child(bench)
@@ -399,3 +438,44 @@ func _build_construction_site(center: Vector3) -> void:
 	for i in 5:  # stacked lumber and pipe
 		Models.box(pile, Vector3(6.0, 0.3, 0.6), Vector3(0.0, 0.15 + (i % 3) * 0.32, -1.0 + i * 0.5), Models.mat(Color(0.6, 0.45, 0.25)))
 	Models.box(pile, Vector3(2.5, 1.6, 2.5), Vector3(-1.5, 0.8, 0.5), Models.mat(Color(0.4, 0.42, 0.45)))
+
+
+## The riverbed (dark mud), reeds and rocks along the banks, a bridge where
+## the main road crosses, and the River node (the water).
+func _build_river() -> void:
+	var mud := Models.mat(Color(0.32, 0.25, 0.18), &"dirt")
+	var bank := Models.mat(Color(0.45, 0.38, 0.28), &"dirt")
+	Models.box(self, Vector3(river_length, 0.02, river_width), Vector3(0.0, 0.012, river_z), mud)
+	for side in [-1.0, 1.0]:
+		Models.box(self, Vector3(river_length, 0.03, 2.0), Vector3(0.0, 0.015, river_z + side * (river_width * 0.5 + 1.0)), bank)
+	# Reeds and rocks along both banks.
+	var reed := Models.mat(Color(0.35, 0.45, 0.2), &"grass")
+	var stone := Models.mat(Color(0.45, 0.45, 0.43), &"rough")
+	for i in 90:
+		var x := _rng.randf_range(-river_length * 0.5, river_length * 0.5)
+		if absf(x) < road_width * 0.5 + 4.0:
+			continue
+		var side := -1.0 if _rng.randf() < 0.5 else 1.0
+		var z := river_z + side * (river_width * 0.5 + _rng.randf_range(-1.5, 0.8))
+		if _rng.randf() < 0.65:
+			for k in 4:
+				var tall := _rng.randf_range(0.7, 1.4)
+				Models.box(self, Vector3(0.05, tall, 0.05), Vector3(x + _rng.randf_range(-0.4, 0.4), tall * 0.5, z + _rng.randf_range(-0.3, 0.3)), reed)
+		else:
+			Models.ball(self, _rng.randf_range(0.25, 0.6), Vector3(x, 0.1, z), stone)
+	# The main road's bridge: concrete parapets and piers over the bed.
+	var concrete := Models.mat(Color(0.7, 0.7, 0.68), &"concrete")
+	var span := river_width + 6.0
+	for side in [-1.0, 1.0]:
+		var x: float = side * (road_width * 0.5 + 1.8)
+		Models.box(self, Vector3(0.4, 0.9, span), Vector3(x, 0.45, river_z), concrete)
+		Models.collider(self, Vector3(0.4, 0.9, span), Vector3(x, 0.45, river_z))
+		for z in [-river_width * 0.25, river_width * 0.25]:
+			Models.box(self, Vector3(1.2, 0.3, 1.2), Vector3(x, 0.15, river_z + z), concrete)
+	_river = River.new()
+	_river.name = "River"
+	_river.width = river_width
+	_river.length = river_length
+	_river.gaps = [Vector2(-road_width * 0.5 - 2.2, road_width * 0.5 + 2.2)]
+	_river.position = Vector3(0.0, 0.0, river_z)
+	add_child(_river)

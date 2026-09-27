@@ -70,6 +70,8 @@ func _open_spots(hood: NeighborhoodBuilder, count: int) -> Array[Vector3]:
 			_rng.randf_range(-4.0, hood.main_road_end_z + 4.0))
 		if absf(p.x) < road_half:
 			continue
+		if hood.in_river(p, 1.0):
+			continue
 		if hood.street_z.any(func(z: float) -> bool: return absf(p.z - z) < road_half):
 			continue
 		var point := Vector2(p.x, p.z)

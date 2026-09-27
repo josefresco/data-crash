@@ -93,6 +93,9 @@ func _draw_roads() -> void:
 	if _hood == null:
 		return
 	var w := _hood.road_width
+	if _hood.has_river:
+		_line(Vector3(-_hood.river_length * 0.5, 0, _hood.river_z), Vector3(_hood.river_length * 0.5, 0, _hood.river_z),
+			_hood.river_width, Color(0.25, 0.45, 0.65, 0.9))
 	_line(Vector3(0, 0, -12), Vector3(0, 0, _hood.main_road_end_z), w, ROAD)
 	for z: float in _hood.street_z:
 		_line(Vector3(-_hood.street_half_length, 0, z), Vector3(_hood.street_half_length, 0, z), w, ROAD)
