@@ -56,6 +56,29 @@ func _ready() -> void:
 		await _shot("hats", Vector3(-88, 0.2, 63.5), Vector3(-88, 1.6, 60))
 		for unit in lineup:
 			unit.queue_free()
+		# Townsperson roles and a group of lost Canadians.
+		lineup.clear()
+		var roles: Array[StringName] = [&"jogger", &"kid", &"gardener", &"mail_carrier", &"busker"]
+		for i in roles.size() + 3:
+			var unit: Enemy
+			if i < roles.size():
+				var resident := Resident.new()
+				resident.set_role(roles[i])
+				unit = resident
+			else:
+				var tourist := Canuck.new()
+				tourist.setup(i == roles.size() + 2)
+				unit = tourist
+			unit.position = Vector3(-91.0 + i * 1.6, 0.1, 60.0)
+			level.add_child(unit)
+			unit.set_physics_process(false)
+			unit.set_process(false)
+			unit.rotation.y = PI
+			lineup.append(unit)
+		await _wait(1.0)
+		await _shot("townsfolk", Vector3(-84.5, 0.2, 66), Vector3(-84.5, 1.1, 60))
+		for unit in lineup:
+			unit.queue_free()
 	if _want("parked"):
 		await _shot("parked", Vector3(-30, 0.2, 21), Vector3(-22, 0.8, 26.5))
 		await _shot("parked2", Vector3(46, 0.2, 21), Vector3(54, 0.8, 26.5))

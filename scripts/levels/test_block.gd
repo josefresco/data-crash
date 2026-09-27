@@ -44,6 +44,13 @@ enum Phase { ACTIVISM, ASSAULT, BOSS, BUILD, WAVE, WON, LOST }
 ## once trust reaches 50%.
 @export var resident_count := 24
 @export var resident_bonus := 12
+## Lost Canadian tourists: the first RV shows up this many seconds in, then
+## one every `tourist_interval`, at most `tourist_groups` in all.
+@export var tourist_first := 90.0
+@export var tourist_interval := 240.0
+@export var tourist_groups := 3
+## Where the RVs pull over (main-road shoulder), in rotation.
+@export var tourist_stops: Array[Vector3] = [Vector3(2.8, 0.2, 92.0), Vector3(-2.8, 0.2, 52.0), Vector3(2.8, 0.2, 122.0)]
 ## The farmer's market stalls in the park (where the gun show used to be).
 @export var market_position := Vector3(-24.0, 0.0, 58.0)
 ## [kind, position] of the weapon pickups (WeaponPickup) around the block.
@@ -59,7 +66,11 @@ enum Phase { ACTIVISM, ASSAULT, BOSS, BUILD, WAVE, WON, LOST }
 ## First wave that opens a new lane. Announced (with a flare) a build phase ahead.
 @export var breach_from_wave := 3
 
-var phase := Phase.ACTIVISM
+var phase := Phase.ACTIVISM:
+	set(value):
+		if value != phase:
+			phase = value
+			_announce_phase()
 var core: GreenCore
 
 var _fence_breached := false
@@ -75,6 +86,8 @@ var _deeds := {"water": false, "van": false, "dogs": false, "scout": false, "lad
 var _dogs_tamed := 0
 var _cameras_total := 0
 var _residents_bonus_spawned := false
+var _tourist_left := 0.0
+var _tourists_sent := 0
 var _ladies_total := 0
 var _ladies_helped := 0
 var _litter_total := 0
@@ -126,6 +139,7 @@ func _ready() -> void:
 	market.position = market_position
 	add_child(market)
 	_spawn_residents(resident_count)
+	_tourist_left = tourist_first
 	_spawn_neighborly_deeds()
 	var tips := TipDirector.new()
 	tips.level = self
@@ -142,6 +156,11 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if phase != Phase.WON and phase != Phase.LOST:
 		Game.count("time", delta)
+	if phase in [Phase.ACTIVISM, Phase.ASSAULT, Phase.BUILD] and _tourists_sent < tourist_groups:
+		_tourist_left -= delta
+		if _tourist_left <= 0.0:
+			_tourist_left = tourist_interval
+			spawn_tourists()
 	if not _residents_bonus_spawned and Game.district and Game.district.trust >= 0.5:
 		_residents_bonus_spawned = true
 		_spawn_residents(resident_bonus)
@@ -228,6 +247,9 @@ func guidance_point() -> Variant:
 			targets.append(job.global_position)
 		for node in get_tree().get_nodes_in_group("strays"):
 			targets.append((node as Node3D).global_position)
+		for node in get_tree().get_nodes_in_group("tourists"):
+			if node is Canuck and (node as Canuck).state == Canuck.State.LOST:
+				targets.append((node as Node3D).global_position)
 		if not targets.is_empty():
 			targets.sort_custom(func(a: Vector3, b: Vector3) -> bool: return a.distance_to(here) < b.distance_to(here))
 			return targets[0]
@@ -243,6 +265,19 @@ func guidance_point() -> Variant:
 		if best == null or point.distance_to(here) < (best as Vector3).distance_to(here):
 			best = point
 	return best
+
+
+## Title card on each phase change.
+func _announce_phase() -> void:
+	match phase:
+		Phase.ASSAULT:
+			Game.show_banner("THE ASSAULT", "Wreck the cooling units to bring the datacenter down")
+		Phase.BUILD:
+			Game.show_banner("BUILD PHASE", "[B] build defenses around the Green Core")
+		Phase.WON:
+			Game.show_banner("DISTRICT SAVED", "The air is clearing")
+		Phase.LOST:
+			Game.show_banner("CORE LOST", "The datacenters win this round")
 
 
 ## Debug and tests: sets off the Felsa alarm (Elmo runs for his truck).
@@ -613,6 +648,24 @@ func road_route(from: Vector3, to: Vector3) -> Array[Vector3]:
 	return points
 
 
+## A camper full of lost Canadians rolls up the main road from the south and
+## pulls over. Public for tests.
+func spawn_tourists() -> TouristRV:
+	var rv := TouristRV.new()
+	rv.name = "TouristRV%d" % (_tourists_sent + 1)
+	rv.stop_point = tourist_stops[_tourists_sent % tourist_stops.size()]
+	rv.exit_point = Vector3(2.5, 0.2, 170.0)
+	rv.with_mountie = _tourists_sent % 3 == 1
+	rv.position = Vector3(2.5 if rv.stop_point.x > 0.0 else -2.5, 0.2, 165.0)
+	rv.rotation.y = 0.0  # nose (-Z) up the main road
+	_tourists_sent += 1
+	add_child(rv)
+	rv.arrived.connect(func(_r: TouristRV) -> void:
+		Game.notify("A camper full of lost Canadian tourists pulled over. They look confused, eh.", 5.0)
+		Game.tip("canadians", "Lost Canadian tourists! Walk up and press E to point them the right way. Grateful Canadians join your side, hockey sticks and all."))
+	return rv
+
+
 ## Neighbors on the sidewalks, walking between front doors, shops, the
 ## market, and the park.
 func _spawn_residents(count: int) -> void:
@@ -620,11 +673,25 @@ func _spawn_residents(count: int) -> void:
 	destinations.append(market_position + Vector3(0.0, 0.2, 3.5))
 	for x in [-50.0, -36.0, -24.0]:
 		destinations.append(Vector3(x, 0.2, 60.0))
+	var doors := ($Neighborhood as NeighborhoodBuilder).door_positions()
+	# Mostly strollers, with joggers, dog walkers, kids, gardeners, and the mail.
+	var roles: Array[StringName] = [&"walker", &"walker", &"walker", &"jogger", &"jogger", &"dog_walker", &"dog_walker",
+		&"kid", &"kid", &"gardener", &"gardener", &"mail_carrier"]
+	var busker := get_tree().get_nodes_in_group("residents").any(func(n: Node) -> bool: return (n as Resident).role == &"busker")
 	for i in count:
 		var person := Resident.new()
-		person.destinations = destinations
+		var role: StringName = roles[i % roles.size()] if i < roles.size() else roles.pick_random()
+		if not busker:
+			role = &"busker"
+			busker = true
+		person.set_role(role)
+		person.destinations = destinations if role != &"mail_carrier" else doors
 		var start: Vector3 = destinations.pick_random()
-		person.position = start + Vector3(randf_range(-2.0, 2.0), 0.0, randf_range(-2.0, 2.0))
+		if role == &"busker":
+			start = market_position + Vector3(12.5, 0.2, 2.5)
+		elif role == &"gardener" or role == &"kid":
+			start = doors.pick_random() + Vector3(0.0, 0.0, 0.0)
+		person.position = start + (Vector3(randf_range(-2.0, 2.0), 0.0, randf_range(-2.0, 2.0)) if role != &"busker" else Vector3.ZERO)
 		add_child(person)
 
 
@@ -697,6 +764,7 @@ func _on_wave_started(number: int, total: int) -> void:
 	Sfx.ui(&"jingle_wave", -4.0, "Music")
 	_auto_wave_left = -1.0
 	Game.set_info("wave", "Wave %d/%d" % [number, total])
+	Game.show_banner("WAVE %d / %d" % [number, total], "Hold the line!")
 	if has_planned_breach():
 		Game.set_info("wave", "Wave %d/%d: they cut through the %s fence!" % [number, total, _breach_side])
 		_execute_breach()

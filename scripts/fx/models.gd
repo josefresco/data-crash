@@ -140,6 +140,19 @@ static func hat(parent: Node3D, kind: StringName, color: Color, top: float, scal
 				box(root, Vector3(0.06, 0.2, 0.4), Vector3(x * 0.34, -0.22, 0.04), shell)
 			var visor := box(root, Vector3(0.6, 0.1, 0.04), Vector3(0.0, -0.22, -0.34), glow(accent, 2.5))
 			visor.rotation.x = deg_to_rad(8.0)
+		&"toque":
+			# Knit winter hat: a rounded crown, a rolled cuff, and a pom-pom.
+			_dome(root, 0.34, 0.3, Vector3(0.0, -0.12, 0.0), cloth)
+			cylinder(root, 0.345, 0.12, Vector3(0.0, -0.1, 0.0), mat(accent, &"cloth"), 16)
+			ball(root, 0.1, Vector3(0.0, 0.2, 0.0), mat(Color(0.95, 0.95, 0.92), &"cloth"))
+		&"headband":
+			cylinder(root, 0.33, 0.07, Vector3(0.0, -0.2, 0.0), cloth, 16)
+		&"campaign":
+			# Mountie's felt hat: a wide flat brim and a pinched crown.
+			_disc(root, 0.55, 0.03, Vector3(0.0, -0.1, 0.0), cloth)
+			var crown := cylinder(root, 0.28, 0.26, Vector3(0.0, 0.03, 0.0), cloth, 4)
+			crown.rotation.y = PI * 0.25
+			cylinder(root, 0.3, 0.05, Vector3(0.0, -0.07, 0.0), mat(Color(0.35, 0.2, 0.1), &"cloth"), 16)
 	return root
 
 

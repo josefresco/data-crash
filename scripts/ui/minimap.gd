@@ -160,6 +160,10 @@ func _draw_points_of_interest() -> void:
 	for node in get_tree().get_nodes_in_group("neighbors"):
 		if node is OldLady and (node as OldLady).state != OldLady.State.CROSSED:
 			_poi((node as Node3D).global_position, "G", Color(0.95, 0.75, 0.95))
+	for node in get_tree().get_nodes_in_group("tourists"):
+		if node is Canuck and (node as Canuck).state == Canuck.State.LOST:
+			_poi((node as Node3D).global_position, "C", Color(1.0, 0.3, 0.3))
+			break
 	for node in get_tree().get_nodes_in_group("litter"):
 		draw_circle(to_map((node as Node3D).global_position), 2.0, Color(0.9, 0.9, 0.6))
 	for node in get_tree().get_nodes_in_group("grock_cameras"):
@@ -210,7 +214,7 @@ func _draw_legend() -> void:
 	var font := ThemeDB.fallback_font
 	var rows := [["Objective", Color(1.0, 0.85, 0.15)], ["Hostile", Color(1.0, 0.15, 0.1)], ["Security (quiet)", Color(0.8, 0.5, 0.45)],
 		["Police", Color(0.5, 0.65, 1.0)], ["Friendly dog", Color(0.4, 1.0, 0.5)], ["H Hardware (free)", Color(1.0, 0.35, 0.3)],
-		["M Market", Color(0.45, 0.9, 0.45)], ["G Grandma  W Water main", Color(0.95, 0.75, 0.95)], ["Grock camera", Color(1.0, 0.3, 0.8)]]
+		["M Market", Color(0.45, 0.9, 0.45)], ["C Lost Canadians", Color(1.0, 0.3, 0.3)], ["G Grandma  W Water main", Color(0.95, 0.75, 0.95)], ["Grock camera", Color(1.0, 0.3, 0.8)]]
 	var at := Vector2(14.0, size.y - rows.size() * 18.0 - 10.0)
 	draw_rect(Rect2(at - Vector2(6, 14), Vector2(220, rows.size() * 18.0 + 8.0)), Color(0, 0, 0, 0.55))
 	for row: Array in rows:

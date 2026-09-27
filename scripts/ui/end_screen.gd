@@ -39,6 +39,7 @@ func show_result(won: bool, waves_cleared: int, total_waves: int) -> void:
 		["Good deeds", str(int(Game.stat("deeds")))],
 		["Grock cameras smashed", str(int(Game.stat("cameras")))],
 		["Dogs befriended", str(int(Game.stat("dogs")))],
+		["Canadians recruited", str(int(Game.stat("canadians")))],
 		["Protesters talked down", str(int(Game.stat("talked_down")))],
 		["Neighborhood trust", "%d%%" % roundi((Game.district.trust if Game.district else 0.0) * 100.0)],
 	]

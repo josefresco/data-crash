@@ -16,6 +16,8 @@ extends Enemy
 
 ## Getting hurt lets a guard dog chase past its territory for a few seconds.
 var _provoked_left := 0.0
+## A pet on a walk: trots beside this Resident (untyped: they may be freed).
+var pet_owner: Variant = null
 
 
 func _init() -> void:
@@ -55,6 +57,8 @@ func _process(delta: float) -> void:
 
 
 func _faction_group() -> String:
+	if pet_owner != null and faction == Faction.HOSTILE:
+		return "pets"
 	if stray and faction == Faction.HOSTILE:
 		return "strays"
 	return super()
@@ -80,8 +84,15 @@ func in_territory(point: Vector3) -> bool:
 	return territory_radius <= 0.0 or Vector2(offset.x, offset.z).length() <= territory_radius
 
 
-## Guard dogs trot back to their post once the intruder leaves.
+## Guard dogs trot back to their post once the intruder leaves; pets stay
+## at their owner's heel.
 func _idle() -> void:
+	if pet_owner != null and is_instance_valid(pet_owner) and faction == Faction.HOSTILE:
+		var owner_node := pet_owner as Node3D
+		var heel := owner_node.global_position + owner_node.global_basis.x * 1.0
+		move_speed = 3.5 if global_position.distance_to(heel) < 5.0 else 6.5
+		_nav.target_position = heel if global_position.distance_to(heel) > 1.2 else global_position
+		return
 	if faction == Faction.HOSTILE and territory_radius > 0.0 and global_position.distance_to(home) > 6.0:
 		_nav.target_position = home
 		return

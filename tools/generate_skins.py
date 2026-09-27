@@ -67,6 +67,16 @@ OUTFITS = {
     "resident_b": ((0.3, 0.58, 0.38), "shirt", (0.6, 0.53, 0.4), (0.35, 0.25, 0.18), None),
     "resident_c": ((0.93, 0.93, 0.9), "skin", (0.18, 0.18, 0.2), (0.75, 0.2, 0.2), None),
     "resident_d": ((0.5, 0.36, 0.7), "shirt", (0.3, 0.32, 0.36), (0.9, 0.9, 0.9), None),
+    # More neighbors: joggers, the mail carrier, kids, gardeners, the busker.
+    "jogger": ((0.6, 0.95, 0.2), "skin", (0.12, 0.12, 0.14), (0.95, 0.4, 0.1), None),
+    "mail_carrier": ((0.35, 0.45, 0.68), "shirt", (0.25, 0.3, 0.45), (0.1, 0.1, 0.1), (0.9, 0.2, 0.2)),
+    "kid": ((0.98, 0.8, 0.15), "skin", (0.85, 0.25, 0.25), (0.3, 0.55, 0.95), None),
+    "gardener": ((0.9, 0.88, 0.8), "skin", (0.3, 0.5, 0.3), (0.4, 0.3, 0.2), None),
+    "busker": ((0.15, 0.15, 0.17), "shirt", (0.25, 0.32, 0.5), (0.5, 0.35, 0.2), (0.95, 0.6, 0.2)),
+    # Lost Canadian tourists: plaid-red and flannel-green, jeans, and a Mountie (retired).
+    "canuck_a": ((0.78, 0.12, 0.12), "shirt", (0.2, 0.28, 0.45), (0.35, 0.25, 0.15), (0.1, 0.1, 0.1)),
+    "canuck_b": ((0.2, 0.42, 0.25), "shirt", (0.2, 0.28, 0.45), (0.35, 0.25, 0.15), (0.75, 0.12, 0.12)),
+    "mountie": ((0.82, 0.1, 0.1), "shirt", (0.08, 0.1, 0.25), (0.35, 0.22, 0.12), (0.95, 0.8, 0.3)),
     # Datacenter tech: company polo with a lanyard badge, khakis.
     "tech": ((0.22, 0.42, 0.72), "skin", (0.56, 0.5, 0.38), (0.15, 0.15, 0.17), (0.95, 0.95, 0.95)),
     # Neighborhood grandmas: lavender cardigan, gray slacks, sensible shoes.

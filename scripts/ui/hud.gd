@@ -7,7 +7,9 @@ extends CanvasLayer
 ## - bottom-left: health bar (flashes on damage), turbo bar while driving,
 ##   C4 and treat counts; the tip panel sits above it
 ## - bottom-right: weapon and ammo
-## - a red vignette when hurt, pulsing at low health
+## - a red vignette when hurt, pulsing at low health, over a faint dark one
+## - HudOverlay: objective marker, enemy bars, damage numbers, hit arcs, banners
+## - CameraFx: FOV kick, explosion shake, dust motes
 
 const TIP_SECONDS := 9.0
 const INFO_KEYS: Array[String] = ["sites", "deeds", "boss", "wave", "core", "build", "bribe", "shop", "notice"]
@@ -42,6 +44,8 @@ var _last_health := -1.0
 var _map_frame: Panel
 var _hit_marker: _HitMarker
 var _minimap: Minimap
+var _overlay: HudOverlay
+var _allies_left := 0.0
 
 
 func _ready() -> void:
@@ -50,8 +54,14 @@ func _ready() -> void:
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
 
-	_vignette = _build_vignette()
+	var shade := _build_vignette(Color(0.0, 0.0, 0.0, 0.0), Color(0.0, 0.0, 0.0, 0.5), 0.55)
+	shade.modulate.a = 1.0
+	root.add_child(shade)
+	_vignette = _build_vignette(Color(0.7, 0.0, 0.0, 0.0), Color(0.75, 0.0, 0.0, 0.85), 0.4)
 	root.add_child(_vignette)
+	_overlay = HudOverlay.new()
+	root.add_child(_overlay)
+	add_child(CameraFx.new())
 
 	# Minimap in a circular frame; children clip to the circle.
 	_map_frame = Panel.new()
@@ -183,6 +193,18 @@ func _ready() -> void:
 
 	_prompt = _make_label(root, 22, HORIZONTAL_ALIGNMENT_CENTER)
 	_place(_prompt, Control.PRESET_CENTER_BOTTOM, Rect2(-320, -150, 640, 40))
+	var badge := StyleBoxFlat.new()
+	badge.bg_color = Color(0.03, 0.05, 0.04, 0.72)
+	badge.border_color = Color(UiTheme.ACCENT, 0.8)
+	badge.border_width_left = 4
+	badge.set_corner_radius_all(6)
+	badge.content_margin_left = 16
+	badge.content_margin_right = 16
+	badge.content_margin_top = 4
+	badge.content_margin_bottom = 4
+	_prompt.add_theme_stylebox_override("normal", badge)
+	_prompt.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_prompt.visible = false
 
 	var crosshair := _make_label(root, 24, HORIZONTAL_ALIGNMENT_CENTER)
 	crosshair.text = "+"
@@ -230,6 +252,10 @@ func _process(delta: float) -> void:
 			bar.value = value
 			var word := "%s %d%%" % [entry[1], roundi(value * 100.0)]
 			bar.text = word
+	_allies_left -= delta
+	if _allies_left <= 0.0:
+		_allies_left = 0.5
+		_refresh_status()
 	if _player and is_instance_valid(_player):
 		var driving := _player.vehicle != null
 		_turbo.visible = driving
@@ -259,7 +285,9 @@ func _connect_player() -> void:
 	_player.hit_confirmed.connect(func(killed: bool) -> void:
 		_hit_marker.show_hit(killed)
 		Sfx.ui(&"hitmarker", -2.0 if killed else -8.0))
-	_player.prompt_changed.connect(func(text: String) -> void: _prompt.text = text)
+	_player.prompt_changed.connect(func(text: String) -> void:
+		_prompt.text = text
+		_prompt.visible = not text.is_empty())
 	_player.weapon_changed.connect(func(_w: Weapon) -> void: _refresh_status())
 	_last_health = _player.health
 	_refresh_status()
@@ -309,6 +337,9 @@ func _refresh_status() -> void:
 	_health.value = health / maxf(_player.max_health, 1.0)
 	_health.text = "%d / %d" % [ceili(health), int(_player.max_health)]
 	_kit.text = "C4 x%d      Treats x%d" % [_player.c4_charges, _player.treats]
+	var allies := ally_count()
+	if allies > 0:
+		_kit.text += "      Allies x%d" % allies
 	var weapon := _player.current_weapon()
 	_weapon_name.text = "[Q] %s" % weapon.display_name
 	_ammo.text = "--" if weapon.ammo < 0 else "%d / %d" % [weapon.ammo, weapon.max_ammo]
@@ -322,12 +353,25 @@ func _on_info_changed(key: String, text: String) -> void:
 		line.visible = not text.is_empty()
 
 
-## Full-screen red edge glow (transparent middle); alpha is driven by damage.
-func _build_vignette() -> TextureRect:
+## Living allies on your side (befriended dogs, recruited Canadians).
+func ally_count() -> int:
+	var total := 0
+	for node in get_tree().get_nodes_in_group("allies"):
+		if node is Enemy and (node as Enemy).is_alive():
+			total += 1
+	return total
+
+
+func overlay() -> HudOverlay:
+	return _overlay
+
+
+## Full-screen edge glow (transparent middle). The red one's alpha is driven by damage.
+func _build_vignette(inner: Color, outer: Color, start: float) -> TextureRect:
 	var gradient := Gradient.new()
-	gradient.set_color(0, Color(0.7, 0.0, 0.0, 0.0))
-	gradient.set_color(1, Color(0.75, 0.0, 0.0, 0.85))
-	gradient.set_offset(0, 0.4)
+	gradient.set_color(0, inner)
+	gradient.set_color(1, outer)
+	gradient.set_offset(0, start)
 	var texture := GradientTexture2D.new()
 	texture.gradient = gradient
 	texture.fill = GradientTexture2D.FILL_RADIAL

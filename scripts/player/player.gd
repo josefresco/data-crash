@@ -8,6 +8,10 @@ signal prompt_changed(text: String)
 signal weapon_changed(weapon: Weapon)
 ## A shot hit a hostile (the HUD's hit marker); `killed` if it went down.
 signal hit_confirmed(killed: bool)
+## Damage the player dealt to a hostile (floating HUD numbers).
+signal damage_dealt(at: Vector3, amount: float, killed: bool)
+## The player got hurt from `from` (the HUD's direction arc).
+signal hurt_from(from: Vector3, amount: float)
 
 ## Hitscan and aim rays hit world, vehicles, destructibles, and units (not debris).
 const AIM_MASK := 1 | 4 | 16 | 32
@@ -133,7 +137,9 @@ func _physics_process(delta: float) -> void:
 	_update_prompt()
 
 
-func apply_damage(amount: float, _from: Vector3, _kind: StringName = &"generic") -> void:
+func apply_damage(amount: float, from: Vector3, _kind: StringName = &"generic") -> void:
+	if amount > 0.0:
+		hurt_from.emit(from, amount)
 	if amount >= 3.0:
 		Sfx.play(&"hit_soft", global_position + Vector3.UP, -6.0)
 	health -= amount
@@ -467,7 +473,9 @@ func _melee(weapon: Weapon) -> void:
 		offset.y = 0.0
 		if offset.length() > weapon.reach + 0.4 or (offset.length() > 0.3 and offset.normalized().dot(facing) < 0.35):
 			continue
+		var before := enemy.health
 		enemy.apply_damage(weapon.damage, chest, &"melee")
+		_report_damage(enemy, before)
 		if weapon.knockback > 0.0:
 			enemy.velocity += facing * weapon.knockback
 		landed = true
@@ -552,6 +560,15 @@ func _kick(amount: float) -> void:
 	_pivot.rotate_y(randf_range(-1.0, 1.0) * amount * 0.35)
 
 
+## Emits damage_dealt for the HUD with what the hit actually took off.
+func _report_damage(enemy: Enemy, before: float, at := Vector3.INF) -> void:
+	var dealt := before - maxf(enemy.health, 0.0)
+	if dealt <= 0.05:
+		return
+	var where := at if at != Vector3.INF else enemy.global_position + Vector3.UP * enemy.body_height
+	damage_dealt.emit(where, dealt, not enemy.is_alive())
+
+
 ## What a bullet hitting `collider` looks like: metal props spark, the
 ## ground throws dirt, people puff, everything else chips.
 static func surface_of(collider: Node, normal: Vector3) -> StringName:
@@ -600,9 +617,11 @@ func _fire_pellet(weapon: Weapon, effects := true) -> void:
 		or (target is Enemy and (target as Enemy).faction == Enemy.Faction.ALLY))
 	if target and not friendly and target.has_method("apply_damage"):
 		# `from` is the shooter: riot shields and debris direction depend on it.
+		var before: float = (target as Enemy).health if target is Enemy else 0.0
 		target.call(&"apply_damage", weapon.damage, muzzle, &"bullet")
 		if target is Enemy and (target as Enemy).faction == Enemy.Faction.HOSTILE:
 			hit_confirmed.emit(not (target as Enemy).is_alive())
+			_report_damage(target as Enemy, before, point)
 	if target is RigidBody3D:
 		(target as RigidBody3D).apply_impulse(-normal * 2.0, point - (target as Node3D).global_position)
 

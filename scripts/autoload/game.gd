@@ -9,6 +9,8 @@ signal info_changed(key: String, text: String)
 signal notice(text: String, seconds: float)
 ## A one-time contextual tip (see tip()).
 signal tip_shown(text: String)
+## A big center-screen title card (phase changes, waves, wins).
+signal banner(title: String, subtitle: String)
 
 ## Physics layer bits. Keep in sync with [layer_names] in project.godot.
 const LAYER_WORLD := 1
@@ -97,6 +99,15 @@ func is_alarmed(site: StringName) -> bool:
 ## True once any site has been attacked.
 func any_alarm() -> bool:
 	return not alarms.is_empty()
+
+
+func show_banner(title: String, subtitle := "") -> void:
+	banner.emit(title, subtitle)
+
+
+## Shakes the active camera (explosions): `strength` fades with distance.
+func shake(at: Vector3, strength: float) -> void:
+	get_tree().call_group(&"camera_fx", &"shake", at, strength)
 
 
 func notify(text: String, seconds := 5.0) -> void:

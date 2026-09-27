@@ -56,6 +56,7 @@ func _run() -> void:
 	hud.call("_unhandled_input", press)
 	check(hud.is_map_expanded(), "[M] opens the full map")
 	hud.call("_unhandled_input", press)
+	await _test_hud_overlay(hud, hardware)
 	await _test_pickups()
 	check(level.call("guidance_point") != hardware, "once armed, it points at the next good deed")
 	await _test_grounding()
@@ -63,6 +64,8 @@ func _run() -> void:
 	await _test_grock_cameras()
 	await _test_parked_cars()
 	await _test_market_and_residents()
+	await _test_canadians()
+	check(hud.ally_count() >= 2, "the HUD counts recruited Canadians as allies (%d)" % hud.ally_count())
 	await _test_vehicles()
 	await _test_reply_guys()
 	await _test_site_life()
@@ -202,6 +205,58 @@ func _test_market_and_residents() -> void:
 	check(Game.district.trust > trust, "buying local raises trust")
 	check(market.buy(4, player) and Game.cash == 5, "the $80 quilt leaves $5")
 	check(not market.buy(0, player), "can't afford bread with $5")
+
+
+func _test_hud_overlay(hud: Hud, hardware: Vector3) -> void:
+	var overlay := hud.overlay()
+	await seconds(0.3)
+	check(overlay.objective_point() == hardware, "an on-screen marker points at the objective")
+	Game.show_banner("TEST BANNER", "sub")
+	check(overlay.current_banner() == "TEST BANNER", "phase banners show center screen")
+	player.damage_dealt.emit(player.global_position + Vector3(0, 2, -5), 15.0, false)
+	player.apply_damage(1.0, player.global_position + Vector3(6.0, 0.0, 0.0))
+	check((overlay.get("_numbers") as Array).size() == 1, "hits pop floating damage numbers")
+	check((overlay.get("_arcs") as Array).size() == 1, "getting hurt shows which way it came from")
+	player.heal(10.0)
+	var fx := get_tree().get_first_node_in_group(&"camera_fx") as CameraFx
+	Game.shake(player.global_position, 1.0)
+	check(fx != null and fx.trauma() > 0.5, "a nearby blast shakes the camera")
+	await seconds(1.0)
+	check(fx.trauma() < 0.5, "the shake settles")
+
+
+func _test_canadians() -> void:
+	var roles := {}
+	for node in get_tree().get_nodes_in_group("residents"):
+		roles[(node as Resident).role] = true
+	check(roles.has(&"jogger") and roles.has(&"dog_walker") and roles.has(&"busker") and roles.has(&"kid"),
+		"many kinds of townspeople (%s)" % ", ".join(roles.keys()))
+	check(not get_tree().get_nodes_in_group("pets").is_empty(), "dog walkers bring their pets")
+	var rv: TouristRV = level.call("spawn_tourists")
+	for i in 120:
+		if rv.leg == TouristRV.Leg.PARKED:
+			break
+		await seconds(0.25)
+	check(rv.leg == TouristRV.Leg.PARKED and rv.tourists.size() >= 2, "a camper of lost Canadians pulls over (%d aboard)" % rv.tourists.size())
+	var tourist := rv.tourists[0]
+	check(tourist.is_in_group("tourists") and not tourist.is_in_group("allies"), "lost tourists aren't in the fight")
+	player.global_position = tourist.global_position + Vector3(1.0, 0.2, 0.0)
+	await seconds(0.1)
+	check(player.nearest_interactable() == tourist, "[E] reaches the lost tourists")
+	tourist.interact(player)
+	check(rv.tourists.all(func(t: Canuck) -> bool: return t.state == Canuck.State.ALLY and t.is_in_group("allies")),
+		"helping one brings the whole group onto your side")
+	var goon := SecurityGuard.new()
+	goon.position = tourist.global_position + Vector3(2.5, 0.1, 0.0)
+	level.add_child(goon)
+	goon.set_physics_process(false)
+	var hp := goon.health
+	for i in 24:
+		if goon.health < hp:
+			break
+		await seconds(0.25)
+	check(goon.health < hp, "Canadian allies fight hostiles with hockey sticks")
+	goon.apply_damage(9999.0, Vector3.ZERO)
 
 
 ## Cars right themselves, turbo boosts and drains, and a dog in the road
