@@ -34,6 +34,14 @@ func _run() -> void:
 		check(boss != null and boss.global_position.y - site_node.global_position.y > ExecutiveSuite.FLOOR - 0.5,
 			"%s waits upstairs at %s" % [site_node.boss_label(), site_node.display_name])
 	check(get_tree().get_nodes_in_group("river_pumps").size() == 3, "PureDrain has three river pumps")
+	for site_node in level.sites:
+		var posters := 0
+		for fence_name in ["FenceFront", "FenceLeft", "FenceRight"]:
+			for panel in site_node.get_node(fence_name).get_children():
+				posters += panel.find_children("*", "MeshInstance3D", false, false).size()
+		var graffiti := site_node.datacenter.find_children("*", "Decal", false, false).size()
+		check(posters >= 4 and graffiti >= 2 and site_node.has_node("CorporateSign1"),
+			"%s: protest posters (%d), graffiti (%d), and the company's signs" % [site_node.display_name, posters, graffiti])
 	check(get_tree().get_nodes_in_group("chatbot_kiosks").size() == 3, "SynergAI has three chatbot kiosks")
 	await _test_pete()
 	await _test_chad()

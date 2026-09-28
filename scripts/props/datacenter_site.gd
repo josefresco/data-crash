@@ -98,6 +98,7 @@ func _ready() -> void:
 		Models.merge_static(self)
 	if not Engine.is_editor_hint():
 		_build_suite()  # after merge_static: the collapse must be able to remove it
+		_dress_protest()  # posters ride on fence panels, so they go when a panel does
 	_spawn_worker()
 	_spawn_truck()
 	var level := get_parent()
@@ -499,6 +500,98 @@ func _build_extras() -> void:
 	_water_board.modulate = Color(1.0, 0.45, 0.2)
 	_water_board.position = Vector3(0.0, 0.0, 0.17)
 	board.add_child(_water_board)
+
+
+const POSTERS := ["poster_0", "poster_1", "poster_2", "poster_3", "poster_4", "poster_5"]
+const GRAFFITI := ["graffiti_0", "graffiti_1", "graffiti_2"]
+const WARNINGS := ["NO TRESPASSING\nVIOLATORS WILL BE MONETIZED", "SMILE!\nYOU'RE TRAINING DATA",
+	"WATER USE:\nTRADE SECRET", "PRIVATE PROPERTY\nOF YOUR FUTURE"]
+static var _art := {}
+
+
+## The neighbors have been here: protest posters zip-tied to the outside of
+## the fence, graffiti on the building, and the company's answer on signs
+## outside the gates. Deterministic per site.
+func _dress_protest() -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash(site_id) + 101
+	# Posters on the outside face of random fence panels.
+	var panels: Array[Destructible] = []
+	for fence_name in ["FenceFront", "FenceLeft", "FenceRight"]:
+		var fence := get_node_or_null(fence_name)
+		if fence:
+			for child in fence.get_children():
+				if child is Destructible:
+					panels.append(child as Destructible)
+	for i in mini(8, panels.size()):
+		var panel: Destructible = panels[rng.randi() % panels.size()]
+		var outward := signf((panel.global_basis.z).dot(panel.global_position - global_position))
+		var quad := MeshInstance3D.new()
+		var mesh := QuadMesh.new()
+		mesh.size = Vector2(0.72, 1.0)
+		quad.mesh = mesh
+		quad.material_override = _art_material(POSTERS[rng.randi() % POSTERS.size()])
+		quad.position = Vector3(rng.randf_range(-0.7, 0.7), rng.randf_range(0.9, 1.3), (0.07 if outward >= 0.0 else -0.07))
+		quad.rotation = Vector3(0.0, 0.0 if outward >= 0.0 else PI, rng.randf_range(-0.08, 0.08))
+		quad.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		panel.add_child(quad)
+	# Graffiti sprayed on the building's outer walls (decals).
+	var walls: Array = datacenter.get("_structure")
+	for i in 3:
+		if walls.is_empty():
+			break
+		var wall := walls[rng.randi() % walls.size()] as Destructible
+		if wall == null or wall.has_meta(&"doorway"):
+			continue
+		var local := wall.position
+		var normal := Vector3(0.0, 0.0, signf(local.z)) if wall.size.x > wall.size.z else Vector3(signf(local.x), 0.0, 0.0)
+		var decal := Decal.new()
+		var art: String = GRAFFITI[i % GRAFFITI.size()]
+		decal.texture_albedo = load("res://assets/generated/%s.png" % art)
+		# Spray paint that still reads through the smog.
+		decal.texture_emission = load("res://assets/generated/%s_glow.png" % art)
+		decal.emission_energy = 0.8
+		decal.size = Vector3(6.0, 0.8, 2.3)
+		datacenter.add_child(decal)
+		var surface := local + normal * (minf(wall.size.x, wall.size.z) * 0.5 + 0.2) + Vector3.UP * rng.randf_range(4.8, 6.4)
+		# Texture +X must run to the viewer's right when facing the wall.
+		var side := Vector3.UP.cross(normal)
+		decal.transform = Transform3D(Basis(side, normal, side.cross(normal)), surface)
+	# The company's signs, outside both gates.
+	var half := compound * 0.5
+	var spots := [Vector3(gate_width * 0.5 + 4.0, 0.0, half.y + 1.4), Vector3(-gate_width * 0.5 - 4.0, 0.0, half.y + 1.4),
+		Vector3(gate_width * 0.5 + 4.0, 0.0, -half.y - 1.4)]
+	for i in spots.size():
+		var board := Node3D.new()
+		board.name = "CorporateSign%d" % (i + 1)
+		board.position = spots[i]
+		board.rotation.y = 0.0 if spots[i].z > 0.0 else PI
+		add_child(board)
+		var steel := Models.mat(Color(0.35, 0.36, 0.38), &"metal")
+		for x in [-0.9, 0.9]:
+			Models.box(board, Vector3(0.08, 2.0, 0.08), Vector3(x, 1.0, 0.0), steel)
+		Models.box(board, Vector3(2.2, 1.0, 0.05), Vector3(0.0, 1.55, 0.0), Models.mat(Color(0.95, 0.95, 0.93), &"paint"))
+		Models.box(board, Vector3(2.2, 0.16, 0.06), Vector3(0.0, 2.0, 0.0), Models.mat(brand_color, &"paint"))
+		var label := Label3D.new()
+		label.text = WARNINGS[(rng.randi() + i) % WARNINGS.size()]
+		label.modulate = Color(0.12, 0.12, 0.14)
+		label.outline_size = 0
+		label.position = Vector3(0.0, 1.5, 0.04)
+		board.add_child(label)
+		Models.fit_label(label, Vector2(2.0, 0.75))
+
+
+## Shared material for a generated poster (assets/generated/<art>.png).
+static func _art_material(art: String) -> StandardMaterial3D:
+	if not _art.has(art):
+		var material := StandardMaterial3D.new()
+		material.albedo_texture = load("res://assets/generated/%s.png" % art)
+		material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+		material.alpha_scissor_threshold = 0.4
+		material.roughness = 0.85
+		material.cull_mode = BaseMaterial3D.CULL_DISABLED
+		_art[art] = material
+	return _art[art]
 
 
 ## The executive suite (see ExecutiveSuite) with extra security: two guards

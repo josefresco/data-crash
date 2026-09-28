@@ -98,6 +98,7 @@ reserved_lots = Array[Vector3]([Vector3(18, 0, 124)])
 store_lots = [[Vector3(-14, 0, 16), "e", "DUECE HARDWARE", Color(0.9, 0.2, 0.15, 1)], [Vector3(14, 0, 16), "h", "THE DAM DINER", Color(0.2, 0.65, 0.95, 1)], [Vector3(-30, 0, 16), "d", "POLICE", Color(0.25, 0.4, 1, 1)], [Vector3(30, 0, 16), "c", "RIVER BAIT & TACKLE", Color(0.3, 0.85, 0.45, 1)], [Vector3(-14, 0, 44), "a", "SPIN CYCLE", Color(0.5, 0.8, 1, 1)], [Vector3(14, 0, 44), "d", "BOATHOUSE PIZZA", Color(1, 0.6, 0.15, 1)], [Vector3(-30, 0, 44), "l", "TOWN HALL", Color(0.95, 0.82, 0.4, 1)]]
 has_river = true
 river_z = 90.0
+river_owner = "PUREDRAIN"
 
 [node name="Player" parent="." instance=ExtResource("3_player")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, 0.1, 20)

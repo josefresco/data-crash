@@ -147,6 +147,7 @@ func _release_static_caches() -> void:
 	Car._skid_material = null
 	UiTheme._theme = null
 	Enemy._talkers.clear()
+	DatacenterSite._art.clear()
 
 
 func _notification(what: int) -> void:

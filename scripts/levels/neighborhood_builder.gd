@@ -40,6 +40,8 @@ extends Node3D
 @export var river_z := 90.0
 @export var river_width := 18.0
 @export var river_length := 420.0
+## Whose river it is now, per the fishing pier's sign.
+@export var river_owner := "THE COUNTY"
 @export_group("")
 ## Shops on house lots: [lot position, Kenney commercial model letter, sign, sign color].
 @export var store_lots: Array = [
@@ -89,6 +91,11 @@ var _store_doors := {}
 var _footprints: Array = []
 var _rng := RandomNumberGenerator.new()
 var _river: River
+## Dressing picks (yard signs, river litter) draw from their own stream so
+## adding them never shifts the houses, trees, and cars `_rng` lays out.
+var _decor_rng := RandomNumberGenerator.new()
+const YARD_SIGNS := ["NO DATACENTERS\nIN OUR BACKYARD", "SAVE OUR\nWATER", "HONK FOR\nCLEAN AIR",
+	"THIS FAMILY\nSUPPORTS TAPS", "UNPLUG\nTHE FARM"]
 
 
 func _ready() -> void:
@@ -142,6 +149,7 @@ func build() -> void:
 	_store_doors.clear()
 	_footprints.clear()
 	_rng.seed = layout_seed
+	_decor_rng.seed = layout_seed * 31 + 5
 
 	var asphalt := Models.mat(Color(0.75, 0.75, 0.75), &"asphalt")
 	var sidewalk := Models.mat(Color(0.92, 0.92, 0.9), &"concrete")
@@ -345,6 +353,26 @@ func _add_house(at: Vector3, facing_side: float) -> void:
 	Models.box(mailbox, Vector3(0.08, 1.0, 0.08), Vector3(0.0, 0.5, 0.0), Models.mat(Color(0.3, 0.25, 0.2)))
 	Models.box(mailbox, Vector3(0.25, 0.25, 0.45), Vector3(0.0, 1.05, 0.0), Models.mat(Color(0.2, 0.25, 0.5), &"metal"))
 	Models.collider(mailbox, Vector3(0.3, 1.2, 0.5), Vector3(0.0, 0.6, 0.0))
+	if _decor_rng.randf() < 0.35:
+		_add_yard_sign(at + Vector3(-2.6, 0.0, 0.0).rotated(Vector3.UP, body.rotation.y) + front * 1.3, body.rotation.y)
+
+
+## A hand-lettered protest sign on a stake in the front lawn.
+func _add_yard_sign(at: Vector3, yaw: float) -> void:
+	var stake := Node3D.new()
+	stake.position = at
+	stake.rotation.y = yaw + _decor_rng.randf_range(-0.25, 0.25)
+	add_child(stake)
+	Models.box(stake, Vector3(0.05, 0.9, 0.05), Vector3(0.0, 0.45, 0.0), Models.mat(Color(0.45, 0.32, 0.2)))
+	var colors: Array[Color] = [Color(0.96, 0.95, 0.9), Color(0.98, 0.85, 0.3), Color(0.55, 0.8, 0.95)]
+	Models.box(stake, Vector3(0.9, 0.6, 0.03), Vector3(0.0, 1.05, 0.0), Models.mat(colors[_decor_rng.randi() % colors.size()], &"paint"))
+	var label := Label3D.new()
+	label.text = YARD_SIGNS[_decor_rng.randi() % YARD_SIGNS.size()]
+	label.modulate = Color(0.1, 0.1, 0.12)
+	label.outline_size = 0
+	label.position = Vector3(0.0, 1.05, 0.02)
+	stake.add_child(label)
+	Models.fit_label(label, Vector2(0.84, 0.54))
 
 
 ## Parked cars are real, drivable Cars (keys in the ignition, this is a nice
@@ -443,9 +471,12 @@ func _build_construction_site(center: Vector3) -> void:
 ## The riverbed (dark mud), reeds and rocks along the banks, a bridge where
 ## the main road crosses, and the River node (the water).
 func _build_river() -> void:
-	var mud := Models.mat(Color(0.32, 0.25, 0.18), &"dirt")
+	var bed := ShaderMaterial.new()
+	bed.shader = preload("res://shaders/riverbed.gdshader")
+	bed.set_shader_parameter(&"mud_color", preload("res://assets/generated/mud_color.png"))
+	bed.set_shader_parameter(&"mud_normal", preload("res://assets/generated/mud_normal.png"))
 	var bank := Models.mat(Color(0.45, 0.38, 0.28), &"dirt")
-	Models.box(self, Vector3(river_length, 0.02, river_width), Vector3(0.0, 0.012, river_z), mud)
+	Models.box(self, Vector3(river_length, 0.02, river_width), Vector3(0.0, 0.012, river_z), bed)
 	for side in [-1.0, 1.0]:
 		Models.box(self, Vector3(river_length, 0.03, 2.0), Vector3(0.0, 0.015, river_z + side * (river_width * 0.5 + 1.0)), bank)
 	# Reeds and rocks along both banks.
@@ -472,10 +503,113 @@ func _build_river() -> void:
 		Models.collider(self, Vector3(0.4, 0.9, span), Vector3(x, 0.45, river_z))
 		for z in [-river_width * 0.25, river_width * 0.25]:
 			Models.box(self, Vector3(1.2, 0.3, 1.2), Vector3(x, 0.15, river_z + z), concrete)
+	_build_boathouse(Vector3(-40.0, 0.0, river_z + river_width * 0.5 - 1.0))
+	_build_pier(Vector3(40.0, 0.0, river_z - river_width * 0.5 - 1.5))
+	_scatter_bottles()
 	_river = River.new()
 	_river.name = "River"
+	_river.bed_material = bed
 	_river.width = river_width
 	_river.length = river_length
 	_river.gaps = [Vector2(-road_width * 0.5 - 2.2, road_width * 0.5 + 2.2)]
 	_river.position = Vector3(0.0, 0.0, river_z)
 	add_child(_river)
+
+
+## A weathered boathouse on stilts at the bank, with a dock out over the
+## bed (high and dry at low water, afloat when the river is back).
+func _build_boathouse(at: Vector3) -> void:
+	var plank := Models.mat(Color(0.5, 0.38, 0.26), &"rough")
+	var dark := Models.mat(Color(0.3, 0.22, 0.16), &"rough")
+	var roof := Models.mat(Color(0.35, 0.18, 0.15), &"paint")
+	var house := Node3D.new()
+	house.name = "Boathouse"
+	house.position = at
+	add_child(house)
+	for x in [-2.8, 2.8]:
+		for z in [-1.8, 1.8]:
+			Models.box(house, Vector3(0.25, 0.8, 0.25), Vector3(x, 0.4, z), dark)
+	Models.box(house, Vector3(6.2, 0.25, 4.2), Vector3(0.0, 0.85, 0.0), plank)
+	Models.box(house, Vector3(6.0, 2.6, 4.0), Vector3(0.0, 2.25, 0.0), plank)
+	Models.box(house, Vector3(6.6, 0.2, 4.6), Vector3(0.0, 3.65, 0.0), roof)
+	Models.box(house, Vector3(2.6, 2.0, 0.06), Vector3(0.0, 1.95, -2.03), dark)  # boat door, river side
+	Models.collider(house, Vector3(6.2, 3.8, 4.2), Vector3(0.0, 1.9, 0.0))
+	# The dock: planks on posts reaching out over the bed.
+	var reach := river_width * 0.45
+	Models.box(house, Vector3(1.8, 0.15, reach), Vector3(4.2, 0.7, -reach * 0.5), plank)
+	Models.collider(house, Vector3(1.8, 0.15, reach), Vector3(4.2, 0.7, -reach * 0.5))
+	for k in int(reach / 2.5) + 1:
+		for x in [3.4, 5.0]:
+			Models.box(house, Vector3(0.18, 0.7, 0.18), Vector3(x, 0.35, -k * 2.5), dark)
+	var sign_label := Label3D.new()
+	sign_label.text = "BAIT\nBOATS"
+	sign_label.modulate = Color(0.95, 0.9, 0.75)
+	sign_label.position = Vector3(0.0, 3.1, 2.04)
+	house.add_child(sign_label)
+	Models.fit_label(sign_label, Vector2(2.4, 0.8))
+
+
+## A fishing pier from the far bank, and the sign that says why nobody
+## fishes here anymore.
+func _build_pier(at: Vector3) -> void:
+	var plank := Models.mat(Color(0.55, 0.43, 0.3), &"rough")
+	var dark := Models.mat(Color(0.3, 0.22, 0.16), &"rough")
+	var pier := Node3D.new()
+	pier.name = "FishingPier"
+	pier.position = at
+	add_child(pier)
+	var reach := river_width * 0.5
+	Models.box(pier, Vector3(2.2, 0.15, reach), Vector3(0.0, 0.6, reach * 0.5), plank)
+	Models.collider(pier, Vector3(2.2, 0.15, reach), Vector3(0.0, 0.6, reach * 0.5))
+	for k in int(reach / 2.5) + 1:
+		for x in [-0.9, 0.9]:
+			Models.box(pier, Vector3(0.18, 0.6, 0.18), Vector3(x, 0.3, k * 2.5), dark)
+			Models.box(pier, Vector3(0.08, 1.0, 0.08), Vector3(x, 1.15, k * 2.5), dark)  # rail posts
+	for x in [-0.9, 0.9]:
+		Models.box(pier, Vector3(0.06, 0.06, reach), Vector3(x, 1.6, reach * 0.5), dark)
+	var board := Node3D.new()
+	board.position = Vector3(2.2, 0.0, -0.5)
+	pier.add_child(board)
+	for x in [-0.8, 0.8]:
+		Models.box(board, Vector3(0.1, 2.2, 0.1), Vector3(x, 1.1, 0.0), dark)
+	Models.box(board, Vector3(2.0, 1.1, 0.06), Vector3(0.0, 1.75, 0.0), Models.mat(Color(0.95, 0.94, 0.9), &"paint"))
+	var label := Label3D.new()
+	label.text = "NO FISHING\nPROPERTY OF %s" % river_owner
+	label.modulate = Color(0.75, 0.1, 0.1)
+	label.outline_size = 0
+	label.position = Vector3(0.0, 1.75, -0.04)
+	label.rotation.y = PI  # faces the street side
+	board.add_child(label)
+	Models.fit_label(label, Vector2(1.9, 1.0))
+
+
+## Plastic bottles littering the banks and the dry bed (one MultiMesh);
+## the water covers the ones on the bed as the river comes back.
+func _scatter_bottles() -> void:
+	var bottle := CylinderMesh.new()
+	bottle.top_radius = 0.035
+	bottle.bottom_radius = 0.05
+	bottle.height = 0.26
+	bottle.radial_segments = 6
+	bottle.rings = 1
+	var plastic := StandardMaterial3D.new()
+	plastic.albedo_color = Color(0.75, 0.9, 1.0, 0.7)
+	plastic.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	plastic.roughness = 0.2
+	bottle.material = plastic
+	var multimesh := MultiMesh.new()
+	multimesh.transform_format = MultiMesh.TRANSFORM_3D
+	multimesh.mesh = bottle
+	multimesh.instance_count = 160
+	for i in multimesh.instance_count:
+		var x := _decor_rng.randf_range(-river_length * 0.45, river_length * 0.45)
+		if absf(x) < road_width * 0.5 + 3.0:
+			x += road_width * 2.0
+		var z := river_z + _decor_rng.randf_range(-river_width * 0.5 - 1.5, river_width * 0.5 + 1.5)
+		var lying := Basis(Vector3.RIGHT, PI * 0.5).rotated(Vector3.UP, _decor_rng.randf() * TAU)
+		multimesh.set_instance_transform(i, Transform3D(lying, Vector3(x, 0.06, z)))
+	var litter := MultiMeshInstance3D.new()
+	litter.name = "RiverBottles"
+	litter.multimesh = multimesh
+	litter.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(litter)

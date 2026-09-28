@@ -140,10 +140,15 @@ func _test_bulldozer() -> void:
 		return datacenter.get("_structure").filter(func(p: Variant) -> bool:
 			return is_instance_valid(p) and not (p as Destructible).is_destroyed).size()
 	var before: int = intact.call()
-	dozer.global_transform = Transform3D(Basis(Vector3.UP, PI), Vector3(-8, 0.9, -26))
+	dozer.global_transform = Transform3D(Basis(Vector3.UP, PI), Vector3(-8, 0.5, -26))
 	dozer.brake = 0.0  # exit() parks it with the brake on
-	dozer.linear_velocity = Vector3(0, 0, -6)
-	await seconds(1.5)
+	dozer.linear_velocity = Vector3(0, 0, -8)
+	# It lands and scrubs speed before the wall: 6 m/s sometimes arrived at ~3.4 m/s,
+	# right at the wall's damage threshold, so give it a real run-up.
+	for i in 16:
+		await seconds(0.25)
+		if intact.call() < before:
+			break
 	check(intact.call() < before, "bulldozer smashes through a datacenter wall (%d -> %d)" % [before, intact.call()])
 
 
