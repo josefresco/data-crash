@@ -1,6 +1,7 @@
 extends TestCase
-## Phase 1 good deeds, noise-scaled trust, the fence breach into Phase 2, and
-## all three bribes.
+## Phase 1 good deeds, noise-scaled trust, the town (walk-in shops, the
+## hospital's bill, storefronts and their regulars), the fence breach into
+## Phase 2, all three bribes, and free care once the green datacenter is up.
 ##
 ##   Godot_console.exe --headless --fixed-fps 60 --path . res://tests/activism_test.tscn
 
@@ -18,9 +19,11 @@ func _run() -> void:
 	await seconds(0.5)
 	check(level.phase == level.Phase.ACTIVISM, "level starts in Phase 1")
 
+	await _test_town()
 	await _test_deeds()
 	await _test_breach_ends_activism()
 	await _test_bribes()
+	await _test_free_hospital()
 
 
 func _test_deeds() -> void:
@@ -112,6 +115,45 @@ func _test_deeds() -> void:
 	await seconds(0.1)
 	check(get_tree().get_nodes_in_group("litter").is_empty(), "walking over litter picks it all up")
 
+	# Potholes: hold F at each; a car over an open one takes a jolt first.
+	var holes := get_tree().get_nodes_in_group("potholes")
+	check(holes.size() == 8, "potholes on the roads (%d)" % holes.size())
+	for hole: Pothole in holes:
+		player.global_position = hole.global_position + Vector3(1.2, 0.2, 0.0)
+		await seconds(0.05)
+		check(player.fixable_target() == hole, "a pothole is in reach")
+		for i in 25:
+			player.call("_repair", 0.1)
+	check(holes.all(func(h: Node) -> bool: return (h as Pothole).is_fixed), "holding F fills every pothole")
+
+	# Library: buy boxes of books until the shelves are full.
+	var drive := level.get_node("BookDrive") as BookDrive
+	Game.cash += 500
+	player.global_position = drive.global_transform * drive.desk + Vector3(0.0, 0.2, 0.0)
+	await seconds(0.05)
+	check(player.nearest_interactable() == drive, "[E] reaches the library's book drive")
+	var books_shown := func() -> int:
+		return drive.get_children().filter(func(n: Node) -> bool: return n is MultiMeshInstance3D and (n as Node3D).visible).size()
+	check(books_shown.call() == 0, "the library shelves start bare")
+	for i in drive.boxes_needed:
+		drive.interact(player)
+	check(drive.is_done() and books_shown.call() == drive.boxes_needed, "each box of books fills more shelves")
+
+	# Soup kitchen: put on an apron, serve six neighbors.
+	var kitchen := level.get_node("SoupKitchen") as SoupKitchen
+	player.global_position = kitchen.global_transform * kitchen.server_spot + Vector3(0.0, 0.2, 0.0)
+	await seconds(0.05)
+	check(player.nearest_interactable() == kitchen, "[E] reaches the soup kitchen counter")
+	kitchen.interact(player)
+	check(kitchen.on_shift, "the shift starts")
+	for i in 200:
+		if kitchen.is_done:
+			break
+		if kitchen.waiting_diner():
+			kitchen.interact(player)
+		await seconds(0.25)
+	check(kitchen.is_done and kitchen.bowls == 6, "six bowls served (%d)" % kitchen.bowls)
+
 	# Supply van: take it out.
 	var van := level.get_node_or_null("SupplyVan") as SupplyVan
 	if van == null:
@@ -124,7 +166,76 @@ func _test_deeds() -> void:
 		await seconds(0.5)
 		# $150 bounty + $100 all-deeds bonus.
 		check(Game.cash == cash + 150 + 100, "van bounty and the all-deeds bonus ($%d)" % (Game.cash - cash))
-	check(level.get("_deeds").values().all(func(done: bool) -> bool: return done), "all seven deeds done")
+	check(level.get("_deeds").values().all(func(done: bool) -> bool: return done), "all ten deeds done")
+
+
+## Walk-in shops, the hospital's bill, and a storefront's regulars.
+func _test_town() -> void:
+	var hood := level.get_node("Neighborhood") as NeighborhoodBuilder
+	for kind in WalkIn.KINDS:
+		check(hood.walk_in(kind) != null, "the %s is a walk-in building" % kind)
+	# Walk in through the hardware store's door: the navmesh reaches inside.
+	var hardware := hood.global_transform * (hood.walk_in("hardware") as Transform3D)
+	var inside := NavigationServer3D.map_get_closest_point(player.get_world_3d().navigation_map, hardware * Vector3(0.0, 0.0, 1.0))
+	check(inside.distance_to(hardware * Vector3(0.0, 0.0, 1.0)) < 1.0, "the navmesh runs inside the hardware store")
+	var tools := get_tree().get_nodes_in_group("hardware_store").map(func(n: Node) -> String: return (n as WeaponPickup).gun_name)
+	check("Pickaxe" in tools and "Sledgehammer" in tools and not "Pistol" in tools, "DUECE Hardware stocks tools, not guns (%s)" % [tools])
+	var guns := get_tree().get_nodes_in_group("gun_store")
+	var gun_store := hood.global_transform * (hood.walk_in("gunstore") as Transform3D)
+	check(guns.size() == 6 and guns.all(func(n: Node) -> bool: return (n as Node3D).global_position.distance_to(gun_store.origin) < 6.0),
+		"the guns are inside Trey's Guns & Ammo (%d)" % guns.size())
+
+	# Hospital: billed while the datacenters run the town.
+	var hospital := level.get_node("Hospital") as Hospital
+	player.global_position = hospital.global_position + Vector3(0.0, 0.2, 0.0)
+	player.health = 40.0
+	Game.cash = 100
+	await seconds(0.05)
+	check(player.nearest_interactable() == hospital, "[E] reaches the hospital's front desk")
+	var bill := hospital.bill_for(player)
+	check(bill == ceili(60.0 * hospital.price_per_hp), "care is billed per health point ($%d)" % bill)
+	hospital.interact(player)
+	check(is_equal_approx(player.health, player.max_health) and Game.cash == 100 - bill, "patched up and charged")
+	# A hurt Canadian ally walks over and recovers on the ward.
+	var ally := Canuck.new()
+	ally.setup(false)
+	ally.position = hospital.global_position + Vector3(0.0, 0.2, 4.0)
+	level.add_child(ally)
+	ally.join()
+	ally.health = 10.0
+	for i in 60:
+		if not ally.in_hospital and ally.health > 70.0:
+			break
+		await seconds(0.25)
+	check(ally.health >= ally.max_health * 0.9, "a hurt ally heads to the hospital and recovers (%d hp)" % roundi(ally.health))
+	ally.queue_free()
+
+	# Storefronts: spending builds goodwill; every third purchase, a regular joins.
+	var diner: Storefront = null
+	for node in get_tree().get_nodes_in_group("storefronts"):
+		if (node as Storefront).kind == "diner":
+			diner = node
+	check(diner != null and get_tree().get_nodes_in_group("storefronts").size() >= 4, "local businesses are open for trade")
+	Game.cash = 200
+	var trust := Game.district.trust
+	for i in 3:
+		check(diner.buy(0, player), "bought a coffee")
+	check(Game.cash == 200 - 15 and Game.district.trust > trust, "purchases cost cash and raise trust")
+	var regulars := get_tree().get_nodes_in_group("regulars")
+	check(regulars.size() == 1 and (regulars[0] as Enemy).faction == Enemy.Faction.ALLY, "three purchases: a regular joins you")
+	for node in regulars:
+		node.queue_free()
+	await seconds(0.1)
+
+
+## Phase 3: the green datacenter is up, and the hospital is free again.
+func _test_free_hospital() -> void:
+	var hospital := level.get_node("Hospital") as Hospital
+	player.health = 30.0
+	var cash := Game.cash
+	check(hospital.is_free() and hospital.bill_for(player) == 0, "care is free once the green datacenter is built")
+	hospital.interact(player)
+	check(is_equal_approx(player.health, player.max_health) and Game.cash == cash, "patched up at no charge")
 
 
 func _test_breach_ends_activism() -> void:

@@ -111,6 +111,10 @@ var _site_node: Variant = null
 var soaked_left := 0.0
 ## Seconds left marked by the player's recon drone (HUD shows it through walls).
 var spotted_left := 0.0
+## Allies and townsfolk below this share of health walk to the nearest
+## hospital's ward and recover there (0 = never). `in_hospital` while on the way or resting.
+var hospital_share := 0.0
+var in_hospital := false
 var _gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 
 
@@ -591,6 +595,8 @@ func _decorate(_visual_root: Node3D) -> void:
 func _think() -> void:
 	if is_dormant() and _watches():
 		_watch_for_player(THINK_INTERVAL * (2.0 if _lod_far else 1.0))
+	if _hospital_visit():
+		return
 	target = _pick_target()
 	if _is_valid(target):
 		_has_los = _can_see(target)
@@ -601,6 +607,40 @@ func _think() -> void:
 		_investigate_left -= THINK_INTERVAL
 		return
 	_idle()
+
+
+## Hurt enough (below `hospital_share`): walk to the hospital ward and rest
+## there until nearly full. Returns true while that's what this unit is doing.
+func _hospital_visit() -> bool:
+	if hospital_share <= 0.0 or not _can_visit_hospital() or (not in_hospital and health >= max_health * hospital_share):
+		in_hospital = false
+		return false
+	var hospital: Hospital = null
+	for node in get_tree().get_nodes_in_group("hospitals"):
+		var candidate := node as Hospital
+		if hospital == null or candidate.global_position.distance_to(global_position) < hospital.global_position.distance_to(global_position):
+			hospital = candidate
+	if hospital == null:
+		in_hospital = false
+		return false
+	if not in_hospital:
+		in_hospital = true
+		speak(["Ow. I'm going to the hospital.", "Need a doctor, back soon!", "Somebody call my insurance!"].pick_random())
+	target = null
+	_has_los = false
+	var ward := hospital.treatment_point()
+	_nav.target_position = ward
+	if global_position.distance_to(ward) < 3.0:
+		health = minf(health + hospital.ward_rate * THINK_INTERVAL, max_health)
+		if health >= max_health * 0.95:
+			in_hospital = false
+			speak("All patched up!")
+	return true
+
+
+## Override: whether a hospital trip is allowed right now.
+func _can_visit_hospital() -> bool:
+	return is_alive()
 
 
 ## Override: quiet site security that keeps an eye out for trespassers.

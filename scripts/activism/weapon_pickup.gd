@@ -132,7 +132,11 @@ func offer_text(player: Player) -> String:
 		return "[E] Grab ammo: tops up everything you carry (free)"
 	if kind == &"weapon":
 		var gun := player.weapon_named(gun_name)
-		return ("[E] Take the %s (free)" % gun_name.to_lower()) if gun and not gun.owned else "[E] Top up %s ammo" % gun_name.to_lower()
+		if gun and not gun.owned:
+			return "[E] Take the %s (free)" % gun_name.to_lower()
+		if gun and gun.max_ammo < 0:
+			return "You already have the %s" % gun_name.to_lower()
+		return "[E] Top up %s ammo" % gun_name.to_lower()
 	var weapon := player.weapon_named(weapon_name())
 	if kind == &"shovel":
 		return "[E] Pick up the shovel" if not weapon.owned else "[E] You already have a shovel"
@@ -154,6 +158,8 @@ func interact(player: Player) -> void:
 		if gun == null:
 			return
 		var had := gun.owned
+		if had and gun.max_ammo < 0:
+			return  # a tool you already carry
 		gun.owned = true
 		gun.refill()
 		player.select_weapon(player.weapons.find(gun))
@@ -162,8 +168,12 @@ func interact(player: Player) -> void:
 		if not note.is_empty():
 			Game.notify(note, 3.5)
 			return
-		Game.notify(("Took the %s. Duece doesn't charge neighbors." % gun_name.to_lower()) if not had else "%s ammo topped up." % gun_name)
-		Game.tip("hardware", "Everything at DUECE Hardware is free: guns, grenades, molotovs, shovels, and ammo. Come back anytime to top up.")
+		var shop := "Trey" if is_in_group("gun_store") else "Duece"
+		Game.notify(("Took the %s. %s doesn't charge neighbors." % [gun_name.to_lower(), shop]) if not had else "%s ammo topped up." % gun_name)
+		if is_in_group("gun_store"):
+			Game.tip("gun_store", "Trey's Guns & Ammo: every gun, grenades, and ammo, free for neighbors. Come back anytime to top up.")
+		else:
+			Game.tip("hardware", "DUECE Hardware: shovels, pickaxes, sledgehammers, bats, bottles and gas, and the recon drone, all free. Guns are at Trey's, down the street.")
 		return
 	var weapon := player.weapon_named(weapon_name())
 	if weapon == null:

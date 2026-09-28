@@ -43,15 +43,22 @@ extends Node3D
 ## Whose river it is now, per the fishing pier's sign.
 @export var river_owner := "THE COUNTY"
 @export_group("")
-## Shops on house lots: [lot position, Kenney commercial model letter, sign, sign color].
+## Shops on house lots: [lot position, Kenney commercial model letter, sign,
+## sign color]. A WalkIn kind name in place of the letter ("gunstore",
+## "hardware", "hospital", "library", "soupkitchen") builds a walk-in
+## building with an interior instead (`walk_in(kind)`).
 @export var store_lots: Array = [
-	[Vector3(-14.0, 0.0, 16.0), "e", "DUECE HARDWARE", Color(0.9, 0.2, 0.15)],
+	[Vector3(-14.0, 0.0, 16.0), "hardware", "DUECE HARDWARE", Color(0.9, 0.2, 0.15)],
 	[Vector3(14.0, 0.0, 16.0), "h", "MABEL'S DINER", Color(0.2, 0.65, 0.95)],
 	[Vector3(-30.0, 0.0, 16.0), "d", "POLICE", Color(0.25, 0.4, 1.0)],
 	[Vector3(30.0, 0.0, 16.0), "c", "CORNER PHARMACY", Color(0.3, 0.85, 0.45)],
 	[Vector3(-14.0, 0.0, 44.0), "a", "SUDS LAUNDROMAT", Color(0.5, 0.8, 1.0)],
 	[Vector3(14.0, 0.0, 44.0), "d", "SLICE OF LIFE PIZZA", Color(1.0, 0.6, 0.15)],
 	[Vector3(-30.0, 0.0, 44.0), "l", "TOWN HALL", Color(0.95, 0.82, 0.4)],
+	[Vector3(-46.0, 0.0, 44.0), "gunstore", "TREY'S GUNS & AMMO", Color(0.95, 0.55, 0.15)],
+	[Vector3(46.0, 0.0, 44.0), "hospital", "ST. MERCY HOSPITAL", Color(0.95, 0.25, 0.2)],
+	[Vector3(-62.0, 0.0, 44.0), "library", "PUBLIC LIBRARY", Color(0.55, 0.75, 0.95)],
+	[Vector3(62.0, 0.0, 44.0), "soupkitchen", "COMMUNITY SOUP KITCHEN", Color(0.5, 0.85, 0.45)],
 ]
 ## Kenney commercial kit: about 1 unit per floor width.
 const STORE_SCALE := 9.0
@@ -87,6 +94,8 @@ var _doors: Array[Vector3] = []
 var _house_doors: Array = []
 ## Sign text -> the spot just outside that store's door.
 var _store_doors := {}
+## WalkIn kind -> [the building's transform (this node's space), sign text].
+var _walk_ins := {}
 ## Footprints on the ground plane (x, z) for the minimap: [Rect2, is_store].
 var _footprints: Array = []
 var _rng := RandomNumberGenerator.new()
@@ -136,6 +145,17 @@ func river() -> River:
 	return _river
 
 
+## A walk-in building by WalkIn kind: its transform in this node's space
+## (origin at the lot center, +Z out the front door), or null.
+func walk_in(kind: String) -> Variant:
+	return (_walk_ins[kind] as Array)[0] if _walk_ins.has(kind) else null
+
+
+## The sign text of the walk-in of `kind` ("" if there is none).
+func walk_in_sign(kind: String) -> String:
+	return (_walk_ins[kind] as Array)[1] if _walk_ins.has(kind) else ""
+
+
 ## Just outside a store's door (by its sign text), in this node's space.
 func store_door(sign_text: String) -> Vector3:
 	return _store_doors.get(sign_text, Vector3.ZERO)
@@ -147,6 +167,7 @@ func build() -> void:
 	_doors.clear()
 	_house_doors.clear()
 	_store_doors.clear()
+	_walk_ins.clear()
 	_footprints.clear()
 	_rng.seed = layout_seed
 	_decor_rng.seed = layout_seed * 31 + 5
@@ -254,21 +275,31 @@ func _add_store(at: Vector3, facing_side: float, lot: Array) -> void:
 	body.position = at
 	body.rotation.y = 0.0 if facing_side < 0.0 else PI
 	add_child(body)
-	var building := Models.model("%scommercial/building-%s.glb" % [KENNEY, lot[1]], STORE_SCALE)
-	body.add_child(building)
-	var bounds := Models.model_bounds(building)
-	var shape := BoxShape3D.new()
-	shape.size = bounds.size
-	var collider := CollisionShape3D.new()
-	collider.shape = shape
-	collider.position = bounds.get_center()
-	body.add_child(collider)
+	var color: Color = lot[3]
+	var bounds: AABB
+	var board_y := 4.6
+	var board_width := 10.0
+	if WalkIn.is_walk_in(lot[1]):
+		bounds = WalkIn.build(body, lot[1], color)
+		board_y = WalkIn.sign_height(lot[1])
+		board_width = bounds.size.x * 0.5
+		_walk_ins[lot[1]] = [body.transform, lot[2]]
+	else:
+		var building := Models.model("%scommercial/building-%s.glb" % [KENNEY, lot[1]], STORE_SCALE)
+		body.add_child(building)
+		bounds = Models.model_bounds(building)
+		var shape := BoxShape3D.new()
+		shape.size = bounds.size
+		var collider := CollisionShape3D.new()
+		collider.shape = shape
+		collider.position = bounds.get_center()
+		body.add_child(collider)
 	_record_footprint(body, bounds, true)
 	var front := bounds.end.z
-	var color: Color = lot[3]
-	var board := Models.box(body, Vector3(minf(bounds.size.x * 0.8, 10.0), 1.3, 0.25), Vector3(0.0, 4.6, front + 0.2),
+	board_width = minf(bounds.size.x * 0.8, board_width)
+	var board := Models.box(body, Vector3(board_width, 1.3, 0.25), Vector3(0.0, board_y, front + 0.2),
 		Models.mat(Color(0.1, 0.1, 0.12), &"paint"))
-	Models.box(board, Vector3(minf(bounds.size.x * 0.8, 10.0) + 0.1, 0.08, 0.3), Vector3(0.0, -0.66, 0.0), Models.glow(color, 2.5))
+	Models.box(board, Vector3(board_width + 0.1, 0.08, 0.3), Vector3(0.0, -0.66, 0.0), Models.glow(color, 2.5))
 	var text := Label3D.new()
 	text.text = lot[2]
 	text.font_size = 96
@@ -276,7 +307,7 @@ func _add_store(at: Vector3, facing_side: float, lot: Array) -> void:
 	text.outline_size = 0
 	text.modulate = color.lerp(Color.WHITE, 0.35)
 	text.position = Vector3(0.0, 0.0, 0.14)
-	Models.fit_label(text, Vector2(minf(bounds.size.x * 0.8, 10.0), 1.3))
+	Models.fit_label(text, Vector2(board_width, 1.3))
 	board.add_child(text)
 	var door := at + Vector3(0.0, 0.0, front + 3.0).rotated(Vector3.UP, body.rotation.y) + Vector3.UP * 0.2
 	_doors.append(door)

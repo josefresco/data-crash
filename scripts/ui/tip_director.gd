@@ -12,7 +12,7 @@ const SCAN_DELAY := 12.0
 
 ## [seconds into Phase 1, key, text]
 const TUTORIAL := [
-	[2.0, "move", "WASD moves, the mouse aims, Shift sprints, Space jumps. You start with bare hands: DUECE Hardware next door has every gun and all the ammo, free. Walk up to a table and press E."],
+	[2.0, "move", "WASD moves, the mouse aims, Shift sprints, Space jumps. You start with bare hands: DUECE Hardware next door has free tools to fight with, and Trey's Guns & Ammo down the street has the guns. Walk in, up to a table, and press E."],
 	[16.0, "deeds", "Help the neighborhood first: the good deeds at the top pay cash and raise TRUST. Trust unlocks the bulldozer and brings more neighbors to help later."],
 	[32.0, "cars", "Every car on the block is drivable: walk up to one and press E."],
 	[48.0, "grock", "Grock AI cameras watch the block from poles. Shoot them down for cash and goodwill."],
@@ -91,7 +91,7 @@ func _scan() -> void:
 		if thing is SecurityCache and eye.distance_to(thing.global_position) < 14.0:
 			Game.tip("cache", "Corporate security keeps a weapons cache here. Walk up and press E to take the rocket launcher.")
 		elif thing.is_in_group("hardware_store") and eye.distance_to(thing.global_position) < 12.0:
-			Game.tip("hardware_near", "DUECE Hardware: every gun, grenades, molotovs, and ammo on the tables out front, free for neighbors. Press E at a table.")
+			Game.tip("hardware_near", "DUECE Hardware: shovels, pickaxes, sledgehammers, bats, and molotov makings on the tables inside, free for neighbors. Guns are at Trey's. Press E at a table.")
 	for node in get_tree().get_nodes_in_group("datacenter_sites"):
 		var site := node as DatacenterSite
 		if not site.is_alarmed() and eye.distance_to(site.global_position) < 42.0:

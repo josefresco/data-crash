@@ -5,7 +5,7 @@ maps. If the set has an opacity map, it is merged into the color map's alpha
 channel (color.png) for alpha-scissor cutouts like chain-link fences.
 
 Re-run after changing MATERIALS:
-  python tools/import_textures.py
+  python tools/import_textures.py [MaterialID ...]   # all, or just these
   <godot> --headless --path . --import
   python tools/import_textures.py --fix-imports   # 3D flags a headless import can't detect
   <godot> --headless --path . --import
@@ -32,6 +32,10 @@ MATERIALS = [
     "MetalPlates006",      # turrets, turbines, industrial kit
     "SolarPanel003",       # solar arrays
     "Fence006",            # chain-link (has opacity)
+    "Bricks090",           # shop and civic walls
+    "Planks021",           # docks, piers, decks, benches, crates
+    "Gravel022",           # shoulders, lots, the construction site
+    "Rust004",             # tanks, dumpsters, old steel
 ]
 MAPS = {"Color": "color", "NormalGL": "normal", "Roughness": "roughness"}
 
@@ -43,9 +47,11 @@ def fetch(material_id):
         return zipfile.ZipFile(io.BytesIO(response.read()))
 
 
-def main():
+def main(only):
     OUT.mkdir(parents=True, exist_ok=True)
     for material_id in MATERIALS:
+        if only and material_id not in only:
+            continue
         archive = fetch(material_id)
         folder = OUT / material_id
         folder.mkdir(exist_ok=True)
@@ -86,4 +92,5 @@ if __name__ == "__main__":
     if "--fix-imports" in sys.argv:
         fix_imports()
     else:
-        main()
+        # Optional material IDs: fetch just those (the rest stay as they are).
+        main([arg for arg in sys.argv[1:] if not arg.startswith("-")])

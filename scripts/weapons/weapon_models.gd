@@ -54,6 +54,25 @@ static func build(model: StringName) -> Node3D:
 			Models.box(root, Vector3(0.14, 0.03, 0.03), Vector3(0.0, 0.0, 0.22), black)  # D-handle
 			muzzle = -1.1
 			grip = Vector3(0.0, 0.0, -0.45)
+		&"pickaxe":
+			Models.cylinder(root, 0.025, 0.95, Vector3(0.0, 0.0, -0.3), wood, 8).rotation.x = PI * 0.5
+			var head := Models.box(root, Vector3(0.06, 0.05, 0.62), Vector3(0.0, 0.0, -0.8), steel)
+			head.rotation.x = PI * 0.5
+			Models.box(root, Vector3(0.05, 0.04, 0.14), Vector3(0.0, 0.34, -0.84), steel).rotation.x = 0.4  # pick point
+			muzzle = -0.85
+			grip = Vector3(0.0, 0.0, -0.35)
+		&"sledgehammer":
+			Models.cylinder(root, 0.028, 0.95, Vector3(0.0, 0.0, -0.3), Models.mat(Color(0.85, 0.72, 0.4), &"wood"), 8).rotation.x = PI * 0.5
+			Models.box(root, Vector3(0.13, 0.13, 0.3), Vector3(0.0, 0.0, -0.82), black).rotation.x = PI * 0.5
+			muzzle = -0.85
+			grip = Vector3(0.0, 0.0, -0.35)
+		&"bat":
+			var bat := Models.cylinder(root, 0.02, 0.4, Vector3(0.0, 0.0, -0.12), wood, 8)
+			bat.rotation.x = PI * 0.5
+			var barrel := Models.cylinder(root, 0.04, 0.5, Vector3(0.0, 0.0, -0.55), Models.mat(Color(0.8, 0.62, 0.4), &"wood"), 8)
+			barrel.rotation.x = PI * 0.5
+			Models.cylinder(root, 0.028, 0.03, Vector3(0.0, 0.0, 0.08), black, 8).rotation.x = PI * 0.5  # knob
+			muzzle = -0.8
 		&"rock":
 			Models.ball(root, 0.09, Vector3(0.0, 0.03, -0.05), Models.mat(Color(0.5, 0.48, 0.45), &"rough"))
 		&"molotov":

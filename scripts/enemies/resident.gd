@@ -48,6 +48,7 @@ var _pet: Dog
 func _init() -> void:
 	faction = Faction.ALLY
 	max_health = 50.0
+	hospital_share = 0.5
 	move_speed = randf_range(1.3, 2.2)
 	sight_range = 0.0
 	attack_range = 0.0

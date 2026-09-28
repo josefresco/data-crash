@@ -36,8 +36,8 @@ func _dummy(unit: Enemy, at: Vector3) -> Enemy:
 
 
 func _test_gun_show() -> void:
-	var tables := get_tree().get_nodes_in_group("hardware_store")
-	check(tables.size() >= 8, "DUECE Hardware lays out its stock (%d tables)" % tables.size())
+	var tables := get_tree().get_nodes_in_group("gun_store")
+	check(tables.size() >= 6, "Trey's Guns & Ammo lays out its stock (%d tables)" % tables.size())
 	var mg: WeaponPickup = null
 	for node in tables:
 		if (node as WeaponPickup).gun_name == "Machine gun":

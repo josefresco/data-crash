@@ -76,6 +76,8 @@ var _protected_left := 0.0
 var _air_time := 0.0
 ## Sneaking ([C]): slow, low, and much harder for site security to notice.
 var crouching := false
+## Seconds left in a fresh-laundry disguise (stealth_rate x0.6).
+var disguised_left := 0.0
 const CROUCH_SPEED := 2.3
 ## The recon drone in the air (null on foot); relaunch cooldown after it ends.
 var drone: ReconDrone = null
@@ -145,6 +147,7 @@ func _physics_process(delta: float) -> void:
 	_protected_left = maxf(_protected_left - delta, 0.0)
 	_aim_hold = maxf(_aim_hold - delta, 0.0)
 	_drone_cooldown = maxf(_drone_cooldown - delta, 0.0)
+	disguised_left = maxf(disguised_left - delta, 0.0)
 	if drone:
 		_stand_while_piloting(delta)
 		return
@@ -567,10 +570,10 @@ func _melee(weapon: Weapon) -> void:
 	if not hit.is_empty():
 		var prop := hit["collider"] as Node
 		if prop and not prop.is_in_group("structures") and prop.has_method("apply_damage"):
-			prop.call(&"apply_damage", weapon.damage, chest, &"melee")
+			prop.call(&"apply_damage", weapon.damage * weapon.prop_factor, chest, &"melee")
 			landed = true
 	if landed:
-		Sfx.play(&"hit_metal" if weapon.model == &"shovel" else &"hit_flesh", chest + facing, -2.0)
+		Sfx.play(&"hit_metal" if weapon.model in [&"shovel", &"pickaxe", &"sledgehammer"] else &"hit_flesh", chest + facing, -2.0)
 
 
 func _refresh_held() -> void:
@@ -781,7 +784,14 @@ func stealth_rate() -> float:
 		rate = 1.4
 	if is_threatening():
 		rate *= 1.5
+	if disguised_left > 0.0:
+		rate *= 0.6
 	return rate
+
+
+## A fresh hoodie from the laundromat: guards take longer to place you.
+func disguise(seconds: float) -> void:
+	disguised_left = maxf(disguised_left, seconds)
 
 
 ## A gun (or launcher) up and aimed, or just fired.

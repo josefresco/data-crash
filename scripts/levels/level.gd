@@ -44,6 +44,14 @@ enum Phase { ACTIVISM, ASSAULT, BOSS, BUILD, WAVE, WON, LOST }
 	Vector3(-5.5, 0, 64), Vector3(46, 0, 63), Vector3(18, 0, 75.5), Vector3(-44, 0, 75.4),
 	Vector3(-5.8, 0, 118), Vector3(30, 0, 115.3), Vector3(-52, 0, 104.8), Vector3(5.8, 0, 140),
 ]
+## Potholes to fill (hold [F]) on the roads.
+@export var pothole_spots: Array[Vector3] = [
+	Vector3(1.8, 0, 40), Vector3(-2.0, 0, 62), Vector3(1.6, 0, 132), Vector3(-30, 0, 31.6),
+	Vector3(22, 0, 28.6), Vector3(-52, 0, 71.2), Vector3(40, 0, 68.8), Vector3(-14, 0, 111.3),
+]
+## Purchases at local shops per Regular who joins, and most Regulars at once.
+@export var goodwill_per_regular := 3
+@export var regular_cap := 4
 ## Neighbors strolling the block at the start, and how many more come out
 ## once trust reaches 50%.
 @export var resident_count := 24
@@ -129,7 +137,13 @@ var _breach_hold := Vector3.INF
 var _breach_side := ""
 var _breach_flare: Node3D
 var _boss_bar_shown := false
-var _deeds := {"water": false, "van": false, "dogs": false, "scout": false, "ladies": false, "paint": false, "litter": false}
+var _deeds := {"water": false, "van": false, "dogs": false, "scout": false, "ladies": false, "paint": false, "litter": false,
+	"potholes": false, "books": false, "soup": false}
+const DEED_ORDER := ["water", "van", "dogs", "scout", "ladies", "paint", "litter", "potholes", "books", "soup"]
+var _potholes_total := 0
+var _potholes_filled := 0
+## Purchases at local shops since the last Regular joined.
+var _goodwill := 0
 var _dogs_tamed := 0
 var _cameras_total := 0
 var _residents_bonus_spawned := false
@@ -215,6 +229,7 @@ func _ready() -> void:
 	_spawn_grock_cameras()
 	_spawn_pickups()
 	_spawn_hardware_store()
+	_spawn_town_services()
 	_spawn_police()
 	_spawn_heavy_equipment()
 	var market := FarmersMarket.new()
@@ -237,6 +252,12 @@ func _ready() -> void:
 		_deeds.erase("ladies")
 	if litter_spots.is_empty():
 		_deeds.erase("litter")
+	if pothole_spots.is_empty():
+		_deeds.erase("potholes")
+	if get_tree().get_nodes_in_group("book_drives").is_empty():
+		_deeds.erase("books")
+	if get_tree().get_nodes_in_group("soup_kitchens").is_empty():
+		_deeds.erase("soup")
 	Game.set_objective(intro_objective)
 
 
@@ -371,6 +392,9 @@ func guidance_point() -> Variant:
 			targets.append(job.global_position)
 		for node in get_tree().get_nodes_in_group("strays"):
 			targets.append((node as Node3D).global_position)
+		for node in get_tree().get_nodes_in_group("potholes"):
+			if not (node as Pothole).is_fixed:
+				targets.append((node as Node3D).global_position)
 		for node in get_tree().get_nodes_in_group("tourists"):
 			if node is Canuck and (node as Canuck).state == Canuck.State.LOST:
 				targets.append((node as Node3D).global_position)
@@ -1065,31 +1089,143 @@ func _on_litter_collected(_piece: Litter) -> void:
 		_update_deeds()
 
 
-## DUECE Hardware, next to where the player starts: every gun, grenades,
-## molotovs, shovels, rocks, and ammo on tables out front, all free.
+## DUECE Hardware, next to where the player starts: shovels, pickaxes,
+## sledgehammers, bats, the recon drone kit, bottles and gas, and rocks on
+## tables inside, free for neighbors. Trey's Guns & Ammo (his brother's
+## place) has every gun, grenades, and ammo, also free. Tables stand in the
+## walk-in buildings (local x, z; +Z toward the door).
+const HARDWARE_STOCK := [
+	[&"weapon", "Shovel", Vector2(-4.2, 0.2)], [&"weapon", "Pickaxe", Vector2(-2.3, 0.2)],
+	[&"weapon", "Sledgehammer", Vector2(2.3, 0.2)], [&"weapon", "Baseball bat", Vector2(4.2, 0.2)],
+	[&"rocks", "", Vector2(-4.2, 2.0)], [&"molotovs", "", Vector2(-2.3, 2.0)], [&"weapon", "Recon drone", Vector2(2.3, 2.0)],
+]
+const GUN_STOCK := [
+	[&"weapon", "Pistol", Vector2(-3.3, -1.0)], [&"weapon", "Shotgun", Vector2(-1.1, -1.0)],
+	[&"weapon", "Hunting rifle", Vector2(1.1, -1.0)], [&"weapon", "Machine gun", Vector2(3.3, -1.0)],
+	[&"weapon", "Grenades", Vector2(-3.3, 1.8)], [&"ammo", "", Vector2(3.3, 1.8)],
+]
+
+
 func _spawn_hardware_store() -> void:
-	var door := ($Neighborhood as NeighborhoodBuilder).store_door("DUECE HARDWARE")
+	var hood := $Neighborhood as NeighborhoodBuilder
+	var door := hood.store_door("DUECE HARDWARE")
 	if door == Vector3.ZERO:
 		return
-	var stock := [
-		[&"shovel", ""], [&"weapon", "Pistol"], [&"weapon", "Shotgun"], [&"weapon", "Hunting rifle"],
-		[&"weapon", "Machine gun"], [&"weapon", "Grenades"], [&"weapon", "Recon drone"], [&"molotovs", ""],
-		[&"rocks", ""], [&"ammo", ""],
-	]
-	for i in stock.size():
-		var pickup := WeaponPickup.new()
-		pickup.kind = stock[i][0]
-		pickup.gun_name = stock[i][1]
-		pickup.respawn = 20.0
-		# One tidy row centered on the door, a pace apart.
-		pickup.position = Vector3(door.x + (i - (stock.size() - 1) * 0.5) * 1.9, 0.0, door.z - 0.9)
-		pickup.add_to_group("hardware_store")
-		add_child(pickup)
+	_stock_walk_in("hardware", HARDWARE_STOCK, "hardware_store")
+	_stock_walk_in("gunstore", GUN_STOCK, "gun_store")
+	var gun_door := hood.store_door(hood.walk_in_sign("gunstore"))
+	if gun_door != Vector3.ZERO:
+		Game.set_meta(&"gun_store_door", hood.to_global(gun_door))
 	Game.set_meta(&"hardware_door", door)
 	_move_in()
 	var hall := ($Neighborhood as NeighborhoodBuilder).store_door("TOWN HALL")
 	if hall != Vector3.ZERO:
 		Game.set_meta(&"town_hall_door", hall)
+
+
+## Free tables inside a walk-in building (see HARDWARE_STOCK).
+func _stock_walk_in(kind: String, stock: Array, group: String) -> void:
+	var hood := $Neighborhood as NeighborhoodBuilder
+	var xform: Variant = hood.walk_in(kind)
+	if xform == null:
+		return
+	var building := hood.global_transform * (xform as Transform3D)
+	for entry: Array in stock:
+		var pickup := WeaponPickup.new()
+		pickup.kind = entry[0]
+		pickup.gun_name = entry[1]
+		pickup.respawn = 20.0
+		pickup.add_to_group(group)
+		add_child(pickup)
+		var spot: Vector2 = entry[2]
+		pickup.global_position = building * Vector3(spot.x, 0.05, spot.y)
+		pickup.global_rotation.y = building.basis.get_euler().y
+
+
+## The hospital desk, the library's book drive, the soup kitchen, potholes,
+## and a storefront at every local business.
+func _spawn_town_services() -> void:
+	var hood := $Neighborhood as NeighborhoodBuilder
+	for kind in ["hospital", "library", "soupkitchen"]:
+		var xform: Variant = hood.walk_in(kind)
+		if xform == null:
+			continue
+		var building := hood.global_transform * (xform as Transform3D)
+		var service: Node3D
+		match kind:
+			"hospital":
+				var hospital := Hospital.new()
+				hospital.name = "Hospital"
+				hospital.ward = Vector3(-4.0, 0.0, -4.7)
+				service = hospital
+				building = building * Transform3D(Basis.IDENTITY, Vector3(4.0, 0.0, 2.3))
+			"library":
+				var drive := BookDrive.new()
+				drive.name = "BookDrive"
+				drive.completed.connect(func() -> void:
+					_complete_deed("books", 40, 0.05, "The library's shelves are full again. (+$40)"))
+				drive.donated.connect(func(_n: int) -> void: _update_deeds())
+				service = drive
+			"soupkitchen":
+				var kitchen := SoupKitchen.new()
+				kitchen.name = "SoupKitchen"
+				kitchen.shift_done.connect(func() -> void:
+					_complete_deed("soup", 50, 0.06, "Shift done: six neighbors fed. (+$50)"))
+				kitchen.served.connect(func(_n: int) -> void: _update_deeds())
+				service = kitchen
+		add_child(service)
+		service.global_transform = building
+	for spot in pothole_spots:
+		var hole := Pothole.new()
+		hole.position = spot
+		add_child(hole)
+		hole.fixed.connect(_on_pothole_fixed)
+	_potholes_total = pothole_spots.size()
+	for lot: Array in hood.store_lots:
+		var kind := Storefront.kind_for(lot[2])
+		var door := hood.store_door(lot[2])
+		if kind.is_empty() or door == Vector3.ZERO:
+			continue
+		var shop := Storefront.new()
+		shop.name = "Storefront_%s" % kind
+		shop.kind = kind
+		shop.store_name = String(lot[2]).capitalize()
+		add_child(shop)
+		var facing := signf(door.z - (lot[0] as Vector3).z)
+		shop.global_position = hood.to_global(door + Vector3(2.4, -0.2, 0.0))
+		shop.global_rotation.y = 0.0 if facing >= 0.0 else PI
+		shop.purchased.connect(on_purchase)
+
+
+func _on_pothole_fixed(_hole: Pothole) -> void:
+	_potholes_filled += 1
+	Game.add_cash(15)
+	Game.district.trust += 0.01
+	if _potholes_filled >= _potholes_total:
+		_complete_deed("potholes", 40, 0.05, "Every pothole filled. The mail truck thanks you. (+$40)")
+	else:
+		Game.notify("Pothole filled. (+$15, %d/%d)" % [_potholes_filled, _potholes_total], 3.0)
+		Game.tip("potholes", "Potholes: hold F next to one to shovel in cold patch. Cars jolt over the unfilled ones.")
+		_update_deeds()
+
+
+## Money spent on the block: every `goodwill_per_regular` purchases, one of
+## the shop's regulars joins you (up to `regular_cap` at once).
+func on_purchase(store: Storefront, _item: String) -> void:
+	_goodwill += 1
+	if _goodwill < goodwill_per_regular:
+		return
+	var alive := get_tree().get_nodes_in_group("regulars").filter(func(n: Node) -> bool:
+		return (n as Enemy).is_alive()).size()
+	if alive >= regular_cap:
+		return
+	_goodwill = 0
+	var regular := Regular.new()
+	regular.setup_regular(store.kind)
+	regular.position = store.global_position + Vector3(0.0, 0.2, 0.0)
+	add_child(regular)
+	Game.count("regulars")
+	Game.notify("A regular from %s joins you: \"%s\"" % [store.store_name, regular.call("_join_line")], 5.0)
 
 
 ## One patrol car loops the first street and the main road, and two officers
@@ -1241,14 +1377,37 @@ func _update_deeds() -> void:
 		"ladies": "Help grandmas %d/%d [E]" % [_ladies_helped, _ladies_total],
 		"paint": "Paint a house [F]",
 		"litter": "Litter %d/%d" % [_litter_total - _litter_left, _litter_total],
+		"potholes": "Fill potholes %d/%d [F]" % [_potholes_filled, _potholes_total],
+		"books": "Library books %d/%d [E]" % [_book_boxes(), _book_boxes_needed()],
+		"soup": "Soup kitchen shift %d/%d" % [_bowls_served(), _bowls_needed()],
 	}
 	var rows := []
-	for key: String in ["water", "van", "dogs", "scout", "ladies", "paint", "litter"]:
+	for key: String in DEED_ORDER:
 		if _deeds.has(key):
 			rows.append([labels[key], &"done" if _deeds[key] else &"todo"])
 	rows.append(["Grock cams %d/%d" % [_cameras_smashed, _cameras_total], cams])
 	rows.append(["Irrigation off %d/%d" % irrigation_status(), &"done" if irrigation_status()[0] >= irrigation_status()[1] else &"info"])
 	Game.set_checklist("deeds", "GOOD DEEDS", rows)
+
+
+func _book_boxes() -> int:
+	var drive := get_node_or_null("BookDrive") as BookDrive
+	return drive.boxes if drive else 0
+
+
+func _book_boxes_needed() -> int:
+	var drive := get_node_or_null("BookDrive") as BookDrive
+	return drive.boxes_needed if drive else 0
+
+
+func _bowls_served() -> int:
+	var kitchen := get_node_or_null("SoupKitchen") as SoupKitchen
+	return kitchen.bowls if kitchen else 0
+
+
+func _bowls_needed() -> int:
+	var kitchen := get_node_or_null("SoupKitchen") as SoupKitchen
+	return kitchen.bowls_needed if kitchen else 0
 
 
 func _on_bribe_bought(key: String) -> void:

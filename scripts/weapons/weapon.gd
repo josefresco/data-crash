@@ -34,6 +34,8 @@ var two_handed := false
 ## MELEE: how far the swing reaches, and how hard it shoves.
 var reach := 2.0
 var knockback := 0.0
+## MELEE: damage multiplier against props (walls, cameras, fences).
+var prop_factor := 1.0
 ## SPRAY: seconds of fire put out per second of spraying, and whether the
 ## jet knocks people off their feet up close.
 var douse := 0.0
@@ -63,6 +65,13 @@ static func default_loadout() -> Array[Weapon]:
 		make("Fists", {"kind": Kind.MELEE, "damage": 6.0, "cooldown": 0.45, "reach": 1.7, "sound": &"throw"}),
 		make("Shovel", {"kind": Kind.MELEE, "damage": 28.0, "cooldown": 0.7, "reach": 2.5, "knockback": 5.0,
 			"owned": false, "sound": &"throw", "model": &"shovel", "two_handed": true}),
+		# DUECE Hardware's tool wall: the pickaxe and sledgehammer wreck props.
+		make("Pickaxe", {"kind": Kind.MELEE, "damage": 34.0, "cooldown": 0.9, "reach": 2.4, "knockback": 3.0,
+			"prop_factor": 2.5, "owned": false, "sound": &"throw", "model": &"pickaxe", "two_handed": true}),
+		make("Sledgehammer", {"kind": Kind.MELEE, "damage": 40.0, "cooldown": 1.15, "reach": 2.3, "knockback": 9.0,
+			"prop_factor": 3.0, "owned": false, "sound": &"throw", "model": &"sledgehammer", "two_handed": true}),
+		make("Baseball bat", {"kind": Kind.MELEE, "damage": 20.0, "cooldown": 0.5, "reach": 2.2, "knockback": 6.0,
+			"owned": false, "sound": &"throw", "model": &"bat"}),
 		make("Rocks", {"kind": Kind.THROWN, "throw_kind": &"rock", "damage": 5.0, "cooldown": 0.6, "ammo": 0,
 			"max_ammo": 12, "owned": false, "sound": &"throw", "model": &"rock"}),
 		make("Pistol", {"damage": 24.0, "cooldown": 0.25, "spread": 0.01, "max_range": 60.0, "owned": false,

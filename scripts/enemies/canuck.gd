@@ -61,6 +61,7 @@ func _init() -> void:
 	attack_range = 1.9
 	attack_interval = 0.9
 	bounty = 0
+	hospital_share = 0.35
 
 
 func setup(is_mountie: bool) -> void:
@@ -105,7 +106,7 @@ func join() -> void:
 	sight_range = 22.0
 	remove_from_group("tourists")
 	set_faction(Faction.ALLY)
-	speak(THANKS)
+	speak(_join_line())
 	_speech_left = 4.0
 
 
@@ -228,6 +229,12 @@ func _defense_post() -> Variant:
 	return post
 
 
+## Tagging along with the player: patch up at the hospital. Holding a
+## defense post: fall back to the core instead (the hospital is too far).
+func _can_visit_hospital() -> bool:
+	return super() and state == State.ALLY and _defense_post() == null
+
+
 func _attack(victim: Node3D) -> void:
 	if _is_friend(victim):
 		return
@@ -243,8 +250,17 @@ func _attack(victim: Node3D) -> void:
 		victim.call(&"apply_knockback", push.normalized() * 3.0 + Vector3.UP * 1.0)
 	Sfx.play(&"hit_wood", victim.global_position, -4.0)
 	if randf() < 0.35:
-		speak(FIGHT_LINES.pick_random())
+		speak(_fight_line())
 		_speech_left = 2.0
+
+
+## Overrides: what they say joining up and mid-fight.
+func _join_line() -> String:
+	return THANKS
+
+
+func _fight_line() -> String:
+	return FIGHT_LINES.pick_random()
 
 
 ## The Mountie's revolver: one hitscan round, less accurate far off.

@@ -149,6 +149,12 @@ func _draw_points_of_interest() -> void:
 			var door := _hood.store_door(spec[0])
 			if door != Vector3.ZERO:
 				_poi(door, spec[1], spec[2])
+		var guns := _hood.store_door(_hood.walk_in_sign("gunstore"))
+		if guns != Vector3.ZERO:
+			_poi(guns, "A", Color(1.0, 0.6, 0.2))
+	# Town services mark themselves (meta "poi" letter and "poi_color").
+	for node in get_tree().get_nodes_in_group("map_pois"):
+		_poi((node as Node3D).global_position, node.get_meta(&"poi", "?"), node.get_meta(&"poi_color", Color.WHITE))
 	if Game.has_meta(&"home"):
 		var home := to_map(Game.get_meta(&"home"))
 		draw_colored_polygon(PackedVector2Array([home + Vector2(-6, 0), home + Vector2(0, -6), home + Vector2(6, 0)]), Color(0.4, 1.0, 0.5))

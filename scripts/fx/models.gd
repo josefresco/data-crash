@@ -305,6 +305,10 @@ const PBR_KINDS := {
 	&"plates": ["MetalPlates006", 2.0, 0.6],
 	&"solar": ["SolarPanel003", 1.6, 0.3],
 	&"chainlink": ["Fence006", 3.5, 0.6],
+	&"brick": ["Bricks090", 2.2, 0.0],
+	&"wood": ["Planks021", 2.0, 0.0],
+	&"gravel": ["Gravel022", 2.5, 0.0],
+	&"rust": ["Rust004", 2.0, 0.35],
 }
 
 

@@ -20,6 +20,7 @@ func _init() -> void:
 	outfit = "townsperson"
 	faction = Faction.ALLY
 	max_health = 50.0
+	hospital_share = 0.5
 	move_speed = 4.2
 	sight_range = 45.0
 	attack_range = 2.0
