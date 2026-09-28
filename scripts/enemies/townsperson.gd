@@ -94,7 +94,7 @@ func _is_safe(structure: Destructible) -> bool:
 ## Idle near the green core (home) instead of following the player.
 func _idle() -> void:
 	if _is_valid(objective) and global_position.distance_to(objective.global_position) > 10.0:
-		_nav.target_position = objective.global_position
+		_nav.target_position = approach_point(objective)
 	else:
 		_wander()
 

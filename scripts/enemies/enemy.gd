@@ -600,7 +600,7 @@ func _think() -> void:
 	target = _pick_target()
 	if _is_valid(target):
 		_has_los = _can_see(target)
-		_nav.target_position = target.global_position
+		_nav.target_position = approach_point(target)
 		return
 	_has_los = false
 	if _investigate_left > 0.0:
@@ -636,6 +636,26 @@ func _hospital_visit() -> bool:
 			in_hospital = false
 			speak("All patched up!")
 	return true
+
+
+## Where to walk to reach `thing`: its position, or for a solid structure a
+## spot on the ground just outside its footprint on this unit's side. (A
+## structure's center maps to the navmesh island on its roof or pad, which
+## ground paths can't reach; path queries toward it could hit an engine
+## error while a region rebakes.)
+func approach_point(thing: Node3D) -> Vector3:
+	if not thing is Destructible:
+		return thing.global_position
+	# Nearest point of its footprint (it may be rotated), then a step out.
+	var half := (thing as Destructible).size * 0.5
+	var local := thing.to_local(global_position)
+	var edge := Vector3(clampf(local.x, -half.x, half.x), 0.0, clampf(local.z, -half.z, half.z))
+	var out := Vector3(local.x, 0.0, local.z) - edge
+	if out.length_squared() < 0.0001:
+		out = Vector3(0.0, 0.0, 1.0)  # inside it somehow: step out the front
+	var spot := thing.to_global(edge + out.normalized() * 0.6)
+	spot.y = thing.global_position.y
+	return spot
 
 
 ## Override: whether a hospital trip is allowed right now.
@@ -714,7 +734,7 @@ func _idle() -> void:
 	if faction == Faction.ALLY:
 		_follow_player()
 	elif _is_valid(objective):
-		_nav.target_position = objective.global_position
+		_nav.target_position = approach_point(objective)
 	else:
 		_wander()
 

@@ -134,6 +134,9 @@ func quit_cleanly(code := 0) -> void:
 ## during script unload, after the rendering server is already gone.
 func _release_static_caches() -> void:
 	Models._materials.clear()
+	Car._plate_mat = null
+	Car._trim_mat = null
+	Car._chrome_mat = null
 	Models._scenes.clear()
 	Models._retextured.clear()
 	Models._textures.clear()

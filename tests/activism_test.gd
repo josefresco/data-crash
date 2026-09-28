@@ -156,7 +156,7 @@ func _test_deeds() -> void:
 
 	# Supply van: take it out.
 	var van := level.get_node_or_null("SupplyVan") as SupplyVan
-	if van == null:
+	if van == null or not van.is_alive():
 		# Traffic or a stray round got it first (rare): the deed still counts.
 		check((level.get("_deeds") as Dictionary).get("van", false), "the supply van was already stopped (deed done)")
 	else:

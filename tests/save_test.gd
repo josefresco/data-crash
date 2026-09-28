@@ -11,6 +11,11 @@ func _run() -> void:
 	level.set("boss_enabled", false)
 	add_child(level)
 	await seconds(1.5)
+	# Every navmesh region baked first: pathing against a half-baked map hits
+	# an engine error (the walk-in buildings made the first bake slower).
+	for node in get_tree().get_nodes_in_group("nav_baker"):
+		while (node as NavBaker).bake_count == 0:
+			await (node as NavBaker).navmesh_ready
 	level.call("start_defense")
 	await seconds(1.0)
 	check(SaveGame.has_save(), "starting the defense writes a checkpoint")

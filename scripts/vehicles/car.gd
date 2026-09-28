@@ -69,6 +69,8 @@ var _burn_left := -1.0
 ## Water on a burning car (hoses): enough puts the fire out.
 var _doused := 0.0
 var _headlight: SpotLight3D
+## The imported model's bounds (zero size without a model).
+var _model_bounds := AABB()
 var _tail_mat: StandardMaterial3D
 var _head_mat: StandardMaterial3D
 ## Skid marks: last mark position per wheel (for spacing), shared pool.
@@ -112,6 +114,8 @@ func _ready() -> void:
 	Bumper.attach(self, size + Vector3(0.6, 0.6, 1.0), box.position)
 	health = max_health
 	_build_lights(size, box.position)
+	if _model_bounds.size != Vector3.ZERO:
+		_build_details(_model_bounds)
 	_dress_materials()
 	Models.set_gi_mode(self, GeometryInstance3D.GI_MODE_DYNAMIC)
 
@@ -122,8 +126,9 @@ func _use_model() -> void:
 	var model := Models.model(model_path, model_scale)
 	model.position = model_offset
 	add_child(model)
+	_model_bounds = Models.model_bounds(model)
 	if fit_to_model:
-		_fit_to(Models.model_bounds(model))
+		_fit_to(_model_bounds)
 
 
 ## Sizes the chassis box and places the wheels for a model's bounds
@@ -400,6 +405,64 @@ func _burn(delta: float) -> void:
 
 ## Lenses on every car (unique materials so brake lights can flare) and a
 ## real headlight beam on the car being driven.
+## Small parts the low-poly models lack: license plates (the rear one
+## lettered), side mirrors, an antenna, an exhaust tip, rear mud flaps, and
+## door handles. Merged into one mesh per material, and hidden past 70 m.
+static var _plate_mat: StandardMaterial3D
+static var _trim_mat: StandardMaterial3D
+static var _chrome_mat: StandardMaterial3D
+const PLATE_LETTERS := "ABCDEFGHJKLMNPRSTUVWXYZ"
+
+
+func _build_details(bounds: AABB) -> void:
+	if _plate_mat == null:
+		_plate_mat = Models.mat(Color(0.93, 0.93, 0.9), &"paint")
+		_trim_mat = Models.mat(Color(0.06, 0.06, 0.07), &"rough")
+		_chrome_mat = Models.mat(Color(0.78, 0.79, 0.8), &"metal")
+	var root := Node3D.new()
+	root.name = "Details"
+	add_child(root)
+	var front := bounds.end.z
+	var back := bounds.position.z
+	var half := bounds.size.x * 0.5
+	var bumper := bounds.position.y + bounds.size.y * 0.24
+	# Plates.
+	Models.box(root, Vector3(0.5, 0.14, 0.02), Vector3(0.0, bumper, front + 0.012), _plate_mat)
+	Models.box(root, Vector3(0.5, 0.14, 0.02), Vector3(0.0, bumper + 0.08, back - 0.012), _plate_mat)
+	# Side mirrors at the base of the windshield.
+	var mirror_y := bounds.position.y + bounds.size.y * 0.62
+	var mirror_z := bounds.get_center().z + bounds.size.z * 0.14
+	for side: float in [-1.0, 1.0]:
+		Models.box(root, Vector3(0.1, 0.05, 0.05), Vector3(side * (half + 0.04), mirror_y - 0.02, mirror_z), _trim_mat)
+		Models.box(root, Vector3(0.05, 0.12, 0.16), Vector3(side * (half + 0.11), mirror_y, mirror_z - 0.02), _trim_mat)
+		# Door handles, front and back doors.
+		for dz: float in [0.1, -0.35]:
+			Models.box(root, Vector3(0.02, 0.03, 0.16), Vector3(side * (half + 0.005), bounds.position.y + bounds.size.y * 0.5, bounds.get_center().z + dz * bounds.size.z * 0.5), _chrome_mat)
+		# Mud flaps behind the rear wheels.
+		Models.box(root, Vector3(0.18, 0.16, 0.015), Vector3(side * (half - 0.3), bounds.position.y + 0.14,
+			bounds.get_center().z - 0.31 * bounds.size.z - 0.4), _trim_mat)
+	# Antenna on the back of the roof, exhaust tip under the rear bumper.
+	var antenna := Models.cylinder(root, 0.008, 0.6, Vector3(-half * 0.5, bounds.end.y + 0.28, back + bounds.size.z * 0.3), _trim_mat, 4)
+	antenna.rotation.x = 0.25
+	var pipe := Models.cylinder(root, 0.045, 0.22, Vector3(half * 0.55, bounds.position.y + 0.22, back + 0.05), _chrome_mat, 8)
+	pipe.rotation.x = PI * 0.5
+	Models.merge_static(root)
+	for node in root.get_children():
+		if node is GeometryInstance3D:
+			(node as GeometryInstance3D).visibility_range_end = 70.0
+	var plate := Label3D.new()
+	plate.text = "%d%s%s%s %d%d%d" % [randi() % 9 + 1, PLATE_LETTERS[randi() % PLATE_LETTERS.length()],
+		PLATE_LETTERS[randi() % PLATE_LETTERS.length()], PLATE_LETTERS[randi() % PLATE_LETTERS.length()],
+		randi() % 10, randi() % 10, randi() % 10]
+	plate.modulate = Color(0.1, 0.15, 0.4)
+	plate.outline_size = 0
+	plate.position = Vector3(0.0, bumper + 0.08, back - 0.025)
+	plate.rotation.y = PI
+	plate.visibility_range_end = 25.0
+	root.add_child(plate)
+	Models.fit_label(plate, Vector2(0.46, 0.11), 0.9)
+
+
 func _build_lights(size: Vector3, center: Vector3) -> void:
 	_head_mat = StandardMaterial3D.new()
 	_head_mat.albedo_color = Color(1.0, 0.97, 0.85)

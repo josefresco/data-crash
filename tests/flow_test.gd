@@ -181,6 +181,9 @@ func _test_grock_cameras() -> void:
 
 func _test_parked_cars() -> void:
 	var car := _parked_cars()[0]
+	var details := car.get_node_or_null("Details")
+	check(details != null and not details.find_children("*", "Label3D", false, false).is_empty(),
+		"parked cars carry plates, mirrors, and trim")
 	player.global_position = car.global_position + Vector3(0, 0.5, 2.5)
 	await seconds(0.2)
 	check(car.enter(player) and player.vehicle == car, "a parked car can be driven")
@@ -260,6 +263,7 @@ func _test_animation_layers() -> void:
 	await seconds(0.8)
 	check((cop.get("_rig") as CharacterModel).upper_clip() == &"shield_idle", "riot police hold their shields up")
 	check((fan.get("_rig") as CharacterModel).upper_clip() == &"zombie_walk", "reply guys shamble with zombie arms")
+	check(fan.move_speed < 2.0 and fan.girth.x >= 2.0, "reply guys are fat and slow (%.1f m/s)" % fan.move_speed)
 	var guard := SecurityGuard.new()
 	guard.position = spot + Vector3(0.0, 0.0, -4.0)
 	level.add_child(guard)

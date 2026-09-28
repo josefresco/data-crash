@@ -152,6 +152,8 @@ func _draw_points_of_interest() -> void:
 		var guns := _hood.store_door(_hood.walk_in_sign("gunstore"))
 		if guns != Vector3.ZERO:
 			_poi(guns, "A", Color(1.0, 0.6, 0.2))
+	for node in get_tree().get_nodes_in_group("robotaxis"):
+		_poi((node as Node3D).global_position, "F", Color(0.95, 0.8, 0.4))
 	# Town services mark themselves (meta "poi" letter and "poi_color").
 	for node in get_tree().get_nodes_in_group("map_pois"):
 		_poi((node as Node3D).global_position, node.get_meta(&"poi", "?"), node.get_meta(&"poi_color", Color.WHITE))

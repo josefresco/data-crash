@@ -20,6 +20,7 @@ func _run() -> void:
 		(node as Enemy).apply_damage(9999.0, Vector3.ZERO)
 	await seconds(0.3)
 
+	await _test_failurecab()
 	await _test_gun_show()
 	await _test_machine_gun()
 	await _test_grenade()
@@ -33,6 +34,51 @@ func _dummy(unit: Enemy, at: Vector3) -> Enemy:
 	level.add_child(unit)
 	unit.set_physics_process(false)
 	return unit
+
+
+## A Failurecab roams its street; hacked, it drives itself into the nearest
+## datacenter and blows up against it. Smashed Grock cameras slow the police.
+func _test_failurecab() -> void:
+	var cabs := get_tree().get_nodes_in_group("failurecabs")
+	check(cabs.size() == 3, "Failurecabs roam the cross streets (%d)" % cabs.size())
+	var cab := level.get_node("Failurecab1") as Failurecab
+	var start := cab.global_position
+	await seconds(2.0)
+	check(cab.global_position.distance_to(start) > 4.0 and cab.is_alive(), "a Failurecab drives its loop")
+	check(not cab.is_in_group("hostiles") and not cab.is_in_group("allies"), "roaming cabs are neutral traffic")
+	var damage := func() -> float:
+		var total := 0.0
+		for node in get_tree().get_nodes_in_group("datacenter_sites"):
+			for piece in (node as DatacenterSite).datacenter.find_children("*", "Destructible", true, false):
+				total += (piece as Destructible).max_health - maxf((piece as Destructible).health, 0.0) if not (piece as Destructible).is_destroyed else (piece as Destructible).max_health
+		return total
+	var before: float = damage.call()
+	player.global_position = cab.global_position + Vector3(0.0, 0.2, 3.0)
+	await seconds(0.05)
+	check(cab.in_reach(player) and player.nearest_interactable() is Failurecab, "[E] reaches the Failurecab")
+	cab.interact(player)
+	check(cab.is_hacked and cab.faction == Enemy.Faction.ALLY and cab.is_in_group("allies"), "hacked: it's on your side")
+	player.global_position = Vector3(-84, 0.2, 60)
+	for i in 160:
+		if not is_instance_valid(cab) or not cab.is_alive():
+			break
+		await seconds(0.25)
+	check(not is_instance_valid(cab) or not cab.is_alive(), "the hacked cab reached a datacenter and blew up")
+	await seconds(0.5)
+	check(damage.call() > before + 100.0, "it wrecked part of the datacenter (%d damage)" % roundi(damage.call() - before))
+
+	# Grock cameras: each one down adds to the police response time.
+	var delay: float = level.call("police_delay")
+	var camera := get_tree().get_first_node_in_group("grock_cameras") as Destructible
+	if camera == null:
+		for node in level.get_children():
+			if node is GrockCamera:
+				camera = node
+				break
+	camera.apply_damage(9999.0, camera.global_position + Vector3(0, 0, 2), &"melee")
+	await seconds(0.2)
+	check(is_equal_approx(level.call("police_delay"), delay + level.get("camera_police_delay")),
+		"a smashed Grock camera slows the police (%ds -> %ds)" % [int(delay), int(level.call("police_delay"))])
 
 
 func _test_gun_show() -> void:

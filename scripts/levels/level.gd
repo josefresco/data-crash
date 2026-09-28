@@ -67,6 +67,11 @@ enum Phase { ACTIVISM, ASSAULT, BOSS, BUILD, WAVE, WON, LOST }
 @export var home_near := Vector3(-5.0, 0.0, 20.0)
 ## Seconds between a datacenter alarm and the police cruiser being sent.
 @export var police_response_delay := 30.0
+## Each smashed Grock camera adds this many seconds to the police response
+## (fewer eyes on the block, slower calls).
+@export var camera_police_delay := 6.0
+## Felsa Failurecabs roaming the cross streets (by street index), one each.
+@export var failurecab_streets: Array[int] = [0, 1, 2]
 ## Most recruited Canadians with you at once: a new RV (up to 3 aboard)
 ## only comes while that still fits.
 @export var tourist_ally_cap := 5
@@ -232,6 +237,7 @@ func _ready() -> void:
 	_spawn_town_services()
 	_spawn_police()
 	_spawn_heavy_equipment()
+	_spawn_failurecabs()
 	var market := FarmersMarket.new()
 	market.name = "FarmersMarket"
 	market.position = market_position
@@ -513,6 +519,24 @@ func _spawn_heavy_equipment() -> void:
 		fire.unlock()
 	if litter_spots.is_empty():
 		garbage.unlock()
+
+
+## One Failurecab per listed cross street, looping it end to end.
+func _spawn_failurecabs() -> void:
+	var hood := $Neighborhood as NeighborhoodBuilder
+	var reach := hood.street_half_length - 6.0
+	for index in failurecab_streets:
+		if index >= hood.street_z.size():
+			continue
+		var z: float = hood.street_z[index]
+		var cab := Failurecab.new()
+		cab.name = "Failurecab%d" % (index + 1)
+		cab.route = [Vector3(reach, 0.2, z - 2.0), Vector3(reach, 0.2, z + 2.0), Vector3(-reach, 0.2, z + 2.0), Vector3(-reach, 0.2, z - 2.0)]
+		# Mid-block in the westbound lane (clear of the cruiser by the station).
+		cab.position = Vector3(reach * 0.5 - index * 12.0, 0.2, z + 2.0)
+		cab.rotation.y = PI * 0.5  # heading -X, toward route[2]
+		cab.set("_leg", 2)
+		add_child(cab)
 
 
 func _place_vehicle(vehicle: Car, spot: Vector4) -> void:
@@ -1015,9 +1039,9 @@ func raise_alarm(site_id: StringName, reason := "", seen_by := "") -> void:
 			Game.tip("alarm_elmo", "Elmo's making a run for his Cyberdouche at the back dock. Catch him first, or wreck the truck.")
 	if site_node:
 		# Someone calls it in; the nearest cruiser rolls after a delay.
-		_police_calls[site_id] = police_response_delay
+		_police_calls[site_id] = police_delay()
 		Game.notify("Someone called the cops. Police are on their way to %s (about %ds)." % [
-			site_node.display_name, int(police_response_delay)], 5.0)
+			site_node.display_name, int(police_delay())], 5.0)
 	elif site_id == &"police":
 		Game.notify("You attacked the police! Every cop in town is after you now.", 6.0)
 	_start_assault()
@@ -1356,10 +1380,16 @@ func _spawn_grock_cameras() -> void:
 	_cameras_total = grock_camera_spots.size()
 
 
+## Seconds from a datacenter alarm to a cruiser rolling: slower for every
+## Grock camera smashed.
+func police_delay() -> float:
+	return police_response_delay + camera_police_delay * _cameras_smashed
+
+
 func _on_grock_camera_smashed(camera: GrockCamera) -> void:
 	_cameras_smashed += 1
 	var left := _cameras_total - _cameras_smashed
-	Game.notify("Grock camera smashed: +$%d, the neighbors approve. %s" % [camera.reward,
+	Game.notify("Grock camera smashed: +$%d, police response now %ds. %s" % [camera.reward, int(police_delay()),
 		("%d left on the block." % left) if left > 0 else "The block is Grock-free!"])
 	_update_deeds()
 

@@ -19,6 +19,12 @@ const MAX_BROS := 8
 func _init() -> void:
 	outfit = "hodl_bro"
 	voice_pitch = 1.3
+	# Gym-bro build: quicker and slimmer than Elmo's reply guys.
+	girth = Vector3(1.55, 1.0, 1.5)
+	gut = 0.27
+	move_speed = 2.8
+	attack_interval = 1.1
+	body_radius = 0.5
 
 
 func _ready() -> void:

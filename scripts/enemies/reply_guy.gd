@@ -1,8 +1,9 @@
 class_name ReplyGuy
 extends Enemy
-## Elmo's Twatter faithful: very pale, very large men who answer every Twat he
-## posts. Slow and soft, they waddle at whoever is bothering Elmo and slap at
-## close range while "well, actually"-ing. They log off when Elmo goes down.
+## Elmo's Twatter faithful: very pale, very fat men who answer every Twat he
+## posts. Slow and soft (a crawling waddle), they close in on whoever is
+## bothering Elmo and slap at close range while "well, actually"-ing,
+## wheezing between lines. They log off when Elmo goes down.
 
 const LINES := [
 	"Well, actually...",
@@ -20,6 +21,9 @@ const LINES := [
 const MAX_ALIVE := 8
 
 @export var slap_damage := 4.0
+## Body scale (width, height, depth) and gut size: subclasses slim down.
+var girth := Vector3(2.1, 1.0, 2.0)
+var gut := 0.42
 
 var _line_left := 0.0
 var _logging_off := false
@@ -29,12 +33,12 @@ func _init() -> void:
 	voice_pitch = 0.8
 	outfit = "reply_guy"
 	max_health = 80.0
-	move_speed = 2.8
+	move_speed = 1.7
 	sight_range = 35.0
-	attack_range = 1.8
-	attack_interval = 1.1
+	attack_range = 2.0
+	attack_interval = 1.4
 	bounty = 8
-	body_radius = 0.5
+	body_radius = 0.68
 	body_height = 1.75
 
 
@@ -78,14 +82,15 @@ func log_off() -> void:
 
 func _build_visual() -> Node3D:
 	var model := CharacterModel.create(outfit, body_height)
-	model.scale = Vector3(1.55, 1.0, 1.5)  # a lot of guy
+	model.scale = girth  # a lot of guy
 	return model
 
 
 func _decorate(_visual_root: Node3D) -> void:
 	# Gut straining the fan tee, and a phone (they are always online too).
 	var tee := _solid(Color(0.16, 0.16, 0.18))
-	Models.ball(_anchor(&"chest"), 0.27, Vector3(0.0, -0.2, -0.1), tee).scale = Vector3(1.0, 0.85, 0.75)
+	Models.ball(_anchor(&"chest"), gut, Vector3(0.0, -0.28, -0.16), tee).scale = Vector3(1.0, 0.85, 0.8)
+	Models.ball(_anchor(&"hips"), gut * 0.8, Vector3(0.0, 0.05, -0.12), tee).scale = Vector3(1.1, 0.7, 0.85)
 	Models.box(_anchor(&"hand_l"), Vector3(0.09, 0.16, 0.025), Vector3(0.0, 0.06, -0.08), Models.glow(Color(0.55, 0.75, 1.0), 1.5))
 
 
