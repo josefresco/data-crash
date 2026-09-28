@@ -109,6 +109,21 @@ static func build(body: Node3D, kind: String, accent: Color) -> AABB:
 			var slat := Models.box(body, Vector3(span / 4.0, 0.05, 1.2), Vector3(side * (half_door + pier + span * (k + 0.5) / 4.0), 3.55, d * 0.5 + 0.55),
 				Models.mat(stripe, &"cloth"))
 			slat.rotation.x = 0.3
+	# Rain streaks running down from the roofline, front and sides.
+	var streak_path := "res://assets/decals/streak_%d.png" % (hash(kind) & 1)
+	if ResourceLoader.exists(streak_path):
+		for face: Vector3 in [Vector3.BACK, Vector3.RIGHT, Vector3.LEFT]:
+			var decal := Decal.new()
+			decal.texture_albedo = load(streak_path)
+			var span_w := w if face == Vector3.BACK else d
+			decal.size = Vector3(span_w * 0.95, 0.8, minf(h - 0.5, 4.0))
+			decal.modulate = Color(1.0, 1.0, 1.0, 0.8)
+			decal.distance_fade_enabled = true
+			decal.distance_fade_begin = 60.0
+			var side := Vector3.UP.cross(face)
+			decal.transform = Transform3D(Basis(side, face, side.cross(face)),
+				face * ((d if face == Vector3.BACK else w) * 0.5) + Vector3.UP * (h - minf(h - 0.5, 4.0) * 0.5))
+			body.add_child(decal)
 	match kind:
 		"gunstore":
 			_dress_gun_store(body, size, accent)

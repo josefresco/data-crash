@@ -46,7 +46,8 @@ func _test_deeds() -> void:
 	check(is_equal_approx(Game.district.trust, trust + 0.1 * 0.5),
 		"noise halves the trust reward (%.3f)" % (Game.district.trust - trust))
 
-	# Scout: climb each perch ([E] at the ladder), stay a moment, climb down.
+	# Scout: climb each perch ([E] at the ladder), raise the binoculars, hold
+	# the reticle on each cooling unit to spot it, climb down.
 	var perches := get_tree().get_nodes_in_group("scout_points")
 	check(perches.size() == 3, "one scout perch per datacenter (%d)" % perches.size())
 	for node in perches:
@@ -57,14 +58,27 @@ func _test_deeds() -> void:
 		perch.interact(player)
 		await seconds(0.2)
 		check(perch.on_perch(player), "[E] climbs up onto the %s perch" % perch.site_id)
-		for i in 20:
-			if perch.is_scouted:
-				break
-			await seconds(0.25)
+		await seconds(1.0)
+		check(not perch.is_scouted, "just standing up there doesn't scout %s" % perch.site_id)
+		player.binoculars_up = true
+		await seconds(0.4)
+		check(player.optic == &"binoculars", "[Z] raises the binoculars (first person)")
+		for unit in get_tree().get_nodes_in_group("cooling_units"):
+			if StringName(unit.get_meta(&"scout_site", &"")) != perch.site_id:
+				continue
+			for i in 12:
+				if Spotting.is_spotted(unit):
+					break
+				player.aim_at(Spotting.aim_point(unit as Node3D) + Vector3.UP * 0.4 * (i % 3))
+				await seconds(0.25)
+			check(Spotting.is_spotted(unit), "spotted %s at %s" % [unit.name, perch.site_id])
+		player.binoculars_up = false
+		await seconds(0.2)
 		perch.interact(player)
 		await seconds(0.2)
 	var scouted := perches.filter(func(n: Node) -> bool: return (n as ScoutPoint).is_scouted).size()
-	check(scouted == 3, "staying on each perch scouts its datacenter (%d/3)" % scouted)
+	check(scouted == 3, "spotting every cooling unit scouts each datacenter (%d/3)" % scouted)
+	check(get_tree().get_nodes_in_group("spotted_targets").size() >= 9, "spotted pieces are map targets")
 	check(not (perches[0] as ScoutPoint).on_perch(player), "[E] climbs back down")
 	var marked := 0
 	for unit in get_tree().get_nodes_in_group("cooling_units"):

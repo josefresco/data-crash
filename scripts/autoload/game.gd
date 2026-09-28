@@ -337,6 +337,7 @@ func _register_input_actions() -> void:
 		"drone": KEY_X,
 		"descend": KEY_C,
 		"crouch": KEY_C,
+		"binoculars": KEY_Z,
 	}
 	for action: String in keys:
 		_ensure_action(action)

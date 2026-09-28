@@ -58,11 +58,13 @@ func _process(delta: float) -> void:
 	if _player.vehicle != null:
 		if sprinting and _player.vehicle.turbo_left > 0.0 and _player.vehicle.linear_velocity.length() > 4.0:
 			target = TURBO_KICK
+	elif _player.optic != &"":
+		target = Player.OPTIC_ZOOM
 	elif _player.aiming:
 		target = AIM_ZOOM
 	elif sprinting and Vector2(_player.velocity.x, _player.velocity.z).length() > _player.walk_speed + 0.5:
 		target = SPRINT_KICK
-	_kick = move_toward(_kick, target, delta * 90.0)
+	_kick = move_toward(_kick, target, delta * (220.0 if _player.optic != &"" else 90.0))
 	_camera.fov = _base_fov + _kick
 	_trauma = maxf(_trauma - delta * 1.4, 0.0)
 	var amount := _trauma * _trauma * 0.35

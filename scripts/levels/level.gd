@@ -194,6 +194,21 @@ func _ready() -> void:
 	life.name = "GroundLife"
 	add_child(life)
 	life.setup($Neighborhood as NeighborhoodBuilder)
+	# Bins, yard things, hydrants, power lines, shop clutter (before the
+	# first navmesh bake, so its solid pieces are baked around).
+	var clutter := StreetClutter.new()
+	clutter.name = "StreetClutter"
+	add_child(clutter)
+	var keep_clear: Array[Vector3] = [market_position]
+	keep_clear.append_array(tourist_stops)
+	for spot: Array in old_lady_spots:
+		keep_clear.append_array([spot[0], spot[1]])
+	for spot: Array in pickup_spots:
+		keep_clear.append(spot[1])
+	var hydrant := get_node_or_null("WaterMain") as Node3D
+	if hydrant:
+		keep_clear.append(hydrant.global_position)
+	clutter.setup($Neighborhood as NeighborhoodBuilder, keep_clear)
 	($Player as Player).respawned.connect(_on_player_respawned)
 	Sfx.music(&"calm")
 	for node in get_tree().get_nodes_in_group("datacenter_sites"):
@@ -213,6 +228,8 @@ func _ready() -> void:
 			_give_fire_hose())
 	else:
 		_deeds.erase("water")
+	for site_node in sites:
+		Spotting.tag_site(site_node)
 	_place_scout_points()
 	if get_tree().get_nodes_in_group("scout_points").is_empty():
 		_deeds.erase("scout")
@@ -442,8 +459,8 @@ func _send_canadians_home() -> void:
 		Game.notify("The Canadians head home after the wave. \"Sorry we can't stay, eh!\"", 5.0)
 
 
-## One vantage point per datacenter, just outside its front-left fence
-## corner: any ScoutPoint placed in the scene (District 1: Felsa's tree),
+## One vantage point per datacenter, just outside its front-right fence
+## corner (the cooling units line the building's +X side): any ScoutPoint placed in the scene (District 1: Felsa's tree),
 ## else a tree, or a rooftop for sites with `scout_rooftop`. All of them
 ## scouted completes the deed; each pays on its own.
 func _place_scout_points() -> void:
@@ -462,7 +479,7 @@ func _place_scout_points() -> void:
 		point.style = ScoutPoint.Style.ROOFTOP if site_node.scout_rooftop else ScoutPoint.Style.TREE
 		var half := site_node.compound * 0.5
 		add_child(point)
-		point.global_position = site_node.at(Vector3(-(half.x - 4.0), 0.0, half.y + 4.0))
+		point.global_position = site_node.at(Vector3(half.x - 4.0, 0.0, half.y + 4.0))
 		point.global_rotation.y = site_node.global_rotation.y
 		points.append(point)
 	for point in points:
@@ -582,7 +599,7 @@ func _move_in() -> void:
 	add_child(sign_root)
 	sign_root.global_position = door + facing * 3.5 + facing.cross(Vector3.UP) * 2.2
 	sign_root.global_basis = Basis.looking_at(-facing, Vector3.UP)
-	var wood := Models.mat(Color(0.45, 0.32, 0.2))
+	var wood := Models.mat(Color(0.62, 0.5, 0.4), &"wood")
 	Models.box(sign_root, Vector3(0.1, 1.2, 0.1), Vector3(0.0, 0.6, 0.0), wood)
 	var board := Models.box(sign_root, Vector3(1.4, 0.6, 0.06), Vector3(0.0, 1.25, 0.0), Models.mat(Color(0.95, 0.9, 0.7), &"paint"))
 	var text := Label3D.new()

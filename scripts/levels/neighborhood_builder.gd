@@ -125,6 +125,11 @@ func home_spot(near: Vector3) -> Array:
 	return best
 
 
+## [door position, outward direction] for every house (not stores).
+func house_doors() -> Array:
+	return _house_doors
+
+
 ## Building footprints for the minimap: [Rect2 (x, z), is_store] pairs.
 func footprints() -> Array:
 	return _footprints
@@ -431,7 +436,7 @@ func _add_for_sale_sign(at: Vector3) -> void:
 	var sign_root := Node3D.new()
 	sign_root.position = at
 	add_child(sign_root)
-	var wood := Models.mat(Color(0.45, 0.32, 0.2))
+	var wood := Models.mat(Color(0.62, 0.5, 0.4), &"wood")
 	for x in [-0.7, 0.7]:
 		Models.box(sign_root, Vector3(0.1, 1.6, 0.1), Vector3(x, 0.8, 0.0), wood)
 	Models.box(sign_root, Vector3(1.8, 0.9, 0.06), Vector3(0.0, 1.3, 0.0), Models.mat(Color(0.95, 0.95, 0.92)))
@@ -495,8 +500,8 @@ func _build_construction_site(center: Vector3) -> void:
 	collider.position.y = 0.8
 	pile.add_child(collider)
 	for i in 5:  # stacked lumber and pipe
-		Models.box(pile, Vector3(6.0, 0.3, 0.6), Vector3(0.0, 0.15 + (i % 3) * 0.32, -1.0 + i * 0.5), Models.mat(Color(0.6, 0.45, 0.25)))
-	Models.box(pile, Vector3(2.5, 1.6, 2.5), Vector3(-1.5, 0.8, 0.5), Models.mat(Color(0.4, 0.42, 0.45)))
+		Models.box(pile, Vector3(6.0, 0.3, 0.6), Vector3(0.0, 0.15 + (i % 3) * 0.32, -1.0 + i * 0.5), Models.mat(Color(0.85, 0.75, 0.6), &"wood"))
+	Models.box(pile, Vector3(2.5, 1.6, 2.5), Vector3(-1.5, 0.8, 0.5), Models.mat(Color(0.8, 0.8, 0.8), &"gravel"))
 
 
 ## The riverbed (dark mud), reeds and rocks along the banks, a bridge where
@@ -550,8 +555,8 @@ func _build_river() -> void:
 ## A weathered boathouse on stilts at the bank, with a dock out over the
 ## bed (high and dry at low water, afloat when the river is back).
 func _build_boathouse(at: Vector3) -> void:
-	var plank := Models.mat(Color(0.5, 0.38, 0.26), &"rough")
-	var dark := Models.mat(Color(0.3, 0.22, 0.16), &"rough")
+	var plank := Models.mat(Color(0.7, 0.58, 0.48), &"wood")
+	var dark := Models.mat(Color(0.42, 0.33, 0.28), &"wood")
 	var roof := Models.mat(Color(0.35, 0.18, 0.15), &"paint")
 	var house := Node3D.new()
 	house.name = "Boathouse"
@@ -583,8 +588,8 @@ func _build_boathouse(at: Vector3) -> void:
 ## A fishing pier from the far bank, and the sign that says why nobody
 ## fishes here anymore.
 func _build_pier(at: Vector3) -> void:
-	var plank := Models.mat(Color(0.55, 0.43, 0.3), &"rough")
-	var dark := Models.mat(Color(0.3, 0.22, 0.16), &"rough")
+	var plank := Models.mat(Color(0.78, 0.64, 0.52), &"wood")
+	var dark := Models.mat(Color(0.42, 0.33, 0.28), &"wood")
 	var pier := Node3D.new()
 	pier.name = "FishingPier"
 	pier.position = at

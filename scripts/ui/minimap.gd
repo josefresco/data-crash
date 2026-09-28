@@ -152,6 +152,13 @@ func _draw_points_of_interest() -> void:
 		var guns := _hood.store_door(_hood.walk_in_sign("gunstore"))
 		if guns != Vector3.ZERO:
 			_poi(guns, "A", Color(1.0, 0.6, 0.2))
+	# Spotted datacenter pieces: red crosshairs.
+	for node in get_tree().get_nodes_in_group("spotted_targets"):
+		if Spotting.is_standing(node):
+			var p := to_map((node as Node3D).global_position)
+			draw_arc(p, 4.0, 0.0, TAU, 12, Color(1.0, 0.3, 0.25), 1.5)
+			draw_line(p - Vector2(6.0, 0.0), p + Vector2(6.0, 0.0), Color(1.0, 0.3, 0.25), 1.0)
+			draw_line(p - Vector2(0.0, 6.0), p + Vector2(0.0, 6.0), Color(1.0, 0.3, 0.25), 1.0)
 	for node in get_tree().get_nodes_in_group("robotaxis"):
 		_poi((node as Node3D).global_position, "F", Color(0.95, 0.8, 0.4))
 	# Town services mark themselves (meta "poi" letter and "poi_color").

@@ -26,7 +26,7 @@ var _player: Player
 func _ready() -> void:
 	add_to_group("interactables")
 	add_to_group("markets")
-	var wood := Models.mat(Color(0.55, 0.4, 0.25))
+	var wood := Models.mat(Color(0.75, 0.6, 0.48), &"wood")
 	var outfits := ["vendor", "townsperson", "old_lady", "foreman"]
 	for i in 4:
 		var stall := Node3D.new()

@@ -89,6 +89,20 @@ var _hiss: AudioStreamPlayer3D
 var _spray_left := 0.0
 ## Right mouse held (not in build mode or a car): zoomed, steadier aim.
 var aiming := false
+## Looking through an optic: &"" (none), &"scope" (aiming the hunting rifle),
+## or &"binoculars" (hold [Z]). Both drop the camera into first person.
+var optic := &""
+## Seconds the binoculars have been held on the current scout target.
+var spot_progress := 0.0
+## Tests hold the binoculars up without input.
+var binoculars_up := false
+var _spot_target: Node3D = null
+var _glass_left := 0.0
+var _spring_length := 4.0
+var _spring_x := 1.0
+## FOV narrowing through the scope and the binoculars (CameraFx).
+const OPTIC_ZOOM := -57.0
+const OPTIC_SENSITIVITY := 0.22
 ## Mouse sensitivity multiplier while aiming.
 const AIM_SENSITIVITY := 0.55
 ## Spread multiplier while aiming.
@@ -117,6 +131,8 @@ func _ready() -> void:
 	health = max_health
 	_spawn = global_transform
 	_spring.rotation.x = _pitch
+	_spring_length = _spring.spring_length
+	_spring_x = _spring.position.x
 	_spring.add_excluded_object(get_rid())
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
@@ -131,7 +147,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		return  # the drone takes the mouse and the weapon keys
 	elif event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		var motion := event as InputEventMouseMotion
-		var sensitivity := Game.mouse_sensitivity * (AIM_SENSITIVITY if aiming else 1.0)
+		var sensitivity := Game.mouse_sensitivity * (OPTIC_SENSITIVITY if optic != &"" else (AIM_SENSITIVITY if aiming else 1.0))
 		_pivot.rotate_y(-motion.relative.x * sensitivity)
 		_pitch = clampf(_pitch - motion.relative.y * sensitivity, -1.2, 0.6)
 		_spring.rotation.x = _pitch
@@ -151,9 +167,12 @@ func _physics_process(delta: float) -> void:
 	if drone:
 		_stand_while_piloting(delta)
 		return
-	aiming = not build_mode and vehicle == null and Input.is_action_pressed("aim") and current_weapon().aims()
+	var glasses := (binoculars_up or Input.is_action_pressed("binoculars")) and not build_mode and vehicle == null
+	aiming = not glasses and not build_mode and vehicle == null and Input.is_action_pressed("aim") and current_weapon().aims()
 	if aiming:
 		_aim_hold = maxf(_aim_hold, 0.15)
+	optic = &"binoculars" if glasses else (&"scope" if aiming and current_weapon().scope else &"")
+	_update_optic(delta)
 	_move(delta)
 	_footsteps(delta)
 
@@ -161,7 +180,7 @@ func _physics_process(delta: float) -> void:
 		_respawn()
 
 	if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and not build_mode:
-		if Input.is_action_pressed("fire") and _fire_timer <= 0.0:
+		if Input.is_action_pressed("fire") and _fire_timer <= 0.0 and optic != &"binoculars":
 			fire()
 		if Input.is_action_just_pressed("plant"):
 			_plant()
@@ -754,6 +773,75 @@ func _spray(weapon: Weapon) -> void:
 	for entry: Array in Hose.spray_tick(self, muzzle_point(), _aim_direction(), weapon, [get_rid()]):
 		_report_damage(entry[0] as Enemy, entry[1])
 	Game.tip("hose", "Hoses push people back and put out fires: burning cars, molotov patches. Protesters just scatter, soaked but unharmed.")
+
+
+## First person through an optic: the camera slides in to the eyes and the
+## body hides. With the binoculars up, whatever scout target sits under the
+## reticle for Spotting.SPOT_TIME gets spotted, and hostiles in the glass are
+## tagged for a while (like the drone does).
+func _update_optic(delta: float) -> void:
+	var close := optic != &""
+	_spring.spring_length = move_toward(_spring.spring_length, 0.0 if close else _spring_length, delta * 24.0)
+	_spring.position.x = move_toward(_spring.position.x, 0.0 if close else _spring_x, delta * 6.0)
+	var show_body := _spring.spring_length > 1.0
+	_rig.visible = show_body
+	if _held:
+		_held.visible = show_body
+	if optic != &"binoculars":
+		_spot_target = null
+		spot_progress = 0.0
+		return
+	if _spring.spring_length > 0.5:
+		return  # still raising them
+	Game.tip("binoculars", "Binoculars: hold the reticle on a datacenter's cooling units, turbines, tanks, and gates to mark them on the map. Spot every cooling unit to scout the site.")
+	var eye := _camera.global_position
+	var look := _aim_direction()
+	var target := Spotting.target_in_view(get_tree(), eye, look, get_world_3d().direct_space_state, [get_rid()])
+	if target != _spot_target:
+		_spot_target = target
+		spot_progress = 0.0
+	if target:
+		spot_progress += delta
+		if spot_progress >= Spotting.SPOT_TIME:
+			if Spotting.spot(target):
+				Sfx.ui(&"confirm", -4.0)
+				var site := StringName(target.get_meta(&"scout_site", &""))
+				var done := Spotting.progress(get_tree(), site)
+				Game.notify("Spotted: %s (%d/%d at this site). Marked on the map." % [
+					String(target.get_meta(&"scout_label", "target")).to_lower(), done.x, done.y], 2.5)
+			_spot_target = null
+			spot_progress = 0.0
+	_glass_left -= delta
+	if _glass_left <= 0.0:
+		_glass_left = 0.25
+		for node in get_tree().get_nodes_in_group("hostiles"):
+			var enemy := node as Enemy
+			if enemy == null or not enemy.is_alive():
+				continue
+			var offset := enemy.global_position + Vector3.UP - eye
+			if offset.length() < 120.0 and look.angle_to(offset) < 0.12 \
+					and Spotting.can_see(enemy, eye, enemy.global_position + Vector3.UP, get_world_3d().direct_space_state, [get_rid()]):
+				enemy.spot(20.0)
+
+
+## The scout target under the binoculars' reticle (the overlay draws it).
+func spotting_target() -> Node3D:
+	return _spot_target if _spot_target and is_instance_valid(_spot_target) else null
+
+
+## The datacenter site the binoculars are pointed at (for the tally), or &"".
+func watched_site() -> StringName:
+	var hit := aim(Spotting.RANGE)
+	var point: Vector3 = hit["position"] if not hit.is_empty() else _camera.global_position + _aim_direction() * 60.0
+	var best := &""
+	var best_distance := 70.0
+	for node in get_tree().get_nodes_in_group("datacenter_sites"):
+		var site := node as DatacenterSite
+		var distance := site.global_position.distance_to(point)
+		if distance < best_distance:
+			best = site.site_id
+			best_distance = distance
+	return best
 
 
 func set_crouching(on: bool) -> void:

@@ -37,7 +37,7 @@ func _ready() -> void:
 			_visual.add_child(shovel)
 		&"weapon":
 			respawn = 0.0
-			var table := Models.box(_visual, Vector3(1.4, 0.8, 0.7), Vector3(0.0, 0.4, 0.0), Models.mat(Color(0.55, 0.4, 0.25)))
+			var table := Models.box(_visual, Vector3(1.4, 0.8, 0.7), Vector3(0.0, 0.4, 0.0), Models.mat(Color(0.75, 0.6, 0.48), &"wood"))
 			table.name = "Table"
 			Models.collider(_visual, Vector3(1.4, 0.8, 0.7), Vector3(0.0, 0.4, 0.0))
 			var model := WeaponModels.build(_weapon_model())

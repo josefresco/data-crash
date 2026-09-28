@@ -11,6 +11,19 @@ var level: Node3D
 var player: Player
 
 
+## Aiming the hunting rifle looks through its scope: first person, a
+## strong zoom; letting go goes back to the shoulder camera.
+func _test_scope() -> void:
+	player.select_weapon(player.weapons.find(player.weapon_named("Hunting rifle")))
+	Input.action_press("aim")
+	await seconds(0.6)
+	var camera := get_viewport().get_camera_3d()
+	check(player.optic == &"scope" and camera.fov < 30.0, "the hunting rifle aims through a scope (fov %d)" % roundi(camera.fov))
+	Input.action_release("aim")
+	await seconds(0.6)
+	check(player.optic == &"" and camera.fov > 60.0, "letting go leaves the scope")
+
+
 func _run() -> void:
 	level = MAIN_SCENE.instantiate()
 	level.set("boss_enabled", false)
@@ -26,6 +39,7 @@ func _run() -> void:
 
 	await _test_shotgun()
 	await _test_rifle_and_ammo()
+	await _test_scope()
 	await _test_molotov()
 	await _test_rock_lure()
 	await _test_knockback()

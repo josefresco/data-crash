@@ -37,7 +37,7 @@ func _ready() -> void:
 		add_child(patch)
 		_patches.append(patch)
 	# Ladder, drop cloth, paint cans, and the neighbor with a roller.
-	var wood := Models.mat(Color(0.7, 0.55, 0.3))
+	var wood := Models.mat(Color(0.9, 0.78, 0.6), &"wood")
 	for x in [-0.25, 0.25]:
 		var rail := Models.box(self, Vector3(0.06, 3.2, 0.06), wall + Vector3(1.8 + x, 1.5, 0.55), wood)
 		rail.rotation.x = -0.18

@@ -74,6 +74,8 @@ func _ready() -> void:
 	var shade := _build_vignette(Color(0.0, 0.0, 0.0, 0.0), Color(0.0, 0.0, 0.0, 0.5), 0.55)
 	shade.modulate.a = 1.0
 	root.add_child(shade)
+	# Scope and binoculars mask the view under everything else on the HUD.
+	root.add_child(OpticOverlay.new())
 	_vignette = _build_vignette(Color(0.7, 0.0, 0.0, 0.0), Color(0.75, 0.0, 0.0, 0.85), 0.4)
 	root.add_child(_vignette)
 	_overlay = HudOverlay.new()

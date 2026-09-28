@@ -45,6 +45,8 @@ var stuns := false
 var flash_size := 1.0
 var recoil := 0.0
 var casing := &""
+## Aiming looks through a scope (first person, strong zoom).
+var scope := false
 
 
 static func make(weapon_name: String, props: Dictionary) -> Weapon:
@@ -81,7 +83,7 @@ static func default_loadout() -> Array[Weapon]:
 			"flash_size": 1.5, "recoil": 0.09, "casing": &"shell"}),
 		make("Hunting rifle", {"damage": 90.0, "cooldown": 1.2, "spread": 0.0, "max_range": 120.0,
 			"ammo": 15, "owned": false, "tracer_color": Color(1.0, 0.9, 0.6), "sound": &"rifle", "model": &"rifle",
-			"two_handed": true, "flash_size": 1.25, "recoil": 0.07, "casing": &"brass"}),
+			"two_handed": true, "flash_size": 1.25, "recoil": 0.07, "casing": &"brass", "scope": true}),
 		make("Molotov", {"kind": Kind.THROWN, "throw_kind": &"molotov", "cooldown": 1.0, "ammo": 0, "max_ammo": 3,
 			"owned": false, "sound": &"throw", "model": &"molotov"}),
 		make("Grenades", {"kind": Kind.THROWN, "throw_kind": &"grenade", "damage": 130.0, "cooldown": 0.9,

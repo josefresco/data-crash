@@ -30,6 +30,7 @@ func setup(hood: NeighborhoodBuilder) -> void:
 	_grass = _scatter(_tuft_mesh(), open.slice(0, tufts), false)
 	_blooms = _scatter(_flower_mesh(), open.slice(tufts), true)
 	_decal_roads(hood)
+	_decal_grime(hood)
 	_apply(0.0)
 
 
@@ -163,6 +164,65 @@ void fragment() {
 	material.shader = shader
 	material.set_shader_parameter(&"petals", colored)
 	return material
+
+
+## Street grime: manhole covers down the middle of the roads, storm drains
+## at the corners ("DRAINS TO RIVER"), tire streaks, puddles in the
+## gutters, and stained, gum-spotted sidewalks.
+func _decal_grime(hood: NeighborhoodBuilder) -> void:
+	var tex := func(name: String) -> Texture2D:
+		var path := DECALS + name + ".png"
+		return load(path) if ResourceLoader.exists(path) else null
+	var manhole: Texture2D = tex.call("manhole")
+	var drain: Texture2D = tex.call("drain")
+	if manhole == null or drain == null:
+		return
+	var place := func(texture: Texture2D, at: Vector3, size: Vector2, yaw: float, fade := 50.0) -> void:
+		if texture == null or hood.in_river(at, 1.0):
+			return
+		var decal := Decal.new()
+		decal.texture_albedo = texture
+		decal.size = Vector3(size.x, 0.6, size.y)
+		decal.cull_mask = 1
+		decal.upper_fade = 0.2
+		decal.lower_fade = 0.2
+		decal.distance_fade_enabled = true
+		decal.distance_fade_begin = fade
+		decal.distance_fade_length = 12.0
+		add_child(decal)
+		decal.global_position = hood.global_transform * at
+		decal.rotation.y = yaw
+	# Manholes every ~34 m down the main road and each cross street.
+	for z in range(10, int(hood.main_road_end_z), 34):
+		place.call(manhole, Vector3(0.0, 0.0, z), Vector2(1.3, 1.3), _rng.randf() * TAU)
+	for street: float in hood.street_z:
+		for x in range(-60, 61, 30):
+			if absf(x) > 8:
+				place.call(manhole, Vector3(x, 0.0, street), Vector2(1.3, 1.3), _rng.randf() * TAU)
+		# Storm drains in the gutter at each corner, lettering facing the street.
+		for sx: float in [-1.0, 1.0]:
+			for sz: float in [-1.0, 1.0]:
+				var at := Vector3(sx * (hood.road_width * 0.5 + 4.0), 0.0, street + sz * (hood.road_width * 0.5 - 0.5))
+				place.call(drain, at, Vector2(1.4, 1.4), 0.0 if sz > 0.0 else PI)
+	var extras: Array = [["tires_0", 14, Vector2(2.0, 5.0)], ["tires_1", 14, Vector2(2.0, 5.0)],
+		["puddle_0", 10, Vector2(2.0, 1.4)], ["puddle_1", 10, Vector2(2.0, 1.4)],
+		["grime_0", 18, Vector2(2.4, 2.4)], ["grime_1", 18, Vector2(2.4, 2.4)]]
+	for entry: Array in extras:
+		var texture: Texture2D = tex.call(entry[0])
+		for i in int(entry[1]):
+			var street: float = hood.street_z[_rng.randi() % hood.street_z.size()]
+			var at := Vector3.ZERO
+			match String(entry[0]).substr(0, 4):
+				"tire":  # on the road
+					at = Vector3(_rng.randf_range(-hood.street_half_length, hood.street_half_length), 0.0, street + _rng.randf_range(-2.5, 2.5))
+				"pudd":  # in the gutter
+					at = Vector3(_rng.randf_range(-hood.street_half_length, hood.street_half_length), 0.0,
+						street + (1.0 if _rng.randf() < 0.5 else -1.0) * (hood.road_width * 0.5 - 0.6))
+				_:  # on the sidewalks
+					at = Vector3(_rng.randf_range(-hood.street_half_length, hood.street_half_length), 0.0,
+						street + (1.0 if _rng.randf() < 0.5 else -1.0) * (hood.road_width * 0.5 + 1.0))
+			var yaw := _rng.randf_range(-0.3, 0.3) + (PI * 0.5 if String(entry[0]).begins_with("tire") else _rng.randf() * TAU)
+			place.call(texture, at, entry[2], yaw)
 
 
 ## Cracks and oil stains on the roads (projected decals, permanent).
