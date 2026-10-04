@@ -20,6 +20,8 @@ func _run() -> void:
 		(node as Enemy).apply_damage(9999.0, Vector3.ZERO)
 	await seconds(0.3)
 
+	await _test_orders()
+	await _test_airport()
 	await _test_failurecab()
 	await _test_gun_show()
 	await _test_machine_gun()
@@ -36,15 +38,147 @@ func _dummy(unit: Enemy, at: Vector3) -> Enemy:
 	return unit
 
 
+## The airport: a helicopter carries allies to a datacenter roof and they
+## rappel to its cooling units; a plane you bail out of flies into a
+## datacenter and blows a hole in it while you drift down under a canopy.
+func _test_airport() -> void:
+	var airport := level.get_node("Airport") as Airport
+	var planes := airport.aircraft.filter(func(a: Aircraft) -> bool: return a is Airplane)
+	var helis := airport.aircraft.filter(func(a: Aircraft) -> bool: return a is Helicopter)
+	check(planes.size() == 2 and helis.size() == 2, "the airport has two planes and two helicopters")
+	var heli := helis[0] as Helicopter
+	var allies: Array[Canuck] = []
+	for i in 2:
+		var ally := Canuck.new()
+		ally.setup(false)
+		ally.position = heli.global_position + Vector3(4.0 + i, 0.2, 3.0)
+		level.add_child(ally)
+		ally.join()
+		allies.append(ally)
+	await seconds(0.3)
+	player.global_position = heli.global_position + Vector3(3.0, 0.2, 0.0)
+	await seconds(0.05)
+	check(heli.in_reach(player), "[E] reaches the helicopter")
+	heli.board(player)
+	check(player.aircraft == heli and heli.passengers.size() == 2, "you and two allies climb aboard (%d)" % heli.passengers.size())
+	# Fly it to a datacenter roof (teleported for the test) and land.
+	var site_node := level.get_node("ScgrewgleSite") as DatacenterSite
+	heli.global_position = site_node.datacenter.to_global(Vector3(0.0, site_node.datacenter.height + 0.6, 0.0))
+	await seconds(1.0)
+	check(heli.roof_site() == site_node, "landed on %s's roof" % site_node.display_name)
+	heli.leave(heli.global_position + Vector3(3.0, 0.5, 0.0))
+	await seconds(0.3)
+	check(player.aircraft == null and player.visible, "you climb out on the roof")
+	var near := allies.filter(func(a: Canuck) -> bool:
+		for node in site_node.datacenter.find_children("*", "Destructible", true, false):
+			if node.is_in_group(&"cooling_units") and a.global_position.distance_to((node as Node3D).global_position) < 8.0:
+				return true
+		return false).size()
+	check(near == 2 and allies.all(func(a: Canuck) -> bool: return a.order_point != Vector3.INF),
+		"the allies rappel down to the cooling units with orders to wreck them (%d)" % near)
+	for ally in allies:
+		ally.queue_free()
+
+	# The plane: take off (placed airborne for the test), aim it at ForProfitSI, bail.
+	var plane := planes[0] as Airplane
+	player.global_position = plane.global_position + Vector3(4.0, 0.2, 0.0)
+	await seconds(0.05)
+	plane.board(player)
+	var target := level.get_node("ForProfitSite") as DatacenterSite
+	# Off the center line: the front and back doorways line up down the aisle.
+	var aim := target.datacenter.to_global(Vector3(9.0, 4.0, 0.0))
+	var start := aim + Vector3(0.0, 30.0, 140.0)
+	plane.global_position = start
+	plane.look_at(aim, Vector3.UP)
+	plane.global_rotation = Vector3(0.0, plane.global_rotation.y, 0.0)
+	plane.speed = 40.0
+	# Let it register being airborne after the teleport, then set the dive.
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	plane.global_position = start
+	plane.pitch = -atan2(26.0, 140.0)
+	var damage := func() -> float:
+		var total := 0.0
+		for piece in target.datacenter.find_children("*", "Destructible", true, false):
+			var part := piece as Destructible
+			total += part.max_health if part.is_destroyed else part.max_health - maxf(part.health, 0.0)
+		return total
+	var before: float = damage.call()
+	plane.call("_on_exit_pressed")
+	check(player.aircraft == null and player.parachuting, "bailing out pops a parachute")
+	await seconds(0.5)
+	check(player.parachuting and not player.is_on_floor() and player.velocity.y >= -3.6,
+		"the canopy stays open on the way down (%.1f m/s)" % player.velocity.y)
+	for i in 80:
+		if plane.is_wrecked:
+			break
+		await seconds(0.1)
+	check(plane.is_wrecked, "the empty plane flew on and crashed")
+	await seconds(0.5)
+	check(damage.call() > before + 300.0, "into the datacenter: big damage (%d)" % roundi(damage.call() - before))
+	for i in 60:
+		if not player.parachuting:
+			break
+		await seconds(0.25)
+	check(not player.parachuting, "the pilot lands safely")
+
+
+## [H] orders: send an ally to a cooling unit and they wreck it; everyone
+## follows again on [3].
+func _test_orders() -> void:
+	var orders := level.get_node("AllyOrders") as AllyOrders
+	var allies: Array[Canuck] = []
+	for i in 2:
+		var ally := Canuck.new()
+		ally.setup(false)
+		ally.position = player.global_position + Vector3(2.0 + i, 0.2, 0.0)
+		level.add_child(ally)
+		ally.join()
+		allies.append(ally)
+	await seconds(0.3)
+	check(orders.squad().size() == 2, "the orders menu counts your allies (%d)" % orders.squad().size())
+	var unit: Destructible = null
+	for node in get_tree().get_nodes_in_group("cooling_units"):
+		if (node as Destructible).site_id == &"forprofit":
+			unit = node
+			break
+	player.global_position = unit.global_position + Vector3(0.0, 0.2, 30.0)
+	for ally in allies:
+		ally.global_position = player.global_position + Vector3(1.0, 0.0, 0.0)
+	var before := unit.health
+	check(orders.issue(0, unit.global_position) == 1, "[1] sends one ally")
+	check(allies.filter(func(a: Canuck) -> bool: return a.order_point != Vector3.INF).size() == 1, "only one ally left to do it")
+	for i in 120:
+		if unit.health < before:
+			break
+		await seconds(0.25)
+	check(unit.health < before or unit.is_destroyed, "the ally went and hit the cooling unit (%d -> %d)" % [roundi(before), roundi(unit.health)])
+	orders.issue(2, Vector3.ZERO)
+	check(allies.all(func(a: Canuck) -> bool: return a.order_point == Vector3.INF), "[3] everyone follows again")
+	for ally in allies:
+		ally.queue_free()
+	await seconds(0.2)
+
+
 ## A Failurecab roams its street; hacked, it drives itself into the nearest
 ## datacenter and blows up against it. Smashed Grock cameras slow the police.
 func _test_failurecab() -> void:
 	var cabs := get_tree().get_nodes_in_group("failurecabs")
 	check(cabs.size() == 3, "Failurecabs roam the cross streets (%d)" % cabs.size())
+	# Any of them rolling (one may be easing past a parked car).
+	var starts := cabs.map(func(c: Node) -> Vector3: return (c as Node3D).global_position)
+	var moved := func() -> bool:
+		for k in cabs.size():
+			if (cabs[k] as Node3D).global_position.distance_to(starts[k]) > 4.0:
+				return true
+		return false
+	for i in 20:
+		await seconds(0.5)
+		if moved.call():
+			break
+	check(moved.call(), "Failurecabs drive their loops")
 	var cab := level.get_node("Failurecab1") as Failurecab
-	var start := cab.global_position
-	await seconds(2.0)
-	check(cab.global_position.distance_to(start) > 4.0 and cab.is_alive(), "a Failurecab drives its loop")
+	check(cab.is_alive(), "and nobody wrecks them")
 	check(not cab.is_in_group("hostiles") and not cab.is_in_group("allies"), "roaming cabs are neutral traffic")
 	var damage := func() -> float:
 		var total := 0.0
@@ -53,6 +187,11 @@ func _test_failurecab() -> void:
 				total += (piece as Destructible).max_health - maxf((piece as Destructible).health, 0.0) if not (piece as Destructible).is_destroyed else (piece as Destructible).max_health
 		return total
 	var before: float = damage.call()
+	# Hack it at the west end of the street, so it goes for Scgrewgle (the
+	# later tests need Felsa standing).
+	cab.global_position = Vector3(-100.0, 0.2, 29.5)
+	cab.global_rotation.y = PI * 0.5
+	await seconds(0.1)
 	player.global_position = cab.global_position + Vector3(0.0, 0.2, 3.0)
 	await seconds(0.05)
 	check(cab.in_reach(player) and player.nearest_interactable() is Failurecab, "[E] reaches the Failurecab")

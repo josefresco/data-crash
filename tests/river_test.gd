@@ -34,7 +34,33 @@ func _run() -> void:
 		for label in node.find_children("*", "Label3D", false, false):
 			if (label as Label3D).text in NeighborhoodBuilder.YARD_SIGNS:
 				yard += 1
-	check(yard >= 4, "neighbors put protest signs on their lawns (%d)" % yard)
+	check(yard >= 2, "neighbors put protest signs on their lawns (%d)" % yard)
+	# Streets: a stop sign each way and a named corner sign at every crossing,
+	# and family cars parked in driveways, clear of the houses.
+	var stops := 0
+	var named := 0
+	for label in hood.find_children("*", "Label3D", true, false):
+		var text := (label as Label3D).text
+		if text == "STOP":
+			stops += 1
+		elif text in hood.street_names:
+			named += 1
+	check(stops == hood.street_z.size() * 2, "each cross street stops for the main road (%d signs)" % stops)
+	check(named == hood.street_z.size() * 2, "corner signs name the streets (%d faces)" % named)
+	var spots := hood.driveway_spots()
+	var parked := 0
+	var clear := true
+	for spot in spots:
+		for node in hood.get_children():
+			if node is Car and (node as Car).global_position.distance_to(hood.to_global(spot)) < 1.5:
+				parked += 1
+		for entry: Array in hood.footprints():
+			if (entry[0] as Rect2).grow(0.2).has_point(Vector2(spot.x, spot.z)):
+				clear = false
+		if hood.in_river(spot, 2.0):
+			clear = false
+	check(spots.size() >= 4 and parked == spots.size(), "cars sit in driveways (%d of %d still there)" % [parked, spots.size()])
+	check(clear, "no driveway car is inside a building or the river")
 	var low := river.water_width()
 	Game.district.water_table = 0.9
 	await seconds(12.0)

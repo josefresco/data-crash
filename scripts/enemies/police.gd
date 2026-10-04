@@ -57,6 +57,12 @@ func _physics_process(delta: float) -> void:
 	super(delta)
 
 
+func _distracted_line(by: Node3D) -> String:
+	if by is KidRider:
+		return ["Hey kid! Get off the road!", "Slow down, you little...!", "Is that a wheelie? Stop that!"].pick_random()
+	return ["Ma'am, please step back.", "Ma'am, I'm just doing my job.", "Okay, okay, I hear you, ma'am.", "Ma'am, that sign is very... large."].pick_random()
+
+
 func _think() -> void:
 	super()
 	_hold_the_line()

@@ -60,6 +60,15 @@ var sham: ShamCrapman
 ## The boss's office on a mezzanine inside the datacenter.
 var suite: ExecutiveSuite
 var is_neutralized := false
+## Datacenter power, 1..MIN_POWER. Every Government Cheese delivery wrecked
+## drains CHEESE_DRAIN: cooling units and turbines lose health and armor
+## (damage_threshold), the robot guards slow down, and the lights dim.
+var power := 1.0
+const MIN_POWER := 0.25
+const CHEESE_DRAIN := 0.25
+## Seconds before a wrecked delivery truck is replaced.
+const TRUCK_RESPAWN := 45.0
+signal power_changed(site: DatacenterSite, power: float)
 var boss_defeated := false
 var is_cleared := false
 ## This site's sprinklers, controller, and fountain (see _build_grounds).
@@ -339,6 +348,11 @@ func _post_security() -> void:
 		dog.position = Vector3(2.5 * side[1], 0.1, side[1] * (half.y - 6.5))
 		add_child(dog)
 		dog.territory_center = global_position
+	var robot := RoboGuard.new()
+	robot.name = "RoboGuard"
+	robot.site = site_id
+	robot.position = Vector3(-12.0, 0.1, half.y - 12.0)
+	add_child(robot)
 	var patrol := SecurityGuard.new()
 	patrol.name = "PatrolGuard"
 	patrol.site = site_id
@@ -636,6 +650,40 @@ func _spawn_worker() -> void:
 	worker.position = building_offset + Vector3(-4.0, 0.1, 6.0)
 	worker.escape_point = at(Vector3(0.0, 0.0, compound.y * 0.5 + 14.0))
 	add_child(worker)
+
+
+## A Government Cheese delivery was wrecked: less power for the servers.
+func drain_power(amount := CHEESE_DRAIN) -> void:
+	if is_cleared:
+		return
+	var before := power
+	power = maxf(power - amount, MIN_POWER)
+	if is_equal_approx(before, power):
+		return
+	for node in find_children("*", "Destructible", true, false):
+		var part := node as Destructible
+		if part.is_in_group(&"cooling_units") or part is GasTurbine:
+			# Crapya's shield (1e9, base already in the meta) stays until her
+			# room goes; the room then restores base x power.
+			var shielded := part.damage_threshold >= 1000.0
+			if not part.has_meta(&"base_threshold"):
+				part.set_meta(&"base_threshold", part.damage_threshold)
+			var base: float = part.get_meta(&"base_threshold")
+			if not shielded:
+				part.damage_threshold = base * power
+			part.health = minf(part.health, part.max_health * power)
+	for node in find_children("*", "Light3D", true, false):
+		(node as Light3D).light_energy *= power / before
+	Game.notify("%s is running on fumes: power %d%%. Its cooling units and turbines are weaker." % [display_name, roundi(power * 100.0)], 5.0)
+	power_changed.emit(self, power)
+
+
+## After a wreck, another truck takes up the route (while the site stands).
+func replace_truck() -> void:
+	await get_tree().create_timer(TRUCK_RESPAWN, false).timeout
+	if not is_instance_valid(self) or is_cleared or datacenter == null or datacenter.cooling_remaining <= 0:
+		return
+	_spawn_truck()
 
 
 func _spawn_truck() -> void:

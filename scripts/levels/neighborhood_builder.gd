@@ -19,6 +19,9 @@ extends Node3D
 ## Empty lots (no house within `reserved_radius`): Harry's boardroom site.
 @export var reserved_lots: Array[Vector3] = [Vector3(18.0, 0.0, 97.0)]
 @export var reserved_radius := 13.0
+## Empty lots zoned for affordable housing (the level puts a HousingSite on
+## each; no house or SOLD sign here).
+@export var housing_lots: Array[Vector3] = [Vector3(-62.0, 0.0, 124.0), Vector3(-46.0, 0.0, 124.0)]
 ## The street (index) whose north side is the park and the construction site
 ## instead of houses (-1: houses on both sides of every street).
 @export var park_street := 1
@@ -26,12 +29,18 @@ extends Node3D
 ## from the park street).
 @export var park_x := Vector2(-64.0, -10.0)
 @export var construction_site := Vector3(34.0, 0.0, -12.0)
-## Cars parked along the curbs: (x, z, yaw).
-@export var parked_cars: Array[Vector3] = [Vector3(-38, 27.3, PI * 0.5), Vector3(-22, 27.3, PI * 0.5),
-	Vector3(22, 27.3, PI * 0.5), Vector3(54, 27.3, PI * 0.5), Vector3(-46, 112.7, -PI * 0.5),
-	Vector3(-14, 112.7, -PI * 0.5), Vector3(38, 112.7, -PI * 0.5)]
+## Cars parked along the curbs: (x, z, yaw). Keep them off the driveway
+## mouths (6 m to one side of each house's center).
+@export var parked_cars: Array[Vector3] = [Vector3(-34, 27.3, PI * 0.5), Vector3(-22, 27.3, PI * 0.5),
+	Vector3(22, 27.3, PI * 0.5), Vector3(46, 27.3, PI * 0.5), Vector3(-46, 112.7, -PI * 0.5),
+	Vector3(-14, 112.7, -PI * 0.5), Vector3(32, 112.7, -PI * 0.5)]
 ## Streets (by index) lined with street trees.
 @export var tree_streets: Array[int] = [0, 2]
+## Names on the corner signs: one per cross street, and the main road's.
+@export var street_names: Array[String] = ["FIRST ST", "SECOND ST", "THIRD ST"]
+@export var main_street_name := "MAIN ST"
+## Share of the driveways long enough for a car that have one parked in them.
+@export_range(0.0, 1.0) var driveway_car_share := 0.4
 @export_group("River")
 ## A river along X at `river_z` (bed, reedy banks, a water surface that
 ## follows the water table, and bridges where the main road crosses). Lots,
@@ -50,7 +59,7 @@ extends Node3D
 @export var store_lots: Array = [
 	[Vector3(-14.0, 0.0, 16.0), "hardware", "DUECE HARDWARE", Color(0.9, 0.2, 0.15)],
 	[Vector3(14.0, 0.0, 16.0), "h", "MABEL'S DINER", Color(0.2, 0.65, 0.95)],
-	[Vector3(-30.0, 0.0, 16.0), "d", "POLICE", Color(0.25, 0.4, 1.0)],
+	[Vector3(-30.0, 0.0, 16.0), "police", "POLICE", Color(0.25, 0.4, 1.0)],
 	[Vector3(30.0, 0.0, 16.0), "c", "CORNER PHARMACY", Color(0.3, 0.85, 0.45)],
 	[Vector3(-14.0, 0.0, 44.0), "a", "SUDS LAUNDROMAT", Color(0.5, 0.8, 1.0)],
 	[Vector3(14.0, 0.0, 44.0), "d", "SLICE OF LIFE PIZZA", Color(1.0, 0.6, 0.15)],
@@ -59,6 +68,7 @@ extends Node3D
 	[Vector3(46.0, 0.0, 44.0), "hospital", "ST. MERCY HOSPITAL", Color(0.95, 0.25, 0.2)],
 	[Vector3(-62.0, 0.0, 44.0), "library", "PUBLIC LIBRARY", Color(0.55, 0.75, 0.95)],
 	[Vector3(62.0, 0.0, 44.0), "soupkitchen", "COMMUNITY SOUP KITCHEN", Color(0.5, 0.85, 0.45)],
+	[Vector3(62.0, 0.0, 16.0), "firestation", "FIRE STATION 7", Color(0.95, 0.2, 0.15)],
 ]
 ## Kenney commercial kit: about 1 unit per floor width.
 const STORE_SCALE := 9.0
@@ -84,6 +94,14 @@ const PARKED_CARS: Array[String] = ["sedan", "suv", "hatchback-sports", "taxi", 
 ## Kenney Car Kit is about 1/1.45 real size.
 const CAR_SCALE := 1.45
 const CAR_SCENE := preload("res://scenes/vehicles/car.tscn")
+## Driveways: the center's offset along the house front, and the slab's width.
+const DRIVEWAY_OFFSET := 6.0
+const DRIVEWAY_WIDTH := 2.8
+## Curbs are visual only (no collider: cars and people cross them freely).
+const CURB_WIDTH := 0.18
+const CURB_HEIGHT := 0.12
+## Center lines stop this far from an intersection's middle.
+const CROSSING_CLEAR := 8.0
 
 const CAR_COLORS: Array[Color] = [
 	Color(0.7, 0.15, 0.15), Color(0.2, 0.3, 0.6), Color(0.85, 0.85, 0.8), Color(0.2, 0.2, 0.22),
@@ -103,6 +121,13 @@ var _river: River
 ## Dressing picks (yard signs, river litter) draw from their own stream so
 ## adding them never shifts the houses, trees, and cars `_rng` lays out.
 var _decor_rng := RandomNumberGenerator.new()
+## Driveway picks (which have a car, which way it faces): a third stream, for
+## the same reason.
+var _lot_rng := RandomNumberGenerator.new()
+## Where each driveway meets the street (this node's space): the curb drops there.
+var _curb_cuts: Array[Vector3] = []
+## [position, yaw] of the cars parked in driveways.
+var _driveway_cars: Array = []
 const YARD_SIGNS := ["NO DATACENTERS\nIN OUR BACKYARD", "SAVE OUR\nWATER", "HONK FOR\nCLEAN AIR",
 	"THIS FAMILY\nSUPPORTS TAPS", "UNPLUG\nTHE FARM"]
 
@@ -128,6 +153,14 @@ func home_spot(near: Vector3) -> Array:
 ## [door position, outward direction] for every house (not stores).
 func house_doors() -> Array:
 	return _house_doors
+
+
+## Where a car is parked in a driveway (this node's space).
+func driveway_spots() -> Array[Vector3]:
+	var spots: Array[Vector3] = []
+	for entry: Array in _driveway_cars:
+		spots.append(entry[0])
+	return spots
 
 
 ## Building footprints for the minimap: [Rect2 (x, z), is_store] pairs.
@@ -174,28 +207,52 @@ func build() -> void:
 	_store_doors.clear()
 	_walk_ins.clear()
 	_footprints.clear()
+	_curb_cuts.clear()
+	_driveway_cars.clear()
 	_rng.seed = layout_seed
 	_decor_rng.seed = layout_seed * 31 + 5
+	_lot_rng.seed = layout_seed * 53 + 11
 
 	var asphalt := Models.mat(Color(0.75, 0.75, 0.75), &"asphalt")
 	var sidewalk := Models.mat(Color(0.92, 0.92, 0.9), &"concrete")
 	var line := Models.mat(Color(0.85, 0.75, 0.3))
+	var half_road := road_width * 0.5
 
-	# Main road (north-south, x = 0) from just south of the fence.
+	# Main road (north-south, x = 0) from just south of the fence. Sidewalks
+	# and curbs stop at the cross streets instead of running over them.
 	var main_len := main_road_end_z + 10.0
 	Models.box(self, Vector3(road_width, 0.04, main_len), Vector3(0.0, 0.02, main_road_end_z - main_len * 0.5), asphalt)
+	var street_cuts: Array[Vector2] = []
+	var corner_cuts: Array[Vector2] = []
+	for z: float in street_z:
+		street_cuts.append(Vector2(z, half_road))
+		corner_cuts.append(Vector2(z, half_road + 2.0))
 	for side in [-1.0, 1.0]:
-		Models.box(self, Vector3(2.0, 0.06, main_len), Vector3(side * (road_width * 0.5 + 1.0), 0.03, main_road_end_z - main_len * 0.5), sidewalk)
+		for span in _spans(-10.0, main_road_end_z, street_cuts):
+			Models.box(self, Vector3(2.0, 0.06, span.y - span.x), Vector3(side * (half_road + 1.0), 0.03, (span.x + span.y) * 0.5), sidewalk)
+		for span in _spans(-10.0, main_road_end_z, corner_cuts):
+			Models.box(self, Vector3(CURB_WIDTH, CURB_HEIGHT, span.y - span.x),
+				Vector3(side * (half_road + CURB_WIDTH * 0.5), CURB_HEIGHT * 0.5, (span.x + span.y) * 0.5), _curb_material())
 	for z in range(-6, int(main_road_end_z), 6):
+		if street_z.any(func(street: float) -> bool: return absf(z - street) < CROSSING_CLEAR):
+			continue  # no center line through the intersections
 		Models.box(self, Vector3(0.15, 0.05, 3.0), Vector3(0.0, 0.035, z), line)
 
 	for side in [-1.0, 1.0]:
 		var reach := access_road_x - street_half_length
 		Models.box(self, Vector3(reach, 0.04, road_width), Vector3(side * (street_half_length + reach * 0.5), 0.021, street_z[0]), asphalt)
-	for z: float in street_z:
+	for i in street_z.size():
+		var z: float = street_z[i]
 		Models.box(self, Vector3(street_half_length * 2.0, 0.04, road_width), Vector3(0.0, 0.021, z), asphalt)
 		for side in [-1.0, 1.0]:
-			Models.box(self, Vector3(street_half_length * 2.0, 0.06, 2.0), Vector3(0.0, 0.03, z + side * (road_width * 0.5 + 1.0)), sidewalk)
+			for span in _spans(-street_half_length, street_half_length, [Vector2(0.0, half_road + 2.0)]):
+				Models.box(self, Vector3(span.y - span.x, 0.06, 2.0), Vector3((span.x + span.y) * 0.5, 0.03, z + side * (half_road + 1.0)), sidewalk)
+		# Center line (the first street's runs on out to the side gates).
+		var reach := access_road_x if i == 0 else street_half_length
+		for x in range(-int(reach) + 4, int(reach) - 3, 6):
+			if absf(x) >= CROSSING_CLEAR:
+				Models.box(self, Vector3(3.0, 0.05, 0.15), Vector3(x, 0.036, z), line)
+		_build_intersection(i)
 
 	# Houses: both sides of every street except the second, whose north side is
 	# the park and the construction site. Reserved lots stay empty.
@@ -210,6 +267,8 @@ func build() -> void:
 					var at := Vector3(column * mirror, 0.0, z + side * house_setback)
 					if reserved_lots.any(func(lot: Vector3) -> bool: return lot.distance_to(at) < reserved_radius):
 						continue
+					if housing_lots.any(func(lot: Vector3) -> bool: return lot.distance_to(at) < 2.0):
+						continue
 					if in_river(at, 8.0):
 						continue
 					var store := _store_at(at)
@@ -219,6 +278,17 @@ func build() -> void:
 						_add_store(at, side, store)
 	for lot in reserved_lots:
 		_add_for_sale_sign(lot + Vector3(0.0, 0.0, 8.0))
+
+	# Curbs along the cross streets, dropped at the corners and every driveway.
+	for z: float in street_z:
+		for side: float in [-1.0, 1.0]:
+			var cuts: Array[Vector2] = [Vector2(0.0, half_road + 2.0)]
+			for mouth in _curb_cuts:
+				if absf(mouth.z - (z + side * house_setback)) < 1.0:
+					cuts.append(Vector2(mouth.x, DRIVEWAY_WIDTH * 0.5 + 0.2))
+			for span in _spans(-street_half_length, street_half_length, cuts):
+				Models.box(self, Vector3(span.y - span.x, CURB_HEIGHT, CURB_WIDTH),
+					Vector3((span.x + span.y) * 0.5, CURB_HEIGHT * 0.5, z + side * (half_road + CURB_WIDTH * 0.5)), _curb_material())
 
 	# Streetlights along the main road and the first street.
 	for z in range(0, int(main_road_end_z), 16):
@@ -253,8 +323,99 @@ func build() -> void:
 				_add_tree(Vector3(x, 0.0, z), _rng.randf_range(4.5, 6.0))
 	if has_river:
 		_build_river()
+	# Last, so the cars' model picks never shift the layout drawn from `_rng`.
+	for entry: Array in _driveway_cars:
+		_add_parked_car(entry[0], entry[1])
 	if not Engine.is_editor_hint():
 		_batch_details()
+
+
+## The parts of `from`..`to` left after removing `cuts` ([center, half
+## width] each): [start, end] pairs.
+func _spans(from: float, to: float, cuts: Array[Vector2]) -> Array[Vector2]:
+	var sorted := cuts.duplicate()
+	sorted.sort_custom(func(a: Vector2, b: Vector2) -> bool: return a.x < b.x)
+	var spans: Array[Vector2] = []
+	var at := from
+	for cut: Vector2 in sorted:
+		var low := minf(cut.x - cut.y, to)
+		if low - at > 0.3:
+			spans.append(Vector2(at, low))
+		at = maxf(at, cut.x + cut.y)
+	if to - at > 0.3:
+		spans.append(Vector2(at, to))
+	return spans
+
+
+func _curb_material() -> StandardMaterial3D:
+	return Models.mat(Color(0.8, 0.8, 0.78), &"concrete")
+
+
+## Where cross street `index` meets the main road: zebra crossings on all four
+## sides, stop lines and stop signs for the cross street (the main road has
+## the right of way), and a street-name sign on the corner.
+func _build_intersection(index: int) -> void:
+	var z: float = street_z[index]
+	var half_road := road_width * 0.5
+	var paint := Models.mat(Color(0.9, 0.9, 0.88))
+	var bars := int(road_width / 0.9)
+	for side: float in [-1.0, 1.0]:
+		for k in bars:
+			var across := -half_road + 0.45 + k * 0.9
+			# Over the main road (north and south), then over the cross street.
+			Models.box(self, Vector3(0.45, 0.05, 2.0), Vector3(across, 0.037, z + side * (half_road + 1.0)), paint)
+			Models.box(self, Vector3(2.0, 0.05, 0.45), Vector3(side * (half_road + 1.0), 0.037, z + across), paint)
+		# Traffic keeps right: the lane heading for the crossing from +X is the
+		# north one (-Z), and its stop sign stands on the driver's right.
+		Models.box(self, Vector3(0.4, 0.05, half_road - 0.4), Vector3(side * (half_road + 2.8), 0.037, z - side * half_road * 0.5), paint)
+		_add_stop_sign(Vector3(side * (half_road + 3.0), 0.0, z - side * (half_road + 2.3)), side * PI * 0.5)
+	var cross_name := street_names[index] if index < street_names.size() else "%d ST" % (index + 1)
+	_add_street_sign(Vector3(half_road + 2.4, 0.0, z + half_road + 2.4), cross_name)
+
+
+## A stop sign facing local +Z (decorative: no collider, traffic cuts corners).
+func _add_stop_sign(at: Vector3, yaw: float) -> void:
+	var root := Node3D.new()
+	root.position = at
+	root.rotation.y = yaw
+	add_child(root)
+	Models.cylinder(root, 0.04, 2.5, Vector3(0.0, 1.25, 0.0), Models.mat(Color(0.55, 0.56, 0.58), &"metal"), 6)
+	var face := Models.cylinder(root, 0.4, 0.03, Vector3(0.0, 2.2, 0.06), Models.mat(Color(0.8, 0.1, 0.08), &"paint"), 8)
+	# An octagon on edge, flat side up.
+	face.basis = Basis(Vector3.RIGHT, PI * 0.5) * Basis(Vector3.UP, PI / 8.0)
+	var text := Label3D.new()
+	text.text = "STOP"
+	text.font_size = 48
+	text.pixel_size = 0.005
+	text.outline_size = 0
+	text.position = Vector3(0.0, 2.2, 0.08)
+	Models.fit_label(text, Vector2(0.66, 0.3))
+	root.add_child(text)
+
+
+## A corner post with a blade for the cross street and one for the main road.
+func _add_street_sign(at: Vector3, cross_name: String) -> void:
+	var root := Node3D.new()
+	root.position = at
+	add_child(root)
+	Models.cylinder(root, 0.04, 3.1, Vector3(0.0, 1.55, 0.0), Models.mat(Color(0.55, 0.56, 0.58), &"metal"), 6)
+	var blades := [[cross_name, 2.75, 0.0], [main_street_name, 3.0, PI * 0.5]]
+	for entry: Array in blades:
+		var blade := Node3D.new()
+		blade.position = Vector3(0.0, entry[1], 0.0)
+		blade.rotation.y = entry[2]
+		root.add_child(blade)
+		Models.box(blade, Vector3(1.4, 0.24, 0.03), Vector3.ZERO, Models.mat(Color(0.1, 0.4, 0.22), &"paint"))
+		for face: float in [1.0, -1.0]:
+			var text := Label3D.new()
+			text.text = entry[0]
+			text.font_size = 48
+			text.pixel_size = 0.005
+			text.outline_size = 0
+			text.position = Vector3(0.0, 0.0, face * 0.02)
+			text.rotation.y = 0.0 if face > 0.0 else PI
+			Models.fit_label(text, Vector2(1.4, 0.24))
+			blade.add_child(text)
 
 
 ## Draw calls: each house, store, and tree lot (a static body) bakes its
@@ -391,6 +552,23 @@ func _add_house(at: Vector3, facing_side: float) -> void:
 	Models.collider(mailbox, Vector3(0.3, 1.2, 0.5), Vector3(0.0, 0.6, 0.0))
 	if _decor_rng.randf() < 0.35:
 		_add_yard_sign(at + Vector3(-2.6, 0.0, 0.0).rotated(Vector3.UP, body.rotation.y) + front * 1.3, body.rotation.y)
+
+	# A concrete driveway from the house front to the sidewalk, on the side
+	# away from the bins and between the street trees; the corner lots keep
+	# theirs away from the main road. A shallow front yard has room for a car.
+	var drive_x := DRIVEWAY_OFFSET
+	if absf(at.x + drive_x * cos(body.rotation.y)) < 10.0:
+		drive_x = -drive_x
+	var drive_from := front_depth + 0.15
+	var drive_to := house_setback - road_width * 0.5 - 2.0
+	Models.box(body, Vector3(DRIVEWAY_WIDTH, 0.05, drive_to - drive_from),
+		Vector3(drive_x, 0.025, (drive_from + drive_to) * 0.5), Models.mat(Color(0.78, 0.78, 0.76), &"concrete"))
+	_curb_cuts.append(at + Vector3(drive_x, 0.0, 0.0).rotated(Vector3.UP, body.rotation.y))
+	var parks := _lot_rng.randf() < driveway_car_share
+	var nose_in := _lot_rng.randf() < 0.5
+	if parks and drive_to - drive_from >= 3.7:
+		var spot := at + Vector3(drive_x, 0.0, drive_from + 2.05).rotated(Vector3.UP, body.rotation.y)
+		_driveway_cars.append([spot, body.rotation.y + (PI if nose_in else 0.0)])
 
 
 ## A hand-lettered protest sign on a stake in the front lawn.

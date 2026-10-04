@@ -57,6 +57,43 @@ func _init() -> void:
 	outfit = WALKER_OUTFITS.pick_random()
 
 
+## Kids: [E] buys them candy, and they go get their bike (KidRider).
+func in_reach(player: Node3D) -> bool:
+	return role == &"kid" and is_alive() and player.global_position.distance_to(global_position) <= 2.8
+
+
+func offer_text(_player: Player) -> String:
+	return "[E] Buy the kid some candy ($%d): they'll ride their bike around the cops" % CANDY_PRICE
+
+
+func interact(_player: Player) -> void:
+	recruit_kid()
+
+
+## Candy for a kid: they swap to a KidRider on a bike. Returns the rider.
+func recruit_kid() -> KidRider:
+	if role != &"kid" or not is_alive():
+		return null
+	if get_tree().get_nodes_in_group("kids").size() >= MAX_RIDERS:
+		Game.notify("Enough kids are out on bikes already.", 3.0)
+		return null
+	if Game.cash < CANDY_PRICE:
+		Sfx.ui(&"error", -4.0)
+		Game.notify("Candy is $%d." % CANDY_PRICE, 2.5)
+		return null
+	Game.add_cash(-CANDY_PRICE)
+	Game.count("kids")
+	var rider := KidRider.new()
+	rider.position = position
+	get_parent().add_child(rider)
+	rider.speak(["Candy! I'll get my bike!", "Sweet! Watch this wheelie!", "Cops can't catch me!"].pick_random())
+	Game.tip("kids", "Kids on bikes circle the nearest cops near you and keep them busy. Police can't resist yelling at them.")
+	Sfx.ui(&"cash", -6.0)
+	remove_from_group("residents")
+	queue_free()
+	return rider
+
+
 ## Sets the role (before the resident enters the tree): outfit, pace, size.
 func set_role(value: StringName) -> void:
 	role = value
@@ -79,9 +116,16 @@ func set_role(value: StringName) -> void:
 			pass
 
 
+## Kids on bikes at once (KidRider): candy won't recruit more than this.
+const MAX_RIDERS := 4
+const CANDY_PRICE := 5
+
+
 func _ready() -> void:
 	super()
 	_line_left = randf_range(4.0, 20.0)
+	if role == &"kid":
+		add_to_group("interactables")
 	if role == &"dog_walker":
 		_pet = Dog.new()
 		_pet.stray = true

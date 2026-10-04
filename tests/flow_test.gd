@@ -282,7 +282,7 @@ func _test_animation_layers() -> void:
 
 func _test_hud_layout(hud: Hud) -> void:
 	await seconds(0.3)
-	check(hud.checklist_rows("deeds").size() == 12, "good deeds are a checklist on the right (%d rows)" % hud.checklist_rows("deeds").size())
+	check(hud.checklist_rows("deeds").size() == 14, "good deeds are a checklist on the right (%d rows)" % hud.checklist_rows("deeds").size())
 	check(hud.checklist_rows("sites").size() == 3, "datacenter status is a checklist (%d rows)" % hud.checklist_rows("sites").size())
 	# Speech: only the nearest few talk, and neighbors' bubbles stack.
 	var crowd: Array[Resident] = []

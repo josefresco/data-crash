@@ -25,6 +25,11 @@ var _strike: Variant = null  # the cooling unit (or hostile) it's going for
 var _sign: Label3D
 var _detonated := false
 var _site: DatacenterSite = null
+## Mission watchdog: seconds on the mission, and seconds without progress.
+var _mission_time := 0.0
+var _still_time := 0.0
+var _last_spot := Vector3.INF
+const MISSION_LIMIT := 45.0
 
 
 func _init() -> void:
@@ -132,6 +137,26 @@ func _plan_mission() -> void:
 		_mission.append(site_node.to_global(Vector3(unit_local.x, 0.2, site_node.compound.y * 0.5 - 4.0)))
 		Game.notify("Failurecab hacked! It's driving itself into %s. Stand clear." % site_node.display_name, 5.0)
 	Game.tip("failurecab", "Hacked Failurecabs drive to the nearest datacenter and blow up against a cooling unit. Hack more for a bigger bang.")
+
+
+func _physics_process(delta: float) -> void:
+	super(delta)
+	if not is_hacked or _detonated or _is_dead:
+		return
+	# Wedged somewhere (a gate post, a wreck, a corner): skip ahead, or blow
+	# up right there if it's close to the target or has been at it too long.
+	_mission_time += delta
+	if _last_spot == Vector3.INF or global_position.distance_to(_last_spot) > 2.0:
+		_last_spot = global_position
+		_still_time = 0.0
+	else:
+		_still_time += delta
+	var near_target := _strike != null and is_instance_valid(_strike) and (_strike as Node3D).global_position.distance_to(global_position) < 25.0
+	if _mission_time > MISSION_LIMIT or (_still_time > 3.0 and near_target):
+		_detonate()
+	elif _still_time > 3.0 and not _mission.is_empty():
+		_mission.remove_at(0)
+		_still_time = 0.0
 
 
 func _goal_point() -> Vector3:

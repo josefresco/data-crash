@@ -49,6 +49,10 @@ enum Phase { ACTIVISM, ASSAULT, BOSS, BUILD, WAVE, WON, LOST }
 	Vector3(1.8, 0, 40), Vector3(-2.0, 0, 62), Vector3(1.6, 0, 132), Vector3(-30, 0, 31.6),
 	Vector3(22, 0, 28.6), Vector3(-52, 0, 71.2), Vector3(40, 0, 68.8), Vector3(-14, 0, 111.3),
 ]
+## The regional airport south of town (planes and helicopters), or INF for none.
+@export var airport_origin := Vector3(0.0, 0.0, 158.0)
+## Where the playground goes up (in the park; the deed earns Moms).
+@export var playground_spot := Vector3(-54.0, 0.0, 57.0)
 ## Purchases at local shops per Regular who joins, and most Regulars at once.
 @export var goodwill_per_regular := 3
 @export var regular_cap := 4
@@ -143,8 +147,10 @@ var _breach_side := ""
 var _breach_flare: Node3D
 var _boss_bar_shown := false
 var _deeds := {"water": false, "van": false, "dogs": false, "scout": false, "ladies": false, "paint": false, "litter": false,
-	"potholes": false, "books": false, "soup": false}
-const DEED_ORDER := ["water", "van", "dogs", "scout", "ladies", "paint", "litter", "potholes", "books", "soup"]
+	"potholes": false, "books": false, "soup": false, "housing": false, "playground": false}
+const DEED_ORDER := ["water", "van", "dogs", "scout", "ladies", "paint", "litter", "potholes", "books", "soup", "housing", "playground"]
+var _houses_total := 0
+var _houses_built := 0
 var _potholes_total := 0
 var _potholes_filled := 0
 ## Purchases at local shops since the last Regular joined.
@@ -281,6 +287,10 @@ func _ready() -> void:
 		_deeds.erase("books")
 	if get_tree().get_nodes_in_group("soup_kitchens").is_empty():
 		_deeds.erase("soup")
+	if _houses_total == 0:
+		_deeds.erase("housing")
+	if get_tree().get_nodes_in_group("playgrounds").is_empty():
+		_deeds.erase("playground")
 	Game.set_objective(intro_objective)
 
 
@@ -504,7 +514,14 @@ func _spawn_heavy_equipment() -> void:
 	var fire := FireTruck.new_from_scene()
 	fire.name = "FireTruck"
 	fire.locked_hint = "cap the burst hydrant and the fire crew lends you their truck"
-	_place_vehicle(fire, fire_truck_spot)
+	var station: Variant = ($Neighborhood as NeighborhoodBuilder).walk_in("firestation")
+	if station != null:
+		# Parked in the engine bay, nose out the door.
+		var bay := ($Neighborhood as NeighborhoodBuilder).global_transform * (station as Transform3D)
+		var inside := bay * Vector3(0.0, 0.8, -0.5)
+		_place_vehicle(fire, Vector4(inside.x, inside.y, inside.z, bay.basis.get_euler().y))
+	else:
+		_place_vehicle(fire, fire_truck_spot)
 	var garbage := CAR_SCENE.instantiate() as Car
 	garbage.name = "GarbageTruck"
 	garbage.model_path = "res://assets/kenney/cars/garbage-truck.glb"
@@ -548,9 +565,10 @@ func _spawn_failurecabs() -> void:
 		var z: float = hood.street_z[index]
 		var cab := Failurecab.new()
 		cab.name = "Failurecab%d" % (index + 1)
-		cab.route = [Vector3(reach, 0.2, z - 2.0), Vector3(reach, 0.2, z + 2.0), Vector3(-reach, 0.2, z + 2.0), Vector3(-reach, 0.2, z - 2.0)]
+		# Lanes hug the center line: cars are parked along the curbs.
+		cab.route = [Vector3(reach, 0.2, z - 0.5), Vector3(reach, 0.2, z + 0.5), Vector3(-reach, 0.2, z + 0.5), Vector3(-reach, 0.2, z - 0.5)]
 		# Mid-block in the westbound lane (clear of the cruiser by the station).
-		cab.position = Vector3(reach * 0.5 - index * 12.0, 0.2, z + 2.0)
+		cab.position = Vector3(reach * 0.5 - index * 12.0, 0.2, z + 0.5)
 		cab.rotation.y = PI * 0.5  # heading -X, toward route[2]
 		cab.set("_leg", 2)
 		add_child(cab)
@@ -858,6 +876,7 @@ func site(id: StringName) -> DatacenterSite:
 func _connect_site(site_node: DatacenterSite) -> void:
 	var building := site_node.datacenter
 	site_node.fence_breached.connect(func(_s: DatacenterSite) -> void: _on_fence_breached(site_node))
+	site_node.power_changed.connect(func(_s: DatacenterSite, _p: float) -> void: _update_sites())
 	building.cooling_unit_destroyed.connect(func(remaining: int) -> void:
 		if remaining > 0:
 			Game.set_objective("%s: cooling unit destroyed. %d left." % [site_node.display_name, remaining])
@@ -932,6 +951,8 @@ func _update_sites() -> void:
 			row = [site_node.display_name + "   boss loose", &"alert"]
 		elif site_node.is_alarmed():
 			row = [site_node.display_name + "   ALARM", &"alert"]
+		if site_node.power < 0.99 and not site_node.is_cleared:
+			row[0] += "  (power %d%%)" % roundi(site_node.power * 100.0)
 		rows.append(row)
 	Game.set_checklist("sites", "DATACENTERS", rows)
 
@@ -1216,6 +1237,34 @@ func _spawn_town_services() -> void:
 				service = kitchen
 		add_child(service)
 		service.global_transform = building
+	# Affordable housing on the zoned lots, and the playground in the park.
+	for lot in hood.housing_lots:
+		var site_node := HousingSite.new()
+		add_child(site_node)
+		site_node.global_position = hood.to_global(lot)
+		var street := hood.street_z[0]
+		for z: float in hood.street_z:
+			if absf(z - lot.z) < absf(street - lot.z):
+				street = z
+		site_node.global_rotation.y = 0.0 if lot.z < street else PI  # +Z toward the street
+		site_node.built.connect(_on_house_built)
+		_houses_total += 1
+	if playground_spot != Vector3.INF:
+		var playground := Playground.new()
+		playground.name = "Playground"
+		playground.position = playground_spot
+		add_child(playground)
+		playground.built.connect(func(_p: Playground) -> void:
+			_complete_deed("playground", 40, 0.06, "The playground is open! Three moms joined the cause: they'll keep the police busy. (+$40)"))
+	var orders := AllyOrders.new()
+	orders.name = "AllyOrders"
+	add_child(orders)
+	if airport_origin != Vector3.INF:
+		var airport := Airport.new()
+		airport.name = "Airport"
+		airport.position = airport_origin
+		airport.town = String(Game.DISTRICTS[district_index][1]) if district_index < Game.DISTRICTS.size() else "MAPLE"
+		add_child(airport)
 	for spot in pothole_spots:
 		var hole := Pothole.new()
 		hole.position = spot
@@ -1236,6 +1285,16 @@ func _spawn_town_services() -> void:
 		shop.global_position = hood.to_global(door + Vector3(2.4, -0.2, 0.0))
 		shop.global_rotation.y = 0.0 if facing >= 0.0 else PI
 		shop.purchased.connect(on_purchase)
+
+
+func _on_house_built(_site: HousingSite) -> void:
+	_houses_built += 1
+	Game.district.trust += 0.03
+	if _houses_built >= _houses_total:
+		_complete_deed("housing", 60, 0.08, "Affordable homes built: two families moved in. (+$60)")
+	else:
+		Game.notify("An affordable home is finished: a family moves in. (%d/%d)" % [_houses_built, _houses_total], 4.0)
+		_update_deeds()
 
 
 func _on_pothole_fixed(_hole: Pothole) -> void:
@@ -1427,6 +1486,8 @@ func _update_deeds() -> void:
 		"potholes": "Fill potholes %d/%d [F]" % [_potholes_filled, _potholes_total],
 		"books": "Library books %d/%d [E]" % [_book_boxes(), _book_boxes_needed()],
 		"soup": "Soup kitchen shift %d/%d" % [_bowls_served(), _bowls_needed()],
+		"housing": "Affordable homes %d/%d [F]" % [_houses_built, _houses_total],
+		"playground": "Build the playground [F]",
 	}
 	var rows := []
 	for key: String in DEED_ORDER:
@@ -1612,7 +1673,30 @@ func _spawn_solar_field() -> void:
 			var array := SolarArray.new()
 			array.position = Vector3(center.x + dx, 0.0, center.z + dz)
 			add_child(array)
+	_spawn_carports()
 	get_tree().call_group(&"nav_baker", &"request_rebake")
+
+
+## Solar canopies over the green datacenter's parking: both rows of the
+## visitor lot and the employee lot. (Site-local spots from DatacenterSite;
+## after a Continue the site is gone, so the lot is rebuilt around the core.)
+func _spawn_carports() -> void:
+	var frame := Transform3D(Basis.IDENTITY, _defense_lot() + Vector3(0.0, 0.0, 2.0))
+	var half := Vector2(34.0, 30.0)
+	if _defense_site and is_instance_valid(_defense_site):
+		frame = _defense_site.global_transform
+		half = _defense_site.compound * 0.5
+	var spots := [
+		[Vector3(half.x + 12.0 - 6.4, 0.0, 4.0), 30.0, 5.5, PI * 0.5],
+		[Vector3(half.x + 12.0 + 6.4, 0.0, 4.0), 30.0, 5.5, PI * 0.5],
+		[Vector3(22.0 - 1.5, 0.0, half.y - 15.5), 15.0, 6.0, 0.0],
+	]
+	for spot: Array in spots:
+		var carport := SolarCarport.new()
+		carport.length = spot[1]
+		carport.depth = spot[2]
+		add_child(carport)
+		carport.global_transform = frame * Transform3D(Basis(Vector3.UP, spot[3]), spot[0])
 
 
 func _spawn_townspeople(count: int) -> void:

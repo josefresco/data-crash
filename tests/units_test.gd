@@ -27,6 +27,47 @@ func _run() -> void:
 	await _test_guard_flank()
 	await _test_shield_wall()
 	await _test_canadian_post()
+	await _test_robot()
+	await _test_carports()
+
+
+## The T-800: plating halves bullets, water shorts it out, the first kill
+## leaves it crawling, the second finishes it; a blast scraps it outright.
+func _test_robot() -> void:
+	var robot := RoboGuard.new()
+	robot.position = Vector3(-84.0, 0.1, 40.0)
+	level.add_child(robot)
+	robot.set_physics_process(false)
+	await seconds(0.2)
+	var hp := robot.health
+	robot.apply_damage(20.0, player.global_position, &"bullet")
+	check(is_equal_approx(hp - robot.health, 10.0), "bullets glance off its plating (%d)" % roundi(hp - robot.health))
+	hp = robot.health
+	robot.apply_damage(10.0, player.global_position, &"water")
+	check(is_equal_approx(hp - robot.health, 30.0), "water shorts it out (x3)")
+	# Just enough after the x3 (a bigger hit would count as overkill).
+	robot.apply_damage(robot.health / 3.0 + 1.0, player.global_position, &"water")
+	await seconds(0.1)
+	check(robot.is_alive() and robot.crawling, "the first kill leaves it crawling")
+	robot.apply_damage(robot.health + 50.0, player.global_position, &"explosive")
+	await seconds(0.1)
+	check(not robot.is_alive(), "the second kill finishes it")
+	var scrap := RoboGuard.new()
+	scrap.position = Vector3(-84.0, 0.1, 44.0)
+	level.add_child(scrap)
+	await seconds(0.1)
+	scrap.apply_damage(9999.0, Vector3.ZERO, &"explosive")
+	await seconds(0.1)
+	check(not scrap.is_alive(), "a big blast scraps it on the spot")
+
+
+## The green datacenter's parking gets solar canopies that pay out.
+func _test_carports() -> void:
+	var carports := get_tree().get_nodes_in_group("solar_carports")
+	check(carports.size() == 3, "solar canopies cover the parking lots (%d)" % carports.size())
+	var cash := Game.cash
+	await seconds(4.5)
+	check(Game.cash > cash, "they pay while the core stands")
 
 
 func _enter_defense_phase() -> void:

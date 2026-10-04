@@ -15,6 +15,7 @@ static var unit_types := {
 	"frost": Frost,
 	"orange_hat": OrangeHat,
 	"felsa": FelsaCar,
+	"robot": RoboGuard,
 	"sham": ShamCrapman,
 	"fark": FarkPod,
 	"harry": HarryPerckerson,
@@ -36,9 +37,9 @@ const STUCK_CHECK := 2.0
 @export var waves: Array[Dictionary] = [
 	{"guard": 4, "dog": 3},
 	{"guard": 6, "dog": 3, "orange_hat": 2},
-	{"guard": 9, "police": 5, "frost": 2, "orange_hat": 3, "felsa": 3},
-	{"guard": 13, "police": 7, "dog": 5, "frost": 3, "orange_hat": 4, "felsa": 3, "fark": 1},
-	{"guard": 14, "police": 9, "dog": 7, "frost": 4, "orange_hat": 5, "felsa": 4, "harry": 1},
+	{"guard": 9, "police": 5, "frost": 2, "orange_hat": 3, "felsa": 3, "robot": 1},
+	{"guard": 13, "police": 7, "dog": 5, "frost": 3, "orange_hat": 4, "felsa": 3, "robot": 2, "fark": 1},
+	{"guard": 14, "police": 9, "dog": 7, "frost": 4, "orange_hat": 5, "felsa": 4, "robot": 2, "harry": 1},
 ]
 
 var objective: Node3D
@@ -161,7 +162,7 @@ func describe_wave(number: int) -> String:
 		return ""
 	var parts: PackedStringArray = []
 	var names := {"guard": "guards", "dog": "dogs", "police": "riot police", "frost": "FROST", "orange_hat": "protesters",
-		"felsa": "Cyberdouches", "fark": "Fark's pod", "harry": "Harry Perckerson"}
+		"felsa": "Cyberdouches", "robot": "T-800 robots", "fark": "Fark's pod", "harry": "Harry Perckerson"}
 	for key: String in waves[number - 1]:
 		parts.append("%d %s" % [int(waves[number - 1][key]), names.get(key, key)])
 	return ", ".join(parts)

@@ -141,6 +141,11 @@ func _goal_point() -> Vector3:
 
 func _on_death() -> void:
 	super()
+	var home := get_parent() as DatacenterSite
+	if home:
+		if cargo == Cargo.CHEESE:
+			home.drain_power()
+		home.replace_truck()
 	if cargo == Cargo.MONEY:
 		Game.add_cash(150)
 		Game.notify("Money truck cracked open: the profits rain on the block. (+$150)")

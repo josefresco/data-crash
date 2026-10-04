@@ -72,8 +72,12 @@ func _test_crapya() -> void:
 	var felsa_unit := (level.get_node("FelsaSite") as DatacenterSite).datacenter.get_children().filter(
 		func(n: Node) -> bool: return n.is_in_group("cooling_units"))[0] as Destructible
 	check(felsa_unit.damage_threshold < 1.0e6, "but not Felsa's")
+	# A wrecked cheese truck weakens the units but must not lift her shield.
+	scgrewgle.drain_power()
+	check(scgrewgle.power < 1.0 and unit.damage_threshold > 1.0e6, "a power drain leaves the shield up (power %d%%)" % roundi(scgrewgle.power * 100.0))
+	var unit_hp := unit.health
 	unit.apply_damage(500.0, unit.global_position, &"explosive")
-	check(is_equal_approx(unit.health, unit.max_health), "shielded cooling unit ignores C4-level damage")
+	check(is_equal_approx(unit.health, unit_hp), "shielded cooling unit ignores C4-level damage")
 
 	# Roof water cannons soak the yard once the alarm is up.
 	level.call("raise_alarm", &"scgrewgle", "test")
@@ -110,8 +114,8 @@ func _test_crapya() -> void:
 	var cash := Game.cash
 	room.apply_damage(9999.0, room.global_position + Vector3(0, 1, 5), &"explosive")
 	await seconds(0.3)
-	check(is_equal_approx(unit.damage_threshold, 50.0) and not unit.has_meta(CrapyaControlRoom.SHIELD_META),
-		"control room down: cooling units exposed")
+	check(is_equal_approx(unit.damage_threshold, 50.0 * scgrewgle.power) and not unit.has_meta(CrapyaControlRoom.SHIELD_META),
+		"control room down: cooling units exposed, at the drained threshold (%.1f)" % unit.damage_threshold)
 	check((scgrewgle.get_node("SteamVent1") as SteamVent).state == SteamVent.State.OFF, "steam vents shut down")
 	check(scgrewgle.boss_defeated, "Scgrewgle's boss is down")
 	check(Game.cash == cash + 300, "Crapya pays out $300")

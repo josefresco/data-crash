@@ -10,7 +10,7 @@ const SECTIONS := [
 		["Left click", "Fire"], ["Right click (hold)", "Aim: zoom in, tighter spread"], ["Q / wheel", "Switch weapon"], ["E", "Drive / talk down / use"],
 		["G", "Plant C4"], ["T", "Give a dog a treat"], ["F (hold)", "Repair / fix"],
 		["X", "Launch / recall the recon drone"], ["C", "Crouch: sneak past site security"],
-		["Z (hold)", "Binoculars: spot datacenter targets"], ["Right click + rifle", "Look through the scope"],
+		["Z (hold)", "Binoculars: spot datacenter targets"], ["H, then 1-4", "Orders: send allies to the crosshair, follow, hold"], ["Right click + rifle", "Look through the scope"],
 	]],
 	["Drone", [
 		["WASD / mouse", "Fly and look"], ["Space / C", "Climb / descend"], ["Left click", "FPV dive (needs a payload)"],

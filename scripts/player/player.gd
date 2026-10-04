@@ -81,6 +81,13 @@ var disguised_left := 0.0
 const CROUCH_SPEED := 2.3
 ## The recon drone in the air (null on foot); relaunch cooldown after it ends.
 var drone: ReconDrone = null
+## Flying a plane or helicopter (the aircraft drives the camera and input).
+var aircraft: Aircraft = null
+## Drifting down under a parachute (after bailing out of a plane).
+var parachuting := false
+## Seconds after parachute() during which a landing isn't trusted yet.
+var _chute_grace := 0.0
+var _canopy: Node3D
 var _drone_cooldown := 0.0
 ## Hoses: the water jet on the held nozzle, its hiss, and how long it keeps
 ## running after the last spray tick.
@@ -143,8 +150,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			and Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 		get_viewport().set_input_as_handled()
-	elif drone:
-		return  # the drone takes the mouse and the weapon keys
+	elif drone or aircraft:
+		return  # the drone or the aircraft takes the mouse and the weapon keys
 	elif event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		var motion := event as InputEventMouseMotion
 		var sensitivity := Game.mouse_sensitivity * (OPTIC_SENSITIVITY if optic != &"" else (AIM_SENSITIVITY if aiming else 1.0))
@@ -339,6 +346,37 @@ func _nearest_in_group(group: String, max_distance: float) -> Node3D:
 
 
 ## Called by Car. Pass a car to hide and disable the player, null to get out.
+## Climbing into an aircraft: like a car, the player hides and waits.
+func board_aircraft(craft: Aircraft) -> void:
+	aircraft = craft
+	set_driving(null, global_position)  # clears any car state first
+	hide()
+	process_mode = Node.PROCESS_MODE_DISABLED
+	collision_layer = 0
+	collision_mask = 0
+	_set_prompt("")
+
+
+func leave_aircraft(at: Vector3) -> void:
+	aircraft = null
+	set_driving(null, at)
+
+
+## Bailed out: fall slowly under a canopy until the ground.
+func parachute() -> void:
+	parachuting = true
+	_chute_grace = 0.2
+	if _canopy == null:
+		_canopy = Node3D.new()
+		add_child(_canopy)
+		var cloth := Models.ball(_canopy, 2.2, Vector3(0.0, 4.2, 0.0), Models.mat(Color(0.95, 0.45, 0.15), &"cloth"))
+		cloth.scale = Vector3(1.0, 0.35, 1.0)
+		for corner: Vector3 in [Vector3(1.6, 0, 1.6), Vector3(-1.6, 0, 1.6), Vector3(1.6, 0, -1.6), Vector3(-1.6, 0, -1.6)]:
+			var line := Models.box(_canopy, Vector3(0.02, 2.6, 0.02), corner * 0.5 + Vector3.UP * 2.8, Models.mat(Color(0.9, 0.9, 0.9), &"cloth"))
+			line.rotation = Vector3(corner.z * 0.25, 0.0, -corner.x * 0.25)
+	_canopy.visible = true
+
+
 func set_driving(car: Car, exit_position := Vector3.ZERO) -> void:
 	vehicle = car
 	_vehicle_change_frame = Engine.get_physics_frames()
@@ -359,8 +397,16 @@ func set_driving(car: Car, exit_position := Vector3.ZERO) -> void:
 
 
 func _move(delta: float) -> void:
-	if not is_on_floor():
+	_chute_grace = maxf(_chute_grace - delta, 0.0)
+	# Right after a bail-out is_on_floor() is stale (from before boarding).
+	if not is_on_floor() or _chute_grace > 0.0:
 		velocity.y -= _gravity * delta
+		if parachuting:
+			velocity.y = maxf(velocity.y, -3.5)
+	elif parachuting:
+		parachuting = false
+		if _canopy:
+			_canopy.visible = false
 	elif Input.is_action_just_pressed("jump"):
 		velocity.y = jump_velocity
 

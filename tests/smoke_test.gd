@@ -33,6 +33,24 @@ func _run() -> void:
 	check(datacenter.get("_racks").size() >= 4, "server racks inside")
 	check(felsa.worker != null and felsa.truck != null, "a worker inside and a cargo truck out back")
 
+	# Government Cheese: wrecking a delivery drains that site's power.
+	var forprofit := level.get_node("ForProfitSite") as DatacenterSite
+	check(forprofit.get_node_or_null("RoboGuard") is RoboGuard, "every site has a T-800 security robot")
+	var cheese := forprofit.truck
+	check(cheese.cargo == CargoTruck.Cargo.CHEESE, "the first delivery is Government Cheese")
+	var cooler: Destructible = null
+	for node in forprofit.datacenter.find_children("*", "Destructible", true, false):
+		if node.is_in_group(&"cooling_units"):
+			cooler = node
+			break
+	var threshold := cooler.damage_threshold
+	cheese.apply_damage(9999.0, cheese.global_position + Vector3.UP, &"explosive")
+	await seconds(0.5)
+	check(is_equal_approx(forprofit.power, 0.75), "a wrecked cheese truck drains the site's power (%d%%)" % roundi(forprofit.power * 100.0))
+	check(cooler.damage_threshold < threshold and cooler.health <= cooler.max_health * 0.75, "its cooling units are weaker")
+	await seconds(DatacenterSite.TRUCK_RESPAWN + 1.0)
+	check(is_instance_valid(forprofit.truck) and forprofit.truck != cheese and forprofit.truck.is_alive(), "another delivery truck takes the route")
+
 	# Batched drawing: the fence panels draw as one MultiMesh per fence line.
 	var batches: Array = fence.get_meta(&"destructible_batches", {}).values()
 	var drawn := func() -> int:

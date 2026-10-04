@@ -222,7 +222,7 @@ func reset() -> void:
 	alarms = {}
 	district = DistrictState.new()
 	cash_changed.emit(cash)
-	for key in ["sites", "deeds", "boss", "wave", "core", "build", "bribe", "shop", "notice", "drone"]:
+	for key in ["sites", "deeds", "boss", "wave", "core", "build", "bribe", "shop", "notice", "drone", "orders"]:
 		set_info(key, "")
 	for key in ["sites", "deeds"]:
 		set_checklist(key, "", [])
@@ -338,6 +338,7 @@ func _register_input_actions() -> void:
 		"descend": KEY_C,
 		"crouch": KEY_C,
 		"binoculars": KEY_Z,
+		"orders": KEY_H,
 	}
 	for action: String in keys:
 		_ensure_action(action)

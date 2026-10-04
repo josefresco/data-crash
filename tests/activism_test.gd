@@ -168,6 +168,46 @@ func _test_deeds() -> void:
 		await seconds(0.25)
 	check(kitchen.is_done and kitchen.bowls == 6, "six bowls served (%d)" % kitchen.bowls)
 
+	# Affordable housing: hold F at each zoned lot (it costs cash as it goes up).
+	Game.cash += 500
+	var lots := get_tree().get_nodes_in_group("housing_sites")
+	check(lots.size() == 2, "two lots zoned for affordable housing (%d)" % lots.size())
+	var people := get_tree().get_nodes_in_group("residents").size()
+	for lot: HousingSite in lots:
+		player.global_position = lot.global_position + lot.global_basis.z * 5.0 + Vector3.UP * 0.2
+		await seconds(0.05)
+		check(player.fixable_target() == lot, "a housing lot is in reach")
+		var before := Game.cash
+		for i in 70:
+			player.call("_repair", 0.1)
+		check(lot.is_fixed and Game.cash < before, "holding F builds a house, paid as it goes ($%d)" % (before - Game.cash))
+	await seconds(0.3)
+	check(get_tree().get_nodes_in_group("residents").size() >= people + 4, "families move into the new homes")
+
+	# Playground: build it, and three moms join; they keep a cop busy.
+	var playground := level.get_node("Playground") as Playground
+	player.global_position = playground.global_position + Vector3(0.0, 0.2, 6.0)
+	await seconds(0.05)
+	check(player.fixable_target() == playground, "the playground site is in reach")
+	for i in 60:
+		player.call("_repair", 0.1)
+	check(playground.is_fixed, "holding F builds the playground")
+	await seconds(0.2)
+	var moms := get_tree().get_nodes_in_group("moms")
+	check(moms.size() == 3, "the playground brings three moms (%d)" % moms.size())
+	var cop := Police.new()
+	cop.position = playground.global_position + Vector3(8.0, 0.2, 0.0)
+	level.add_child(cop)
+	player.global_position = playground.global_position + Vector3(14.0, 0.2, 4.0)
+	for i in 40:
+		if cop.is_distracted():
+			break
+		await seconds(0.25)
+	check(cop.is_distracted() and cop.target == null, "a mom marches up to the cop and keeps them busy")
+	cop.queue_free()
+	for node in moms:
+		node.queue_free()
+
 	# Supply van: take it out.
 	var van := level.get_node_or_null("SupplyVan") as SupplyVan
 	if van == null or not van.is_alive():
@@ -180,7 +220,7 @@ func _test_deeds() -> void:
 		await seconds(0.5)
 		# $150 bounty + $100 all-deeds bonus.
 		check(Game.cash == cash + 150 + 100, "van bounty and the all-deeds bonus ($%d)" % (Game.cash - cash))
-	check(level.get("_deeds").values().all(func(done: bool) -> bool: return done), "all ten deeds done")
+	check(level.get("_deeds").values().all(func(done: bool) -> bool: return done), "all twelve deeds done")
 
 
 ## Walk-in shops, the hospital's bill, and a storefront's regulars.
@@ -223,6 +263,32 @@ func _test_town() -> void:
 		await seconds(0.25)
 	check(ally.health >= ally.max_health * 0.9, "a hurt ally heads to the hospital and recovers (%d hp)" % roundi(ally.health))
 	ally.queue_free()
+
+	# A kid, some candy, a bike: the cop has a new problem.
+	var kid: Resident = null
+	for node in get_tree().get_nodes_in_group("residents"):
+		if (node as Resident).role == &"kid":
+			kid = node
+			break
+	check(kid != null, "kids play around the block")
+	if kid:
+		Game.cash = 50
+		player.global_position = kid.global_position + Vector3(1.0, 0.2, 0.0)
+		await seconds(0.05)
+		check(kid.in_reach(player), "[E] reaches a kid")
+		var rider := kid.recruit_kid()
+		check(rider != null and Game.cash == 45, "candy ($5) gets a kid on their bike")
+		var officer := Police.new()
+		officer.position = player.global_position + Vector3(6.0, 0.0, 0.0)
+		level.add_child(officer)
+		for i in 40:
+			if officer.is_distracted():
+				break
+			await seconds(0.25)
+		check(officer.is_distracted(), "the kid circles the cop, who can't stop yelling at them")
+		officer.queue_free()
+		rider.queue_free()
+		await seconds(0.1)
 
 	# Storefronts: spending builds goodwill; every third purchase, a regular joins.
 	var diner: Storefront = null

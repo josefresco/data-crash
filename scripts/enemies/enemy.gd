@@ -115,6 +115,16 @@ var spotted_left := 0.0
 ## hospital's ward and recover there (0 = never). `in_hospital` while on the way or resting.
 var hospital_share := 0.0
 var in_hospital := false
+## Ally orders (AllyOrders): go to `order_point` and fight there (hostiles
+## and site targets within ORDER_RADIUS of it). Vector3.INF = no order.
+## `order_hold`: stay put there instead of chasing out of the circle.
+var order_point := Vector3.INF
+var order_hold := false
+const ORDER_RADIUS := 16.0
+## Distracted (by a protesting mom or a kid on a bike): no target, stands
+## gawking at `_distractor` until it runs out.
+var distracted_left := 0.0
+var _distractor: Variant = null
 var _gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 
 
@@ -398,7 +408,7 @@ func _physics_process(delta: float) -> void:
 	if _knock_left > 0.0:
 		_knock_left -= delta
 		weight *= 0.08
-	var pace := move_speed * speed_scale * (0.6 if soaked_left > 0.0 else 1.0)
+	var pace := move_speed * speed_scale * _speed_factor() * (0.6 if soaked_left > 0.0 else 1.0)
 	velocity.x = lerpf(velocity.x, move_dir.x * pace, weight)
 	velocity.z = lerpf(velocity.z, move_dir.z * pace, weight)
 	if move_dir != Vector3.ZERO:
@@ -592,10 +602,24 @@ func _decorate(_visual_root: Node3D) -> void:
 	pass
 
 
+## Override: a standing multiplier on move speed (`speed_scale` is the
+## tactical one, rewritten by whoever paces the unit).
+func _speed_factor() -> float:
+	return 1.0
+
+
 func _think() -> void:
+	# Far units think half as often.
+	var tick := THINK_INTERVAL * (2.0 if _lod_far else 1.0)
 	if is_dormant() and _watches():
-		_watch_for_player(THINK_INTERVAL * (2.0 if _lod_far else 1.0))
+		_watch_for_player(tick)
 	if _hospital_visit():
+		return
+	if distracted_left > 0.0:
+		distracted_left -= tick
+		target = null
+		_has_los = false
+		_nav.target_position = global_position
 		return
 	target = _pick_target()
 	if _is_valid(target):
@@ -604,7 +628,7 @@ func _think() -> void:
 		return
 	_has_los = false
 	if _investigate_left > 0.0:
-		_investigate_left -= THINK_INTERVAL
+		_investigate_left -= tick
 		return
 	_idle()
 
@@ -656,6 +680,68 @@ func approach_point(thing: Node3D) -> Vector3:
 	var spot := thing.to_global(edge + out.normalized() * 0.6)
 	spot.y = thing.global_position.y
 	return spot
+
+
+## Something (a mom with a sign, a kid on a bike) holds this unit's
+## attention for `seconds`: it drops its target and stands there.
+func distract(by: Node3D, seconds: float) -> void:
+	if not is_alive():
+		return
+	if distracted_left <= 0.0 and randf() < 0.5:
+		speak(_distracted_line(by))
+	distracted_left = maxf(distracted_left, seconds)
+	_distractor = by
+	target = null
+
+
+func is_distracted() -> bool:
+	return distracted_left > 0.0
+
+
+func _distracted_line(_by: Node3D) -> String:
+	return "Hey! What's going on here?"
+
+
+## Takes an order (AllyOrders): a point to fight around, or INF to follow.
+func give_order(point: Vector3, hold := false) -> void:
+	order_point = point
+	order_hold = hold
+	target = null
+	if point != Vector3.INF:
+		var spread := Vector3(randf_range(-3.0, 3.0), 0.0, randf_range(-3.0, 3.0))
+		_nav.target_position = point + spread
+
+
+## Candidates for an ally with an order: awake hostiles and standing site
+## targets (cooling units, turbines, tanks, gates) within ORDER_RADIUS of
+## the order point.
+func _order_candidates() -> Array[Node3D]:
+	var list: Array[Node3D] = []
+	for node in get_tree().get_nodes_in_group("hostiles"):
+		var enemy := node as Enemy
+		if enemy and enemy.is_alive() and not enemy.is_dormant() and enemy.global_position.distance_to(order_point) <= ORDER_RADIUS:
+			list.append(enemy)
+	if not order_hold:
+		for node in get_tree().get_nodes_in_group("scout_targets"):
+			var thing := node as Destructible
+			if thing and not thing.is_destroyed and thing.global_position.distance_to(order_point) <= ORDER_RADIUS:
+				list.append(thing)
+	return list
+
+
+## A prop in the way of `thing` (a fence panel, a gate, a wall) comes first:
+## allies sent at a cooling unit smash their way into the compound.
+func _breach_toward(thing: Node3D) -> Node3D:
+	var from := global_position + Vector3.UP * 1.0
+	var to := thing.global_position + Vector3.UP * 1.0
+	var query := PhysicsRayQueryParameters3D.create(from, to, 16, [get_rid()])
+	var hit := get_world_3d().direct_space_state.intersect_ray(query)
+	if hit.is_empty():
+		return thing
+	var blocker := hit["collider"] as Destructible
+	if blocker and blocker != thing and not blocker.is_destroyed and not thing.is_ancestor_of(blocker):
+		return blocker
+	return thing
 
 
 ## Override: whether a hospital trip is allowed right now.
@@ -731,7 +817,10 @@ func _site_contains(point: Vector3) -> bool:
 ## Override: what to do with no target. Allies tag along with the player,
 ## hostiles march on their objective, everyone else wanders near home.
 func _idle() -> void:
-	if faction == Faction.ALLY:
+	if faction == Faction.ALLY and order_point != Vector3.INF:
+		if _nav.target_position.distance_to(order_point) > 5.0 or (_nav.is_navigation_finished() and randf() < 0.05):
+			_nav.target_position = order_point + Vector3(randf_range(-4.0, 4.0), 0.0, randf_range(-4.0, 4.0))
+	elif faction == Faction.ALLY:
 		_follow_player()
 	elif _is_valid(objective):
 		_nav.target_position = approach_point(objective)
@@ -792,6 +881,12 @@ func _pick_target() -> Node3D:
 		return null
 	if rushing and faction == Faction.HOSTILE and _is_valid(objective):
 		return objective
+	if faction == Faction.ALLY and order_point != Vector3.INF:
+		var nearest: Node3D = null
+		for candidate in _order_candidates():
+			if nearest == null or _distance_to(candidate) < _distance_to(nearest):
+				nearest = candidate
+		return _breach_toward(nearest) if nearest is Destructible else nearest
 	var best: Node3D = null
 	var best_distance := sight_range
 	for candidate in _candidates():
@@ -809,7 +904,10 @@ func _candidates() -> Array[Node3D]:
 	if faction == Faction.HOSTILE:
 		var player := get_tree().get_first_node_in_group("player") as Player
 		if player:
-			list.append(player.vehicle if player.vehicle else player)
+			if player.aircraft:
+				list.append(player.aircraft)
+			else:
+				list.append(player.vehicle if player.vehicle else player)
 		for node in get_tree().get_nodes_in_group("allies"):
 			list.append(node as Node3D)
 		for node in get_tree().get_nodes_in_group("structures"):

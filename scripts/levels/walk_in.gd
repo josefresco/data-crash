@@ -9,15 +9,24 @@ extends RefCounted
 ## parts (weapon tables, the hospital desk, the book drive, the soup line)
 ## inside by `NeighborhoodBuilder.walk_in(kind)`.
 
-const KINDS := ["gunstore", "hardware", "hospital", "library", "soupkitchen"]
+const KINDS := ["gunstore", "hardware", "hospital", "library", "soupkitchen", "police", "firestation"]
 const DOOR_WIDTH := 2.4
 const DOOR_HEIGHT := 2.8
 const WALL := 0.3
 
 
 ## Footprint (width x, depth z) and wall height per kind.
+## Doorway (width, height): the fire station's is a truck-sized bay.
+static func doorway(kind: String) -> Vector2:
+	return Vector2(5.4, 4.3) if kind == "firestation" else Vector2(DOOR_WIDTH, DOOR_HEIGHT)
+
+
 static func dimensions(kind: String) -> Vector3:
 	match kind:
+		"firestation":
+			return Vector3(16.0, 6.4, 12.0)
+		"police":
+			return Vector3(13.0, 5.4, 11.0)
 		"hospital":
 			return Vector3(16.0, 7.6, 12.0)
 		"library":
@@ -58,7 +67,9 @@ static func build(body: Node3D, kind: String, accent: Color) -> AABB:
 		Models.box(body, Vector3(0.02, ceiling - 0.1, d - WALL * 2.0), Vector3(side * (w * 0.5 - WALL - 0.01), ceiling * 0.5, 0.0), inner)
 	# Front: a doorway in the middle, a big shop window either side.
 	var front := d * 0.5 - WALL * 0.5
-	var half_door := DOOR_WIDTH * 0.5
+	var door_size := doorway(kind)
+	var half_door := door_size.x * 0.5
+	var door_h := door_size.y
 	var pier := 0.7
 	var span := w * 0.5 - half_door - pier * 2.0
 	for side: float in [-1.0, 1.0]:
@@ -73,13 +84,14 @@ static func build(body: Node3D, kind: String, accent: Color) -> AABB:
 		for k in 3:  # mullions
 			Models.box(body, Vector3(0.06, 2.3, 0.1), Vector3(x_mid - span * 0.5 + span * (k + 1) / 4.0, 2.15, front), trim)
 		_wall(body, Vector3(span, h - 3.3, WALL), Vector3(x_mid, 3.3 + (h - 3.3) * 0.5, front), brick)
-	_wall(body, Vector3(DOOR_WIDTH, h - DOOR_HEIGHT, WALL), Vector3(0.0, DOOR_HEIGHT + (h - DOOR_HEIGHT) * 0.5, front), brick)
+	_wall(body, Vector3(door_size.x, h - door_h, WALL), Vector3(0.0, door_h + (h - door_h) * 0.5, front), brick)
 	# Door frame, and an open glass door swung inward against the wall.
 	for side: float in [-1.0, 1.0]:
-		Models.box(body, Vector3(0.1, DOOR_HEIGHT, WALL + 0.1), Vector3(side * (half_door + 0.05), DOOR_HEIGHT * 0.5, front), trim)
-	var door := Models.box(body, Vector3(0.05, DOOR_HEIGHT - 0.1, 1.1), Vector3(-half_door + 0.1, DOOR_HEIGHT * 0.5, front - 0.7), glass)
+		Models.box(body, Vector3(0.1, door_h, WALL + 0.1), Vector3(side * (half_door + 0.05), door_h * 0.5, front), trim)
+	var door := Models.box(body, Vector3(0.05, door_h - 0.1, 1.1), Vector3(-half_door + 0.1, door_h * 0.5, front - 0.7), glass)
+	door.visible = kind != "firestation"  # the bay has a roll-up door instead
 	door.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	Models.box(body, Vector3(DOOR_WIDTH + 0.4, 0.06, 1.2), Vector3(0.0, 0.05, d * 0.5 + 0.55), trim)  # stoop
+	Models.box(body, Vector3(door_size.x + 0.4, 0.06, 1.2), Vector3(0.0, 0.05, d * 0.5 + 0.55), trim)  # stoop
 	# Ceiling, roof, and a cornice along the front.
 	Models.box(body, Vector3(w - WALL * 2.0, 0.08, d - WALL * 2.0), Vector3(0.0, ceiling, 0.0), inner)
 	Models.box(body, Vector3(w + 0.3, 0.3, d + 0.3), Vector3(0.0, h + 0.15, 0.0), Models.mat(Color(0.3, 0.3, 0.32), &"concrete"))
@@ -135,6 +147,10 @@ static func build(body: Node3D, kind: String, accent: Color) -> AABB:
 			_dress_library(body, size)
 		"soupkitchen":
 			_dress_soup_kitchen(body, size)
+		"police":
+			_dress_police(body, size)
+		"firestation":
+			_dress_fire_station(body, size, door_size)
 	return AABB(Vector3(-w * 0.5, 0.0, -d * 0.5), Vector3(w, h, d))
 
 
@@ -146,6 +162,10 @@ static func _brick_tint(kind: String) -> Color:
 			return Color(0.85, 0.75, 0.7)
 		"soupkitchen":
 			return Color(0.9, 0.82, 0.72)
+		"police":
+			return Color(0.85, 0.88, 0.95)
+		"firestation":
+			return Color(1.0, 0.85, 0.8)
 	return Color(1.0, 1.0, 1.0)
 
 
@@ -295,3 +315,66 @@ static func _dress_soup_kitchen(body: Node3D, size: Vector3) -> void:
 	banner.position = Vector3(0.0, 2.9, -size.z * 0.5 + WALL + 0.05)
 	body.add_child(banner)
 	Models.fit_label(banner, Vector2(5.0, 0.8))
+
+
+## Front desk, two holding cells with bars, lockers, and a wanted board.
+static func _dress_police(body: Node3D, size: Vector3) -> void:
+	var desk := Models.mat(Color(0.25, 0.3, 0.45), &"paint")
+	var steel := Models.mat(Color(0.55, 0.56, 0.58), &"metal")
+	_solid(body, Vector3(4.0, 1.1, 0.8), Vector3(0.0, 0.55, 0.6), desk)
+	Models.box(body, Vector3(4.1, 0.06, 0.9), Vector3(0.0, 1.13, 0.6), Models.mat(Color(0.5, 0.4, 0.3), &"wood"))
+	# Cells along the back wall: bars across the front, a cot inside.
+	for cell in 2:
+		var x0 := -size.x * 0.5 + 2.0 + cell * 3.4
+		var z0 := -size.z * 0.5 + 2.6
+		for k in 12:
+			Models.box(body, Vector3(0.05, 2.6, 0.05), Vector3(x0 - 1.4 + k * 0.25, 1.3, z0), steel)
+		Models.box(body, Vector3(3.0, 0.08, 0.08), Vector3(x0, 2.6, z0), steel)
+		Models.collider(body, Vector3(3.0, 2.6, 0.15), Vector3(x0, 1.3, z0))
+		Models.box(body, Vector3(0.1, 2.6, 2.2), Vector3(x0 + 1.55, 1.3, z0 - 1.1), Models.mat(Color(0.8, 0.8, 0.78), &"concrete"))
+		Models.box(body, Vector3(1.8, 0.4, 0.7), Vector3(x0, 0.35, z0 - 1.6), Models.mat(Color(0.35, 0.4, 0.35), &"cloth"))
+	# Lockers on the right wall.
+	for k in 5:
+		Models.box(body, Vector3(0.45, 2.0, 0.55), Vector3(size.x * 0.5 - 0.6, 1.0, -2.0 + k * 0.5), steel)
+	Models.collider(body, Vector3(0.55, 2.0, 2.5), Vector3(size.x * 0.5 - 0.6, 1.0, -1.0))
+	var board := Label3D.new()
+	board.text = "WANTED:\nWHOEVER KEEPS\nFIXING HYDRANTS"
+	board.modulate = Color(0.15, 0.15, 0.2)
+	board.outline_size = 0
+	board.position = Vector3(size.x * 0.5 - WALL - 0.05, 3.2, 1.5)
+	board.rotation.y = -PI * 0.5
+	body.add_child(board)
+	Models.fit_label(board, Vector2(2.2, 1.0))
+
+
+## An engine bay (the fire truck parks inside), a roll-up door rolled up,
+## gear lockers, a brass pole, and a hose rack.
+static func _dress_fire_station(body: Node3D, size: Vector3, door: Vector2) -> void:
+	var red := Models.mat(Color(0.8, 0.12, 0.1), &"paint")
+	var steel := Models.mat(Color(0.6, 0.6, 0.62), &"metal")
+	var brass := Models.mat(Color(0.85, 0.65, 0.3), &"metal")
+	# Rolled-up door drum over the bay, red trim around it.
+	Models.cylinder(body, 0.35, door.x, Vector3(0.0, door.y + 0.1, size.z * 0.5 - 0.6), steel, 12).rotation.z = PI * 0.5
+	Models.box(body, Vector3(door.x + 0.6, 0.3, 0.2), Vector3(0.0, door.y + 0.5, size.z * 0.5 + 0.05), red)
+	# Floor stripes marking the bay.
+	for x: float in [-door.x * 0.5, door.x * 0.5]:
+		Models.box(body, Vector3(0.15, 0.02, size.z - 1.0), Vector3(x, 0.06, 0.0), Models.mat(Color(0.98, 0.8, 0.15), &"paint"))
+	# Gear lockers with coats and helmets along the left wall.
+	for k in 6:
+		var z := -size.z * 0.5 + 1.2 + k * 1.1
+		Models.box(body, Vector3(0.6, 2.0, 0.9), Vector3(-size.x * 0.5 + 0.7, 1.0, z), steel)
+		Models.box(body, Vector3(0.35, 0.8, 0.5), Vector3(-size.x * 0.5 + 1.0, 1.2, z), Models.mat(Color(0.8, 0.7, 0.3), &"cloth"))
+		Models.ball(body, 0.16, Vector3(-size.x * 0.5 + 1.0, 1.8, z), red)
+	Models.collider(body, Vector3(0.9, 2.0, 6.8), Vector3(-size.x * 0.5 + 0.8, 1.0, -size.z * 0.5 + 3.95))
+	# The pole down from upstairs, and a hose rack on the right wall.
+	Models.cylinder(body, 0.05, 4.6, Vector3(size.x * 0.5 - 2.0, 2.3, -size.z * 0.5 + 2.0), brass, 8)
+	for k in 3:
+		var coil := Models.cylinder(body, 0.4, 0.2, Vector3(size.x * 0.5 - 0.5, 1.2 + k * 0.5, 1.0), Models.mat(Color(0.85, 0.8, 0.7), &"cloth"), 12)
+		coil.rotation.z = PI * 0.5
+	var sign_board := Label3D.new()
+	sign_board.text = "DAYS WITHOUT A\nDATACENTER FIRE: 0"
+	sign_board.modulate = Color(0.8, 0.1, 0.1)
+	sign_board.outline_size = 0
+	sign_board.position = Vector3(0.0, 4.4, -size.z * 0.5 + WALL + 0.05)
+	body.add_child(sign_board)
+	Models.fit_label(sign_board, Vector2(5.0, 1.0))

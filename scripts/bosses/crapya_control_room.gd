@@ -78,7 +78,9 @@ func _shield_targets() -> void:
 		var unit := node as Destructible
 		if unit == null or unit.has_meta(SHIELD_META) or unit.site_id != site_id:
 			continue
-		unit.set_meta(&"base_threshold", unit.damage_threshold)
+		# DatacenterSite.drain_power may have stored the full-power base already.
+		if not unit.has_meta(&"base_threshold"):
+			unit.set_meta(&"base_threshold", unit.damage_threshold)
 		unit.damage_threshold = 1.0e9
 		var bubble_mat := StandardMaterial3D.new()
 		bubble_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -89,11 +91,17 @@ func _shield_targets() -> void:
 
 
 func _on_destroyed(_room: Destructible) -> void:
+	# Keep whatever the wrecked cheese trucks already took off (site power).
+	var power := 1.0
+	for node in get_tree().get_nodes_in_group("datacenter_sites"):
+		var site_node := node as DatacenterSite
+		if site_node and site_node.site_id == site_id:
+			power = site_node.power
 	for node in get_tree().get_nodes_in_group(shielded_group):
 		var unit := node as Destructible
 		if unit == null or not unit.has_meta(SHIELD_META):
 			continue
-		unit.damage_threshold = unit.get_meta(&"base_threshold", 0.0)
+		unit.damage_threshold = float(unit.get_meta(&"base_threshold", 0.0)) * power
 		var bubble := unit.get_meta(SHIELD_META) as Node
 		if is_instance_valid(bubble):
 			bubble.queue_free()

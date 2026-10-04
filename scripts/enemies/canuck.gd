@@ -190,7 +190,7 @@ func _idle() -> void:
 				queue_free()
 		State.ALLY:
 			var post: Variant = _defense_post()
-			if post == null:
+			if post == null or order_point != Vector3.INF:
 				super()
 			elif _nav.target_position.distance_to(post as Vector3) > 7.0 \
 					or (_nav.is_navigation_finished() and randf() < 0.05):
@@ -213,6 +213,8 @@ func _idle() -> void:
 ## the core: the level's ally post (a fence breach or the core), or the core
 ## itself while falling back.
 func _defense_post() -> Variant:
+	if order_point != Vector3.INF:
+		return null  # under orders
 	var level := get_tree().get_first_node_in_group("level")
 	if level == null or not level.has_method("ally_post"):
 		return null
@@ -242,8 +244,12 @@ func _attack(victim: Node3D) -> void:
 		_shoot(victim)
 		return
 	_act(&"swing")
+	var damage := stick_damage
+	if victim is Destructible and (victim as Destructible).damage_threshold < 1000.0:
+		# Sabotage under orders: hard enough to get past a prop's threshold.
+		damage = maxf(stick_damage, (victim as Destructible).damage_threshold + 5.0)
 	if victim.has_method("apply_damage"):
-		victim.call(&"apply_damage", stick_damage, global_position, &"melee")
+		victim.call(&"apply_damage", damage, global_position, &"melee")
 	if victim.has_method("apply_knockback"):
 		var push := victim.global_position - global_position
 		push.y = 0.0

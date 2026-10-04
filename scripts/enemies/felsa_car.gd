@@ -67,6 +67,8 @@ var _motor: AudioStreamPlayer3D
 var _blocked_left := 0.0
 var _waited := 0.0
 var _dodge := 0.0
+## Seconds of steering around a blocker before looking again.
+var _dodge_left := 0.0
 var _sense_left := 0.0
 const SENSE_MASK := 2 | 4 | 32  # player, vehicles, units
 
@@ -195,8 +197,9 @@ func _sense_traffic(delta: float) -> void:
 	_blocked_left = maxf(_blocked_left - delta, 0.0)
 	_dodge = move_toward(_dodge, 0.0, delta * 0.2)
 	_sense_left -= delta
-	if _sense_left > 0.0:
-		return
+	_dodge_left = maxf(_dodge_left - delta, 0.0)
+	if _sense_left > 0.0 or _dodge_left > 0.0:
+		return  # between looks, or steering around something
 	_sense_left = 0.1
 	var forward := -global_basis.z
 	forward.y = 0.0
@@ -218,10 +221,12 @@ func _sense_traffic(delta: float) -> void:
 		if _waited > 3.0:
 			# Still stuck behind it: nudge out and around.
 			_dodge = 0.5 if randf() < 0.5 else -0.5
+			_dodge_left = 1.5
 			_blocked_left = 0.0
 			_waited = 0.0
 	else:
-		_waited = maxf(_waited - 0.2, 0.0)
+		# Slow decay: something that blocks on and off still gets dodged.
+		_waited = maxf(_waited - 0.05, 0.0)
 
 
 ## The bumper touched a unit: shove it; ram it for real when hunting.
