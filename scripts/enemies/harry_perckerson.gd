@@ -56,7 +56,7 @@ func _ready() -> void:
 	add_child(boardroom)
 	add_collision_exception_with(boardroom)
 	# The glass appears mid-wave: route everyone around it.
-	get_tree().call_group(&"nav_baker", &"request_rebake")
+	get_tree().call_group(&"nav_baker", &"request_rebake", global_position)
 	boardroom.destroyed.connect(func(_d: Destructible) -> void:
 		speak("My glass! Do you know what that cost? Nothing, I expensed it."))
 	# Furniture: a long table and a chair.

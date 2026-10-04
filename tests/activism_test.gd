@@ -28,7 +28,11 @@ func _run() -> void:
 
 func _test_deeds() -> void:
 	var van_start := (level.get_node("SupplyVan") as SupplyVan).global_position
-	await seconds(2.0)
+	# It may be waiting on traffic or turning around at the end of its loop.
+	for i in 10:
+		await seconds(1.0)
+		if (level.get_node("SupplyVan") as SupplyVan).global_position.distance_to(van_start) > 5.0:
+			break
 	check((level.get_node("SupplyVan") as SupplyVan).global_position.distance_to(van_start) > 5.0, "supply van drives its route")
 	var cash := Game.cash
 	var trust := Game.district.trust

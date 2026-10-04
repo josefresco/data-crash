@@ -102,7 +102,7 @@ func _finish() -> void:
 		get_parent().add_child(mom)
 		if i == 0:
 			mom.speak("Thank you! Now, about those police officers...")
-	get_tree().call_group(&"nav_baker", &"request_rebake")
+	get_tree().call_group(&"nav_baker", &"request_rebake", global_position)
 	built.emit(self)
 
 

@@ -67,10 +67,13 @@ func _open_spots(hood: NeighborhoodBuilder, count: int) -> Array[Vector3]:
 	var tries := 0
 	while spots.size() < count and tries < count * 8:
 		tries += 1
-		var p := Vector3(_rng.randf_range(-hood.street_half_length - 14.0, hood.street_half_length + 14.0), 0.0,
+		var p := Vector3(_rng.randf_range(-hood.street_half_length - 14.0, maxf(hood.street_half_length, hood.east_avenue_x) + 14.0), 0.0,
 			_rng.randf_range(-4.0, hood.main_road_end_z + 4.0))
 		if absf(p.x) < road_half:
 			continue
+		var joined := hood.avenue_streets()
+		if not joined.is_empty() and absf(p.x - hood.east_avenue_x) < road_half and p.z >hood.street_z[joined[0]] - road_half and p.z < hood.street_z[joined[-1]] + road_half:
+			continue  # the east avenue
 		if hood.in_river(p, 1.0):
 			continue
 		if hood.street_z.any(func(z: float) -> bool: return absf(p.z - z) < road_half):

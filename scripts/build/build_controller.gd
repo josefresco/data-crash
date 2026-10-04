@@ -80,7 +80,7 @@ func place(index: int, point: Vector3, rotation_steps := 0, no_cost := false) ->
 	if not no_cost:
 		Game.add_cash(-int(item["cost"]))
 	if node is Structure:
-		get_tree().call_group(&"nav_baker", &"request_rebake")
+		get_tree().call_group(&"nav_baker", &"request_rebake", node.global_position)
 	structure_placed.emit(node)
 	Game.count("built")
 	Sfx.play(&"place", at, 0.0)

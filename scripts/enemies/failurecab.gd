@@ -222,7 +222,10 @@ func _handle_collisions() -> void:
 					and _site.datacenter.is_ancestor_of(hit):
 				_detonate()  # the building, a rack, or a cooling unit
 				return
+	# Ramming its way in (gates, fences) is the autopilot's fault too.
+	Game.alarm_hold += 1
 	super()
+	Game.alarm_hold -= 1
 
 
 ## Rams home: its battery goes up.
@@ -235,8 +238,16 @@ func _detonate() -> void:
 	blast.damage = blast_damage
 	get_parent().add_child(blast)
 	blast.global_position = global_position + Vector3.UP * 0.8
-	blast.detonate.call_deferred()
+	_quiet_blast.call_deferred(blast)
 	apply_damage(99999.0, global_position, &"explosive")
+
+
+## The blast raises no alarm: the site blames Felsa's autopilot, not you.
+func _quiet_blast(blast: Explosive) -> void:
+	Game.alarm_hold += 1
+	blast.detonate()
+	Game.alarm_hold -= 1
+	Game.notify("Security blames the Failurecab's autopilot. Nobody's looking for you.", 4.0)
 
 
 func _decorate(visual_root: Node3D) -> void:

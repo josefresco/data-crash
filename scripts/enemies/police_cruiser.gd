@@ -14,6 +14,9 @@ var responding := false
 var respond_site := &""
 var deployed := false
 
+## It pulls up and the officers get out this close to the suspect.
+const DEPLOY_RANGE := 11.0
+
 var _lights: Array[MeshInstance3D] = []
 var _light_clock := 0.0
 var _siren: AudioStreamPlayer3D
@@ -48,6 +51,21 @@ func dispatch(waypoints: Array[Vector3], site_id: StringName) -> void:
 	responding = true
 	respond_site = site_id
 	top_speed = 13.0
+	site = site_id  # awake for as long as that alarm rings
+
+
+## On a call it goes for the player the moment it sees them (see
+## `_goal_point`); on patrol it hunts nobody.
+func _candidates() -> Array[Node3D]:
+	var list: Array[Node3D] = []
+	if not responding or deployed:
+		return list
+	var player := get_tree().get_first_node_in_group("player") as Player
+	if player and player.is_visible_in_tree():
+		list.append(player)
+	elif player and player.vehicle:
+		list.append(player.vehicle)
+	return list
 
 
 ## Called off: siren off, back to the patrol loop (deployed officers stand down).
@@ -56,6 +74,8 @@ func recall() -> void:
 	deployed = false
 	respond_route.clear()
 	respond_site = &""
+	site = &"police"
+	target = null
 	top_speed = 9.0
 	if _siren:
 		_siren.queue_free()
@@ -89,7 +109,17 @@ func _process(delta: float) -> void:
 func _goal_point() -> Vector3:
 	if not responding:
 		return super()
-	if deployed or respond_route.is_empty():
+	if deployed:
+		return global_position
+	# Spotted the suspect: leave the route, run them down, and pull up to
+	# let the officers out right there.
+	if _is_valid(target) and _has_los:
+		if _distance_to(target) < DEPLOY_RANGE and absf(speed) < 9.0:
+			_deploy()
+			return global_position
+		return target.global_position
+	if respond_route.is_empty():
+		_deploy()
 		return global_position
 	var goal: Vector3 = respond_route[0]
 	var offset := goal - global_position

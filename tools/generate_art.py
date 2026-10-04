@@ -72,6 +72,85 @@ def mud(size=512, seed=11):
     Image.fromarray(((n * 0.5 + 0.5) * 255).astype(np.uint8)).save(OUT / "mud_normal.png")
 
 
+def _smooth_noise(rng, size, cells):
+    """Tileable soft noise in -0.5..0.5: a coarse random grid, wrapped and upscaled."""
+    grid = rng.uniform(0, 255, (cells, cells)).astype(np.uint8)
+    tiled = np.tile(grid, (3, 3))
+    big = Image.fromarray(tiled).resize((size * 3, size * 3), Image.BICUBIC)
+    return np.asarray(big, np.float32)[size:size * 2, size:size * 2] / 255.0 - 0.5
+
+
+def _normal_from_height(height, strength):
+    dx = (np.roll(height, -1, axis=1) - np.roll(height, 1, axis=1)) * strength
+    dy = (np.roll(height, -1, axis=0) - np.roll(height, 1, axis=0)) * strength
+    n = np.dstack([-dx, -dy, np.ones_like(height)])
+    n /= np.linalg.norm(n, axis=2, keepdims=True)
+    return ((n * 0.5 + 0.5) * 255).astype(np.uint8)
+
+
+def sidewalk(size=1024, seed=31):
+    """Poured-concrete sidewalk: 2 x 2 slabs per tile (the tile covers 4 m, so
+    the joints fall every 2 m), each slab its own tone, with tooled joints,
+    broom-finish streaks, stains, and a few hairline cracks."""
+    rng = np.random.default_rng(seed)
+    half = size // 2
+    ys, xs = np.mgrid[0:size, 0:size]
+    # Distance to the nearest joint (the tile edges and the half lines).
+    jx = np.minimum(xs % half, half - xs % half).astype(np.float32)
+    jy = np.minimum(ys % half, half - ys % half).astype(np.float32)
+    joint = np.clip(1.0 - np.minimum(jx, jy) / 5.0, 0.0, 1.0)
+    edge_wear = np.clip(1.0 - np.minimum(jx, jy) / 26.0, 0.0, 1.0) * 0.5
+    tone = np.zeros((size, size), np.float32)
+    for sy in range(2):
+        for sx in range(2):
+            tone[sy * half:(sy + 1) * half, sx * half:(sx + 1) * half] = rng.uniform(-0.05, 0.05)
+    blotch = _smooth_noise(rng, size, 12) * 0.16 + _smooth_noise(rng, size, 40) * 0.08
+    grain = rng.normal(0.0, 1.0, (size, size)).astype(np.float32)
+    # Broom finish: the grain smeared across the slab.
+    streak = np.asarray(Image.fromarray(((grain * 0.25 + 0.5).clip(0, 1) * 255).astype(np.uint8)).filter(
+        ImageFilter.BoxBlur(0)).resize((size // 8, size), Image.BILINEAR).resize((size, size), Image.BILINEAR), np.float32) / 255.0 - 0.5
+    fine = np.asarray(Image.fromarray(((grain * 0.5 + 0.5).clip(0, 1) * 255).astype(np.uint8)).filter(
+        ImageFilter.GaussianBlur(0.8)), np.float32) / 255.0 - 0.5
+    # Hairline cracks: the edges of a sparse voronoi, kept on only some cells.
+    f1, f2 = voronoi_f1_f2(size, rng.uniform(0, size, (9, 2)))
+    crack = np.clip(1.0 - (f2 - f1) / 1.6, 0.0, 1.0) * (_smooth_noise(rng, size, 6) > 0.12)
+    # Gum spots and oil stains.
+    stain = np.zeros((size, size), np.float32)
+    for _ in range(26):
+        cx, cy, r = rng.uniform(0, size), rng.uniform(0, size), rng.uniform(3, 9)
+        dx = np.minimum(np.abs(xs - cx), size - np.abs(xs - cx))
+        dy = np.minimum(np.abs(ys - cy), size - np.abs(ys - cy))
+        stain = np.maximum(stain, np.clip(1.0 - np.sqrt(dx * dx + dy * dy) / r, 0.0, 1.0))
+    shade = 1.0 + tone + blotch + streak * 0.12 + fine * 0.12 - edge_wear * 0.08
+    base = np.array([196, 193, 186], np.float32)
+    color = base * shade[..., None]
+    color *= (1.0 - joint * 0.55)[..., None]
+    color *= (1.0 - crack * 0.5)[..., None]
+    color *= (1.0 - stain * 0.3)[..., None]
+    Image.fromarray(color.clip(0, 255).astype(np.uint8)).save(OUT / "sidewalk_color.png")
+    height = -joint * 1.2 - crack * 0.6 + streak * 0.12 + fine * 0.1 + blotch * 0.3
+    Image.fromarray(_normal_from_height(height, 2.2)).save(OUT / "sidewalk_normal.png")
+    rough = (0.86 + fine * 0.2 + joint * 0.1 - stain * 0.25).clip(0, 1)
+    Image.fromarray((rough * 255).astype(np.uint8)).save(OUT / "sidewalk_roughness.png")
+
+
+def plaster(size=512, seed=47):
+    """A wall-finish detail layer for flat-colored models (multiplied over
+    their palette color): near-white stucco with soft weathering, plus the
+    bumps as a normal map."""
+    rng = np.random.default_rng(seed)
+    grain = rng.normal(0.0, 1.0, (size, size)).astype(np.float32)
+    dabs = np.asarray(Image.fromarray(((grain * 0.5 + 0.5).clip(0, 1) * 255).astype(np.uint8)).filter(
+        ImageFilter.GaussianBlur(2.2)), np.float32) / 255.0 - 0.5
+    fine = np.asarray(Image.fromarray(((grain * 0.5 + 0.5).clip(0, 1) * 255).astype(np.uint8)).filter(
+        ImageFilter.GaussianBlur(0.7)), np.float32) / 255.0 - 0.5
+    weather = _smooth_noise(rng, size, 5) * 0.14 + _smooth_noise(rng, size, 14) * 0.08
+    shade = (0.94 + weather + dabs * 0.28 + fine * 0.06).clip(0.6, 1.0)
+    gray = (shade * 255).astype(np.uint8)
+    Image.fromarray(np.dstack([gray, gray, gray])).save(OUT / "plaster_color.png")
+    Image.fromarray(_normal_from_height(dabs * 3.0 + fine * 0.3, 1.0)).save(OUT / "plaster_normal.png")
+
+
 POSTERS = [
     (["GIVE US", "OUR WATER", "BACK"], IMPACT, (250, 214, 60), (20, 20, 20)),
     (["NOT IN", "MY", "AQUIFER"], IMPACT, (244, 240, 230), (200, 30, 30)),
@@ -178,7 +257,7 @@ def fix_imports():
         text = re.sub(r"compress/mode=\d", "compress/mode=2", text)
         text = re.sub(r"mipmaps/generate=\w+", "mipmaps/generate=true", text)
         text = re.sub(r"detect_3d/compress_to=\d", "detect_3d/compress_to=0", text)
-        if path.name == "mud_normal.png.import":
+        if path.name.endswith("_normal.png.import"):
             text = re.sub(r"compress/normal_map=\d", "compress/normal_map=1", text)
         path.write_text(text, encoding="utf-8", newline="\n")
     print("patched import settings")
@@ -189,6 +268,11 @@ def main():
         fix_imports()
         return
     OUT.mkdir(parents=True, exist_ok=True)
+    sidewalk()
+    plaster()
+    if "--surfaces" in sys.argv:
+        print(f"wrote the sidewalk and plaster textures to {OUT}")
+        return
     mud()
     for i, spec in enumerate(POSTERS):
         poster(i, *spec)

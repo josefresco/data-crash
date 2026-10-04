@@ -71,6 +71,8 @@ enum Phase { ACTIVISM, ASSAULT, BOSS, BUILD, WAVE, WON, LOST }
 @export var home_near := Vector3(-5.0, 0.0, 20.0)
 ## Seconds between a datacenter alarm and the police cruiser being sent.
 @export var police_response_delay := 30.0
+## Seconds an alarmed site keeps searching after it loses the player.
+@export var alarm_cooldown := 30.0
 ## Each smashed Grock camera adds this many seconds to the police response
 ## (fewer eyes on the block, slower calls).
 @export var camera_police_delay := 6.0
@@ -104,9 +106,11 @@ enum Phase { ACTIVISM, ASSAULT, BOSS, BUILD, WAVE, WON, LOST }
 @export var defense_site_id := &"felsa"
 ## The opening objective line.
 @export_multiline var intro_objective := "Three datacenters are draining the block: Felsa Cloud (north), Scgrewgle (west), and ForProfitSI (east), each with a boss inside. Help the neighbors first (optional), then hit them."
-## The patrol cruiser's loop, and the street (z) it starts on by the station.
-@export var police_patrol: Array[Vector3] = [Vector3(2.5, 0.2, -2), Vector3(2.5, 0.2, 28), Vector3(62, 0.2, 28),
-	Vector3(62, 0.2, 32), Vector3(-62, 0.2, 32), Vector3(-62, 0.2, 28), Vector3(-2.5, 0.2, 28)]
+## The patrol cruiser's loop (keeping right: south down the main road's west
+## lane, east along the street's south lane, back west along its north lane),
+## and the street (z) it starts on by the station.
+@export var police_patrol: Array[Vector3] = [Vector3(-2.2, 0.2, -2), Vector3(-2.2, 0.2, 31.2), Vector3(62, 0.2, 31.2),
+	Vector3(62, 0.2, 28.8), Vector3(-62, 0.2, 28.8), Vector3(-62, 0.2, 31.2), Vector3(2.2, 0.2, 31.2), Vector3(2.2, 0.2, -2)]
 @export var police_street_z := 28.0
 ## road_route(): the cross street (z) cruisers take, the main road's lanes
 ## (x = +-route_main_x), and |x| beyond which a site is reached along the
@@ -261,6 +265,7 @@ func _ready() -> void:
 	_spawn_police()
 	_spawn_heavy_equipment()
 	_spawn_failurecabs()
+	_spawn_traffic()
 	var market := FarmersMarket.new()
 	market.name = "FarmersMarket"
 	market.position = market_position
@@ -296,6 +301,7 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	_tick_police_calls(delta)
+	_tick_alarm_cooldowns(delta)
 	if phase != Phase.WON and phase != Phase.LOST:
 		Game.count("time", delta)
 	if phase in [Phase.ACTIVISM, Phase.ASSAULT, Phase.BUILD] and _tourists_sent < tourist_groups:
@@ -352,6 +358,7 @@ func start_defense() -> void:
 	core.destroyed.connect(_on_core_destroyed)
 	_on_core_damaged(0.0, core.health)
 
+	get_tree().call_group(&"civilian_cars", &"go_home")
 	_spawner.objective = core
 	_build.center = core.global_position
 	_build.enabled = true
@@ -565,13 +572,89 @@ func _spawn_failurecabs() -> void:
 		var z: float = hood.street_z[index]
 		var cab := Failurecab.new()
 		cab.name = "Failurecab%d" % (index + 1)
-		# Lanes hug the center line: cars are parked along the curbs.
-		cab.route = [Vector3(reach, 0.2, z - 0.5), Vector3(reach, 0.2, z + 0.5), Vector3(-reach, 0.2, z + 0.5), Vector3(-reach, 0.2, z - 0.5)]
+		# Lanes hug the center line (cars are parked along the curbs) and keep
+		# right: west along the north side, east along the south.
+		cab.route = [Vector3(reach, 0.2, z + 0.5), Vector3(reach, 0.2, z - 0.5), Vector3(-reach, 0.2, z - 0.5), Vector3(-reach, 0.2, z + 0.5)]
 		# Mid-block in the westbound lane (clear of the cruiser by the station).
-		cab.position = Vector3(reach * 0.5 - index * 12.0, 0.2, z + 0.5)
+		cab.position = Vector3(reach * 0.5 - index * 12.0, 0.2, z - 0.5)
 		cab.rotation.y = PI * 0.5  # heading -X, toward route[2]
 		cab.set("_leg", 2)
 		add_child(cab)
+
+
+## Lane offsets from a road's center line (the main road's is wider: the
+## tourist RV parks on its shoulder), and how far back from a crossing's
+## middle the stop lines are.
+const TRAFFIC_LANE := 1.15
+const TRAFFIC_MAIN_LANE := 1.5
+const TRAFFIC_STOP_BACK := 6.8
+## A parked car's center: against the curb, clear of the lane beside it.
+const TRAFFIC_CURB := 3.05
+
+
+## Neighbors' cars (CivilianCar) looping the blocks between the main road and
+## the east avenue: two per block, one each way. Public pieces for tests:
+## group `civilian_cars`, `CivilianCar.route` / `stops`.
+func _spawn_traffic() -> void:
+	var hood := $Neighborhood as NeighborhoodBuilder
+	var joined := hood.avenue_streets()
+	if joined.is_empty():
+		return
+	var blocks: Array = [[joined[0], joined[1]]]
+	if joined.size() > 2:
+		blocks.append([joined[0], joined[-1]])
+	for b in blocks.size():
+		var north: float = hood.street_z[blocks[b][0]]
+		var south: float = hood.street_z[blocks[b][1]]
+		for left_turns: bool in [true, false]:
+			var car := CivilianCar.new()
+			car.name = "CivilianCar%d" % (get_tree().get_nodes_in_group("civilian_cars").size() + 1)
+			_plan_loop(car, hood.east_avenue_x, north, south, left_turns, 0.35 + 0.25 * b)
+			add_child(car)
+			car.add_to_group("civilian_cars")
+
+
+## One block's loop for `car`. `left_turns`: east along the south street,
+## north up the avenue, west along the north street, south down the main
+## road; otherwise the other way round (all right turns). Stop lines: every
+## cross street stops for the main road and (except the first street) for
+## the avenue, and the avenue stops for the first street. `share` places the
+## curbside parking spot and the starting point along a straight.
+func _plan_loop(car: CivilianCar, avenue_x: float, north: float, south: float, left_turns: bool, share: float) -> void:
+	var lane := TRAFFIC_LANE
+	var main := TRAFFIC_MAIN_LANE
+	var back := TRAFFIC_STOP_BACK
+	var y := 0.2
+	var start: Vector3
+	if left_turns:
+		car.route = [
+			Vector3(avenue_x - back, y, south + lane),
+			Vector3(avenue_x + lane, y, south + lane),
+			Vector3(avenue_x + lane, y, north + back),
+			Vector3(avenue_x + lane, y, north - lane),
+			Vector3(back, y, north - lane),
+			Vector3(-main, y, north - lane),
+			Vector3(-main, y, south + lane),
+		]
+		car.stops = [0, 2, 4]
+		car.park_after = 6
+		car.park_spot = Vector3(lerpf(-main, avenue_x - back, share), y, south + TRAFFIC_CURB)
+		start = car.route[6].lerp(car.route[0], share + 0.15)
+	else:
+		car.route = [
+			Vector3(main, y, north + lane),
+			Vector3(avenue_x - lane, y, north + lane),
+			Vector3(avenue_x - lane, y, south - lane),
+			Vector3(back, y, south - lane),
+			Vector3(main, y, south - lane),
+		]
+		car.stops = [3]
+		car.park_after = 0
+		car.park_spot = Vector3(lerpf(main, avenue_x - lane, share), y, north + TRAFFIC_CURB)
+		start = car.route[4].lerp(car.route[0], 0.35)
+	car.position = start
+	var heading := car.route[0] - start
+	car.rotation.y = atan2(-heading.x, -heading.z)
 
 
 func _place_vehicle(vehicle: Car, spot: Vector4) -> void:
@@ -655,6 +738,9 @@ func irrigation_status() -> Array:
 
 ## Datacenter alarms waiting for a cruiser: site id -> seconds until dispatch.
 var _police_calls := {}
+## Site id -> seconds since that alarmed site last had eyes on the player.
+var _alarm_quiet := {}
+var _alarm_check_left := 0.0
 
 
 func _tick_police_calls(delta: float) -> void:
@@ -677,6 +763,75 @@ func police_eta(id: StringName) -> float:
 ## police stop pursuing and go back to their posts, dispatched cruisers go
 ## back on patrol. Damage stays. Sites whose building is already down (boss
 ## loose) stay hot, and the defense waves don't stop.
+## Breaking contact pays: an alarmed site that hasn't had eyes on the player
+## (nobody there with a target, the player well clear of its fence) for
+## `alarm_cooldown` seconds gives up the search and goes quiet again, the
+## police with it. Hit and run, wait them out, sneak back in.
+func _tick_alarm_cooldowns(delta: float) -> void:
+	if phase not in [Phase.ACTIVISM, Phase.ASSAULT] or Game.alarms.is_empty():
+		return
+	_alarm_check_left -= delta
+	if _alarm_check_left > 0.0:
+		return
+	var step := 0.5 - _alarm_check_left
+	_alarm_check_left = 0.5
+	var player := get_node_or_null("Player") as Player
+	var engaged := {}
+	for node in get_tree().get_nodes_in_group("hostiles"):
+		var unit := node as Enemy
+		if unit and unit.is_alive() and is_instance_valid(unit.target):
+			engaged[unit.site] = true
+		# The police are still on their way: the search isn't over until
+		# they've arrived and come up empty too.
+		var cruiser := node as PoliceCruiser
+		if cruiser and cruiser.responding and not cruiser.deployed:
+			engaged[cruiser.respond_site] = true
+	for id: StringName in _police_calls.keys():
+		engaged[id] = true
+	var cooled: Array[StringName] = []
+	for id: StringName in Game.alarms.keys():
+		var site_node := site(id)
+		if site_node and site_node.is_neutralized:
+			continue
+		var near := player != null and site_node != null and site_node.contains(player.global_position, 18.0)
+		if engaged.has(id) or near:
+			_alarm_quiet[id] = 0.0
+			continue
+		_alarm_quiet[id] = float(_alarm_quiet.get(id, 0.0)) + step
+		if _alarm_quiet[id] >= alarm_cooldown:
+			cooled.append(id)
+	if cooled.is_empty():
+		return
+	_stand_down_sites(cooled)
+	for id in cooled:
+		var site_node := site(id)
+		Game.notify("%s gave up the search. It's quiet again: sneak back in, or hit it somewhere else." % (
+			(site_node.display_name + " security") if site_node else "The police"), 6.0)
+	_update_sites()
+
+
+## Townspeople who will join as the repair crew when the defense starts:
+## `townspeople_base` plus `townspeople_per_trust` per full bar of trust.
+func pledged_crew() -> int:
+	return townspeople_base + int((Game.district.trust if Game.district else 0.0) * townspeople_per_trust)
+
+
+## Clears these alarms: their units and cruisers stand down.
+func _stand_down_sites(cooled: Array[StringName]) -> void:
+	for id in cooled:
+		Game.alarms.erase(id)
+		_police_calls.erase(id)
+		_alarm_quiet.erase(id)
+	for node in get_tree().get_nodes_in_group("hostiles"):
+		var unit := node as Enemy
+		if unit == null:
+			continue
+		if unit is PoliceCruiser and (unit as PoliceCruiser).respond_site in cooled:
+			(unit as PoliceCruiser).recall()
+		if unit.site in cooled:
+			unit.stand_down()
+
+
 func _on_player_respawned() -> void:
 	Game.show_banner("KNOCKED OUT", "The heat's off. The damage stays.")
 	if phase not in [Phase.ACTIVISM, Phase.ASSAULT]:
@@ -687,19 +842,22 @@ func _on_player_respawned() -> void:
 		if site_node and site_node.is_neutralized:
 			continue
 		cooled.append(id)
-	for id in cooled:
-		Game.alarms.erase(id)
-		_police_calls.erase(id)
-	if cooled.is_empty():
-		return
+	_stand_down_sites(cooled)
+	var lost := 0
 	for node in get_tree().get_nodes_in_group("hostiles"):
 		var unit := node as Enemy
 		if unit == null:
 			continue
-		if unit is PoliceCruiser and (unit as PoliceCruiser).respond_site in cooled:
-			(unit as PoliceCruiser).recall()
-		if unit.site in cooled:
-			unit.stand_down()
+		if unit.site in cooled or unit.site == &"police":
+			continue
+		if not unit.is_dormant():
+			# No alarm to clear (a boss on the loose and its summons, a fallen
+			# site's leftovers): they lose the trail and go back where they
+			# came from instead of camping the respawn point.
+			unit.lose_track()
+			lost += 1
+	if cooled.is_empty() and lost == 0:
+		return
 	Game.notify("Security and police lost track of you. Lie low, or hit them again.", 6.0)
 	_update_sites()
 
@@ -1059,7 +1217,8 @@ func _on_stray_dog_defeated(dog: Enemy) -> void:
 ## routes hits on site units and property here.
 ## `reason` names what the player hit; `seen_by` (stealth) names who spotted them.
 func raise_alarm(site_id: StringName, reason := "", seen_by := "") -> void:
-	if Game.is_alarmed(site_id):
+	_alarm_quiet[site_id] = 0.0
+	if Game.is_alarmed(site_id) or Game.alarm_hold > 0:
 		return
 	Game.alarms[site_id] = true
 	var site_node := site(site_id)
@@ -1271,7 +1430,7 @@ func _spawn_town_services() -> void:
 		add_child(hole)
 		hole.fixed.connect(_on_pothole_fixed)
 	_potholes_total = pothole_spots.size()
-	for lot: Array in hood.store_lots:
+	for lot: Array in hood.all_store_lots():
 		var kind := Storefront.kind_for(lot[2])
 		var door := hood.store_door(lot[2])
 		if kind.is_empty() or door == Vector3.ZERO:
@@ -1415,6 +1574,7 @@ func _spawn_residents(count: int) -> void:
 	for spot in park_spots:
 		destinations.append(spot)
 	var doors := ($Neighborhood as NeighborhoodBuilder).door_positions()
+	var homes := ($Neighborhood as NeighborhoodBuilder).house_doors()
 	# Mostly strollers, with joggers, dog walkers, kids, gardeners, and the mail.
 	var roles: Array[StringName] = [&"walker", &"walker", &"walker", &"jogger", &"jogger", &"dog_walker", &"dog_walker",
 		&"kid", &"kid", &"gardener", &"gardener", &"mail_carrier"]
@@ -1432,6 +1592,8 @@ func _spawn_residents(count: int) -> void:
 			start = market_position + Vector3(12.5, 0.2, 2.5)
 		elif role == &"gardener" or role == &"kid":
 			start = doors.pick_random() + Vector3(0.0, 0.0, 0.0)
+		elif (role == &"walker" or role == &"dog_walker") and not homes.is_empty():
+			start = (homes.pick_random() as Array)[0]  # their own front door
 		person.position = start + (Vector3(randf_range(-2.0, 2.0), 0.0, randf_range(-2.0, 2.0)) if role != &"busker" else Vector3.ZERO)
 		add_child(person)
 
@@ -1495,6 +1657,8 @@ func _update_deeds() -> void:
 			rows.append([labels[key], &"done" if _deeds[key] else &"todo"])
 	rows.append(["Grock cams %d/%d" % [_cameras_smashed, _cameras_total], cams])
 	rows.append(["Irrigation off %d/%d" % irrigation_status(), &"done" if irrigation_status()[0] >= irrigation_status()[1] else &"info"])
+	# How trust turns into help: the repair crew that shows up for the defense.
+	rows.append(["Neighbors pledged for the defense: %d (more with trust)" % pledged_crew(), &"info"])
 	Game.set_checklist("deeds", "GOOD DEEDS", rows)
 
 

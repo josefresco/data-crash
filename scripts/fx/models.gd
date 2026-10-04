@@ -213,6 +213,16 @@ static func surface(material: StandardMaterial3D, kind: StringName) -> void:
 		_pbr(material, kind)
 		return
 	match kind:
+		&"sidewalk":
+			# Generated slabs (tools/generate_art.py): 2 x 2 per 4 m tile, so the
+			# joints fall every 2 m of the merged street mesh.
+			material.albedo_texture = load(GENERATED_DIR + "sidewalk_color.png")
+			material.normal_texture = load(GENERATED_DIR + "sidewalk_normal.png")
+			material.roughness_texture = load(GENERATED_DIR + "sidewalk_roughness.png")
+			material.roughness_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_RED
+			material.roughness = 1.0
+			material.uv1_scale = Vector3.ONE / 4.0
+			material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
 		&"grass":
 			material.albedo_texture = _grain(&"grass", 0.012, Color(0.68, 0.7, 0.62))
 			material.normal_texture = _bumps(&"grass_n", 0.2, 2.0)
@@ -292,6 +302,39 @@ static func retexture(root: Node, texture: Texture2D) -> void:
 				copy.albedo_texture = texture
 				_retextured[key] = copy
 			mesh.set_surface_override_material(surface_index, _retextured[key])
+
+
+const GENERATED_DIR := "res://assets/generated/"
+static var _detailed := {}
+
+
+## Gives an imported flat-color (palette) model a wall finish without
+## touching its UVs: the plaster texture is a detail layer multiplied over the
+## palette color and mapped by world-space triplanar on the second UV set, so
+## stucco grain and its bumps run across every wall. Materials are cached per
+## source material. `meters`: the size one texture tile covers.
+static func wall_detail(root: Node, meters := 2.5) -> void:
+	for mesh: MeshInstance3D in root.find_children("*", "MeshInstance3D", true, false):
+		for surface_index in mesh.mesh.get_surface_count():
+			var source := mesh.get_surface_override_material(surface_index) as StandardMaterial3D
+			if source == null:
+				source = mesh.mesh.surface_get_material(surface_index) as StandardMaterial3D
+			if source == null:
+				continue
+			var key := "%d/%.2f" % [source.get_instance_id(), meters]
+			if not _detailed.has(key):
+				var copy := source.duplicate() as StandardMaterial3D
+				copy.detail_enabled = true
+				copy.detail_blend_mode = BaseMaterial3D.BLEND_MODE_MUL
+				copy.detail_uv_layer = BaseMaterial3D.DETAIL_UV_2
+				copy.detail_albedo = load(GENERATED_DIR + "plaster_color.png")
+				copy.detail_normal = load(GENERATED_DIR + "plaster_normal.png")
+				copy.uv2_triplanar = true
+				copy.uv2_world_triplanar = true
+				copy.uv2_scale = Vector3.ONE / meters
+				copy.roughness = maxf(copy.roughness, 0.85)
+				_detailed[key] = copy
+			mesh.set_surface_override_material(surface_index, _detailed[key])
 
 
 const PBR_DIR := "res://assets/ambientcg/"

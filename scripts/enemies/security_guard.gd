@@ -242,8 +242,36 @@ func _upper_pose() -> StringName:
 	return &"pistol_aim" if _is_valid(target) and _has_los else &"pistol_idle"
 
 
+## The gun arm: straightened onto the target while it has one in sight (the
+## gun lies along the forearm, so the muzzle really points at you), with a
+## kick upward on every shot.
+var _aim: AimModifier
+var _kick := 0.0
+const KICK := 0.3
+
+
+func _process(delta: float) -> void:
+	super(delta)
+	if _is_dead or not (_rig is CharacterModel):
+		if _aim and _aim.active:
+			_aim.active = false  # a body sinking away has no arm to aim
+		return
+	if _aim == null:
+		_aim = AimModifier.new()
+		_aim.influence = 0.0
+		(_rig as CharacterModel).skeleton().add_child(_aim)
+	_kick = move_toward(_kick, 0.0, delta * 1.6)
+	var aiming := _is_valid(target) and _has_los and not is_dormant() and not is_far() and _stun_timer <= 0.0
+	_aim.influence = move_toward(_aim.influence, 1.0 if aiming else 0.0, delta * (7.0 if aiming else 4.0))
+	if aiming:
+		var shoulder := global_position + Vector3.UP * body_height * 0.78
+		var line := (_aim_point_of(target) - shoulder).normalized()
+		_aim.aim_direction = (line + Vector3.UP * _kick).normalized()
+
+
 func _attack(victim: Node3D) -> void:
 	_act(&"pistol_shoot")
+	_kick = KICK
 	var from := muzzle_point()
 	var aim := _aim_point_of(victim)
 	var accuracy := lerpf(close_accuracy, far_accuracy, clampf(_distance_to(victim) / sight_range, 0.0, 1.0))

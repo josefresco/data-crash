@@ -115,6 +115,15 @@ var spotted_left := 0.0
 ## hospital's ward and recover there (0 = never). `in_hospital` while on the way or resting.
 var hospital_share := 0.0
 var in_hospital := false
+## Lost the player after a knockout (see lose_track()).
+var lost_player := false
+var _lost_grace := 0.0
+const REACQUIRE_RANGE := 22.0
+## Seconds out of sight before site security gives up the chase.
+const HIDE_SECONDS := 7.0
+var _unseen := 0.0
+var _last_seen := Vector3.INF
+const LOST_GRACE := 8.0
 ## Ally orders (AllyOrders): go to `order_point` and fight there (hostiles
 ## and site targets within ORDER_RADIUS of it). Vector3.INF = no order.
 ## `order_hold`: stay put there instead of chasing out of the circle.
@@ -198,6 +207,7 @@ func apply_damage(amount: float, from: Vector3, kind: StringName = &"generic") -
 	_last_hit_from = from
 	_last_hit_kind = kind
 	_last_hit_amount = amount
+	lost_player = false
 	if health <= 0.0:
 		_die()
 		return
@@ -560,6 +570,41 @@ func stand_down() -> void:
 		_nav.target_position = home
 
 
+## The player was knocked out and this unit has no site alarm to clear (a
+## boss on the loose, its summons): it loses the trail and goes back to
+## `home` instead of following the player to the respawn point. It picks the
+## fight up again once the player comes back within REACQUIRE_RANGE in plain
+## sight (not during the first LOST_GRACE seconds), or hurts it.
+func lose_track() -> void:
+	if _is_dead:
+		return
+	stand_down()
+	lost_player = true
+	_lost_grace = LOST_GRACE
+
+
+## Site security (not bosses, not wave units) chasing a player it hasn't
+## seen for HIDE_SECONDS gives up: it checks where it last saw them, then
+## goes back to its post, and only re-engages on seeing them again. Crouching
+## out of sight shakes them faster. Returns true when it just gave up.
+func _lose_hidden_player(tick: float) -> bool:
+	if site == &"" or not boss_name.is_empty() or not (target is Player):
+		return false
+	if _has_los:
+		_unseen = 0.0
+		_last_seen = target.global_position
+		return false
+	_unseen += tick * (1.8 if (target as Player).crouching else 1.0)
+	if _unseen < HIDE_SECONDS:
+		return false
+	_unseen = 0.0
+	lose_track()
+	_lost_grace = 2.0
+	if _last_seen != Vector3.INF:
+		investigate(_last_seen)
+	return true
+
+
 func is_defeated() -> bool:
 	return _defeated_emitted
 
@@ -624,6 +669,8 @@ func _think() -> void:
 	target = _pick_target()
 	if _is_valid(target):
 		_has_los = _can_see(target)
+		if _lose_hidden_player(tick):
+			return
 		_nav.target_position = approach_point(target)
 		return
 	_has_los = false
@@ -822,6 +869,9 @@ func _idle() -> void:
 			_nav.target_position = order_point + Vector3(randf_range(-4.0, 4.0), 0.0, randf_range(-4.0, 4.0))
 	elif faction == Faction.ALLY:
 		_follow_player()
+	elif lost_player:
+		if global_position.distance_to(home) > 4.0:
+			_nav.target_position = home
 	elif _is_valid(objective):
 		_nav.target_position = approach_point(objective)
 	else:
@@ -879,6 +929,15 @@ func label_for_alarm() -> String:
 func _pick_target() -> Node3D:
 	if is_dormant():
 		return null
+	if lost_player:
+		_lost_grace -= THINK_INTERVAL
+		var player := get_tree().get_first_node_in_group("player") as Player
+		if player == null or _lost_grace > 0.0 or player.is_spawn_protected():
+			return null
+		var seen: Node3D = player.vehicle if player.vehicle else player
+		if _distance_to(seen) > REACQUIRE_RANGE or not _can_see(seen):
+			return null
+		lost_player = false
 	if rushing and faction == Faction.HOSTILE and _is_valid(objective):
 		return objective
 	if faction == Faction.ALLY and order_point != Vector3.INF:

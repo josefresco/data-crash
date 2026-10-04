@@ -117,5 +117,5 @@ func _finish() -> void:
 		neighbor.position = to_global(Vector3(-1.0 + i * 2.0, 0.2, 6.0))
 		neighbor.destinations = [global_position + Vector3(0.0, 0.2, 8.0)]
 		get_parent().add_child(neighbor)
-	get_tree().call_group(&"nav_baker", &"request_rebake")
+	get_tree().call_group(&"nav_baker", &"request_rebake", global_position)
 	built.emit(self)

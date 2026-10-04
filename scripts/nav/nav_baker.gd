@@ -3,13 +3,15 @@ extends NavigationRegion3D
 ## Bakes the navmesh at runtime from static colliders (world + destructibles)
 ## under nodes in the "nav_source" group, then rebakes (debounced) whenever
 ## something is destroyed or built. Call via:
-##   get_tree().call_group(&"nav_baker", &"request_rebake")
+##   get_tree().call_group(&"nav_baker", &"request_rebake", global_position)
 
 ## Emitted after every finished bake, including the first.
 signal navmesh_ready
 
 @export var bake_bounds := AABB(Vector3(-92.0, -2.0, -96.0), Vector3(184.0, 20.0, 260.0))
 @export var rebake_delay := 0.4
+
+const REBAKE_MARGIN := 8.0
 
 var bake_count := 0
 
@@ -41,8 +43,19 @@ func _ready() -> void:
 	_start_bake.call_deferred()
 
 
-func request_rebake() -> void:
+## `at` (world): where the map changed. A region whose bounds (grown by
+## REBAKE_MARGIN, so seams and wide props are covered) don't contain it skips
+## the bake: one broken fence panel used to rebake all three regions.
+## Without `at`, every region rebakes.
+func request_rebake(at := Vector3.INF) -> void:
+	if at != Vector3.INF and not bake_bounds.grow(REBAKE_MARGIN).has_point(to_local(at)):
+		return
 	_delay_left = rebake_delay
+
+
+## No bake running or queued (tests wait for this after wrecking things).
+func is_settled() -> bool:
+	return bake_count > 0 and not _baking and not _pending and _delay_left < 0.0
 
 
 func _process(delta: float) -> void:

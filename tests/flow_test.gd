@@ -282,7 +282,7 @@ func _test_animation_layers() -> void:
 
 func _test_hud_layout(hud: Hud) -> void:
 	await seconds(0.3)
-	check(hud.checklist_rows("deeds").size() == 14, "good deeds are a checklist on the right (%d rows)" % hud.checklist_rows("deeds").size())
+	check(hud.checklist_rows("deeds").size() == 15, "good deeds are a checklist on the right (%d rows)" % hud.checklist_rows("deeds").size())
 	check(hud.checklist_rows("sites").size() == 3, "datacenter status is a checklist (%d rows)" % hud.checklist_rows("sites").size())
 	# Speech: only the nearest few talk, and neighbors' bubbles stack.
 	var crowd: Array[Resident] = []
@@ -580,8 +580,15 @@ func _test_solid_props() -> void:
 ## GTA-style: getting knocked out clears the alarms; damage stays.
 func _test_heat_reset() -> void:
 	level.call("raise_alarm", &"scgrewgle", "test")
+	# A hunter with no site (like Elmo once he's out of his datacenter), whose
+	# standing objective is the player.
+	var hunter := SecurityGuard.new()
+	hunter.position = player.global_position + Vector3(9.0, 0.2, 0.0)
+	hunter.objective = player
+	level.add_child(hunter)
 	await seconds(1.5)
 	check(Game.is_alarmed(&"scgrewgle"), "the Scgrewgle alarm is up")
+	check(hunter.target == player, "a hunter with no site is on the player")
 	var hud := level.get_node("Hud") as Hud
 	player.apply_damage(99999.0, player.global_position + Vector3(0, 0, -3), &"bullet")
 	await seconds(0.3)
@@ -601,6 +608,30 @@ func _test_heat_reset() -> void:
 	player.apply_damage(50.0, player.global_position + Vector3(0, 0, -3), &"bullet")
 	check(player.health >= player.max_health - 0.1, "spawn protection absorbs hits right after respawn")
 	check(Game.stat("knockouts") >= 1.0, "knockouts are counted for the end screen")
+	# The siteless hunter loses the trail too, instead of camping the respawn.
+	check(hunter.lost_player and not is_instance_valid(hunter.target), "a hunter with no site loses the trail on a knockout")
+	var post := hunter.home
+	await seconds(4.0)
+	check(not is_instance_valid(hunter.target) and hunter.global_position.distance_to(post) < 6.0,
+		"it goes back where it came from, not to the respawn point (%.0f m from its post)" % hunter.global_position.distance_to(post))
+	await seconds(5.0)  # past its grace period and the spawn protection
+	hunter.global_position = player.global_position + Vector3(0.0, 0.2, 8.0)
+	await seconds(1.0)
+	check(not hunter.lost_player and hunter.target == player, "walking back into its sight picks the fight up again")
+	hunter.queue_free()
+	player.health = player.max_health
+	await seconds(0.2)
+	# Breaking contact works without getting knocked out, too.
+	var cooldown: float = level.get("alarm_cooldown")
+	level.set("alarm_cooldown", 2.0)
+	level.call("raise_alarm", &"scgrewgle", "test")
+	check(Game.is_alarmed(&"scgrewgle"), "the alarm is back up")
+	await seconds(4.0)
+	check(Game.is_alarmed(&"scgrewgle"), "the search goes on while the police are still on their way")
+	(level.get("_police_calls") as Dictionary).erase(&"scgrewgle")  # as if they came and found nothing
+	await seconds(4.0)
+	check(not Game.is_alarmed(&"scgrewgle"), "an alarmed site gives up the search once it loses you")
+	level.set("alarm_cooldown", cooldown)
 
 
 func _test_pause_and_end() -> void:

@@ -33,6 +33,9 @@ extends VehicleBody3D
 ## Crashes, gunfire, and blasts wear a car down: smoke under 40%, fire
 ## under 15%, then it explodes into a burnt wreck (the driver is thrown out).
 @export var max_health := 500.0
+## Bullets count this many times over: sheet metal, glass, a fuel tank. A
+## family car is wrecked by about 7 pistol rounds, 13 from the machine gun.
+@export var bullet_factor := 3.0
 ## Self-damage per m/s of impact speed above `crash_damage_from`.
 @export var crash_damage := 6.0
 @export var crash_damage_from := 7.0
@@ -323,9 +326,11 @@ func rams_units() -> bool:
 
 
 ## Damage from anything (bullets, blasts, fire, rams, crashes).
-func apply_damage(amount: float, _from: Vector3, _kind: StringName = &"generic") -> void:
+func apply_damage(amount: float, _from: Vector3, kind: StringName = &"generic") -> void:
 	if wrecked or amount <= 0.0:
 		return
+	if kind == &"bullet":
+		amount *= bullet_factor
 	health -= amount
 	var ratio := health / max_health
 	if ratio < 0.4 and _smoke == null:

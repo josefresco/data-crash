@@ -15,6 +15,11 @@ const MENUS := {
 	"pizza": [["Slice", 6, 15.0, 0.005, ""], ["Whole pie", 25, 60.0, 0.012, ""], ["Pizza party for your crew", 40, 20.0, 0.02, "party"]],
 	"pharmacy": [["Bandages", 10, 25.0, 0.005, ""], ["First aid kit", 30, 80.0, 0.01, ""], ["Inhalers for the block", 25, 0.0, 0.03, ""]],
 	"laundromat": [["Donate quarters", 5, 0.0, 0.01, ""], ["Wash a neighbor's load", 12, 0.0, 0.02, ""], ["Fresh hoodie (sneakier for 2 min)", 15, 0.0, 0.01, "disguise"]],
+	"cafe": [["Drip coffee", 4, 8.0, 0.005, ""], ["Latte and a muffin", 9, 25.0, 0.008, ""], ["Coffee for the picket line", 22, 0.0, 0.03, ""]],
+	"grocery": [["Apples", 5, 12.0, 0.005, ""], ["Sandwich fixings", 14, 40.0, 0.01, ""], ["Fill the food pantry box", 30, 0.0, 0.035, ""]],
+	"bakery": [["Day-old donut", 3, 8.0, 0.004, ""], ["Loaf of sourdough", 9, 30.0, 0.008, ""], ["Sheet cake for the block party", 35, 15.0, 0.02, "party"]],
+	"auto": [["Air for a neighbor's tires", 5, 0.0, 0.01, ""], ["Jump a dead battery", 12, 0.0, 0.02, ""], ["Brake job for the school van", 40, 0.0, 0.045, ""]],
+	"barber": [["Tip the apprentice", 5, 0.0, 0.01, ""], ["Hot towel shave", 12, 20.0, 0.01, ""], ["A whole new look (sneakier for 2 min)", 18, 0.0, 0.01, "disguise"]],
 	"bait": [["Nightcrawlers", 5, 0.0, 0.01, ""], ["Cooler of snacks", 15, 30.0, 0.01, ""], ["Fishing license (the river's coming back)", 20, 0.0, 0.025, ""]],
 }
 
@@ -31,7 +36,8 @@ var _player: Player
 static func kind_for(sign_text: String) -> String:
 	var upper := sign_text.to_upper()
 	for pair in [["DINER", "diner"], ["PIZZA", "pizza"], ["PHARMACY", "pharmacy"], ["LAUNDROMAT", "laundromat"],
-			["SPIN CYCLE", "laundromat"], ["SUDS", "laundromat"], ["BAIT", "bait"]]:
+			["SPIN CYCLE", "laundromat"], ["SUDS", "laundromat"], ["BAIT", "bait"], ["COFFEE", "cafe"],
+			["GROCER", "grocery"], ["BAKERY", "bakery"], ["AUTO", "auto"], ["BARBER", "barber"]]:
 		if pair[0] in upper:
 			return pair[1]
 	return ""

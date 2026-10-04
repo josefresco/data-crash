@@ -101,6 +101,7 @@ func _ready() -> void:
 	_post_security()
 	_build_extras()
 	_build_grounds()
+	_build_cover()
 	if not Engine.is_editor_hint():
 		# Draw calls: bake the lot's static dressing (lines, beds, bushes,
 		# poles, signs) into a few meshes; bodies and scripted props stay.
@@ -132,6 +133,69 @@ func irrigation_running() -> float:
 ## cars, and a manicured corporate lawn (-X) with hedges, flower beds, trees,
 ## a logo fountain, and sprinklers run by an irrigation controller. All of it
 ## watered around the clock while the neighborhood's taps run dry.
+## Things to hide behind, outside the fence and in the yard: shipping
+## containers, pallet stacks, concrete barriers, utility cabinets, cable
+## reels. All solid and sight-blocking (world layer), clear of the gate
+## lanes (|x| < 6) and the truck dock. Guards use them as cover too.
+## [kind, x, z, yaw]; z is from the building's front (+) or back (-) fence.
+const COVER := [
+	# Outside the front fence: the approach.
+	["container", -20.0, 8.0, 0.2], ["container", 19.0, 7.0, -0.15], ["barrier", -10.0, 4.5, 0.0], ["barrier", 10.5, 4.5, 0.0],
+	["cabinet", -28.0, 3.5, 0.0], ["cabinet", 27.0, 3.5, 0.0], ["reel", -14.5, 9.0, 0.6], ["pallets", 26.0, 9.5, 0.3],
+	# In the front yard, between the fence and the building. The east side
+	# stays open from the gate to the cooling units (x 14..26): that's the
+	# lane a hacked Failurecab drives in on.
+	["pallets", -26.0, -6.0, 0.1], ["pallets", 30.0, -9.0, -0.2], ["container", -15.0, -9.0, 1.5708], ["barrier", -24.0, -12.5, 0.0],
+	["reel", 31.0, -13.5, 0.0], ["cabinet", -9.0, -11.0, 1.5708],
+]
+
+
+func _build_cover() -> void:
+	var half := compound * 0.5
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash(site_id) + 77
+	var root := Node3D.new()
+	root.name = "Cover"
+	add_child(root)
+	var colors: Array[Color] = [Color(0.55, 0.25, 0.2), Color(0.2, 0.35, 0.5), Color(0.3, 0.42, 0.3), Color(0.6, 0.5, 0.25)]
+	var wood := Models.mat(Color(0.7, 0.58, 0.42), &"wood")
+	var concrete := Models.mat(Color(0.75, 0.75, 0.73), &"concrete")
+	var steel := Models.mat(Color(0.5, 0.52, 0.55), &"metal")
+	for entry: Array in COVER:
+		var piece := Node3D.new()
+		piece.position = Vector3(entry[1], 0.0, half.y + float(entry[2]))
+		piece.rotation.y = entry[3]
+		root.add_child(piece)
+		match entry[0]:
+			"container":
+				var paint := Models.mat(colors[rng.randi() % colors.size()], &"corrugated")
+				Models.box(piece, Vector3(6.0, 2.6, 2.4), Vector3(0.0, 1.3, 0.0), paint)
+				Models.box(piece, Vector3(0.08, 2.4, 2.2), Vector3(3.02, 1.3, 0.0), steel)  # doors
+				Models.collider(piece, Vector3(6.0, 2.6, 2.4), Vector3(0.0, 1.3, 0.0))
+			"pallets":
+				var layers := rng.randi_range(4, 7)
+				for k in layers:
+					Models.box(piece, Vector3(1.2, 0.14, 1.0), Vector3(0.0, 0.08 + k * 0.3, 0.0), wood)
+					Models.box(piece, Vector3(1.1, 0.14, 0.9), Vector3(0.0, 0.23 + k * 0.3, 0.0), Models.mat(Color(0.8, 0.78, 0.7), &"paint"))
+				Models.box(piece, Vector3(1.2, 1.5, 1.0), Vector3(1.4, 0.75, 0.1), wood)  # a crate beside it
+				Models.collider(piece, Vector3(2.7, maxf(layers * 0.3, 1.5), 1.1), Vector3(0.7, maxf(layers * 0.3, 1.5) * 0.5, 0.05))
+			"barrier":
+				for k in 3:
+					Models.box(piece, Vector3(2.0, 1.0, 0.5), Vector3((k - 1) * 2.1, 0.5, 0.0), concrete)
+				Models.collider(piece, Vector3(6.2, 1.0, 0.5), Vector3(0.0, 0.5, 0.0))
+			"cabinet":
+				Models.box(piece, Vector3(1.6, 1.9, 0.8), Vector3(0.0, 0.95, 0.0), Models.mat(Color(0.4, 0.5, 0.42), &"metal"))
+				Models.box(piece, Vector3(1.8, 0.12, 1.0), Vector3(0.0, 0.06, 0.0), concrete)
+				Models.collider(piece, Vector3(1.6, 1.9, 0.8), Vector3(0.0, 0.95, 0.0))
+			"reel":
+				for side: float in [-0.45, 0.45]:
+					var flange := Models.cylinder(piece, 0.95, 0.08, Vector3(side, 0.95, 0.0), wood, 14)
+					flange.rotation.z = PI * 0.5
+				var drum := Models.cylinder(piece, 0.5, 0.9, Vector3(0.0, 0.95, 0.0), Models.mat(Color(0.12, 0.12, 0.13), &"paint"), 12)
+				drum.rotation.z = PI * 0.5
+				Models.collider(piece, Vector3(1.0, 1.9, 1.9), Vector3(0.0, 0.95, 0.0))
+
+
 func _build_grounds() -> void:
 	var half := compound * 0.5
 	var paint := Models.mat(Color(0.92, 0.92, 0.9))

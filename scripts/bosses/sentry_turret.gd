@@ -57,6 +57,13 @@ func _process(delta: float) -> void:
 func _attack(victim: Node3D) -> void:
 	var from := _nozzle.global_position
 	var aim := _aim_point_of(victim)
+	# Nothing to hose down through a roof or a wall: with the target under
+	# cover (inside the building, behind a container) the cannon holds.
+	var sight := PhysicsRayQueryParameters3D.create(from, aim, 1 | 16, [get_rid()])
+	if not get_world_3d().direct_space_state.intersect_ray(sight).is_empty():
+		_set_spraying(false)
+		_spray_left = 0.0
+		return
 	# Lob a little high: the stream droops over distance.
 	var lead := aim + Vector3.UP * from.distance_to(aim) * 0.04
 	_nozzle.look_at(lead, Vector3.UP)

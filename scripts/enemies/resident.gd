@@ -3,7 +3,10 @@ extends Enemy
 ## A neighbor out and about. Nobody targets them; hurting one costs trust.
 ## When awake hostiles get close they hurry off somewhere else. Cars shove
 ## them aside (see Car._bump). Each has a `role`:
-## - walker: strolls between doors, shops, the market, and the park
+## - walker: lives at the door they start from (`home`): leaves on one to
+##   three errands (doors, shops, the market, the park), stops to chat when
+##   another neighbor is there, then walks home and goes inside for a while
+##   (`is_inside()`: hidden, untouchable) before the next outing
 ## - jogger: loops the block at a run, never stops
 ## - dog_walker: a strolling walker with a pet dog at heel
 ## - kid: dashes around near home with a ball
@@ -43,6 +46,12 @@ var _spray_left := randf() * 0.5
 var _route_index := 0
 var _spray: GPUParticles3D
 var _pet: Dog
+## Stops left before heading home, and seconds left indoors.
+var _errands_left := randi_range(1, 3)
+var _inside_left := 0.0
+var _stopped := false
+var _chatting := false
+var _layer := 0
 
 
 func _init() -> void:
@@ -143,6 +152,35 @@ func _faction_group() -> String:
 	return "residents"
 
 
+## Indoors at home: not on the street until the next outing.
+func is_inside() -> bool:
+	return _inside_left > 0.0
+
+
+func _go_inside() -> void:
+	_inside_left = randf_range(12.0, 30.0)
+	_layer = collision_layer
+	collision_layer = 0
+	visible = false
+	speak("")
+
+
+func _step_out() -> void:
+	_inside_left = 0.0
+	collision_layer = _layer
+	visible = true
+	_errands_left = randi_range(1, 3)
+
+
+## Another neighbor standing within chatting distance.
+func _neighbor_close() -> bool:
+	for node in get_tree().get_nodes_in_group("residents"):
+		var other := node as Resident
+		if other and other != self and other.visible and other.global_position.distance_to(global_position) < 2.5:
+			return true
+	return false
+
+
 func _pick_target() -> Node3D:
 	return null
 
@@ -156,7 +194,7 @@ func _process(delta: float) -> void:
 		_spray_left = 0.5
 		_spray.emitting = not is_far() and _nav.is_navigation_finished() and randf() < 0.6
 	_line_left -= delta
-	if _line_left <= 0.0:
+	if _line_left <= 0.0 and not is_inside():
 		_line_left = randf_range(14.0, 30.0) if role != &"busker" else randf_range(6.0, 10.0)
 		var lines: Array = LINES.get(role, LINES[&"walker"])
 		speak(lines.pick_random())
@@ -166,6 +204,12 @@ func _process(delta: float) -> void:
 
 
 func _idle() -> void:
+	if is_inside():
+		# Home is the safest place to be when trouble's about.
+		_inside_left -= THINK_INTERVAL
+		if _inside_left <= 0.0 and not _danger_nearby():
+			_step_out()
+		return
 	if role != &"busker" and role != &"gardener" and _danger_nearby():
 		# Hurry off to somewhere else.
 		move_speed = maxf(move_speed, 4.0)
@@ -203,11 +247,25 @@ func _stroll() -> void:
 	move_speed = minf(move_speed, 2.2)
 	if not _nav.is_navigation_finished():
 		return
+	if not _stopped:
+		# Just arrived: stand a while, longer if there's someone to talk to.
+		_stopped = true
+		_chatting = _neighbor_close()
+		_pause_left = randf_range(3.0, 9.0) + (5.0 if _chatting else 0.0)
 	_pause_left -= THINK_INTERVAL
 	if _pause_left > 0.0:
 		return
-	_pause_left = randf_range(3.0, 9.0)
-	_nav.target_position = destinations.pick_random() + Vector3(randf_range(-2.0, 2.0), 0.0, randf_range(-2.0, 2.0))
+	_stopped = false
+	_chatting = false
+	if _errands_left > 0:
+		_errands_left -= 1
+		_nav.target_position = destinations.pick_random() + Vector3(randf_range(-2.0, 2.0), 0.0, randf_range(-2.0, 2.0))
+	elif global_position.distance_to(home) > 3.0:
+		_nav.target_position = home
+	elif role == &"walker":
+		_go_inside()
+	else:
+		_errands_left = randi_range(1, 3)
 
 
 ## Acoustic guitar across the chest: a figure-eight body (two bouts), a sound
@@ -238,7 +296,7 @@ func _upper_pose() -> StringName:
 			return &"carry_walk"
 		&"busker":
 			return &"talk"
-	return &""
+	return &"talk" if _chatting else &""
 
 
 func _danger_nearby() -> bool:

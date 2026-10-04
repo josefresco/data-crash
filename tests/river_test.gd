@@ -45,8 +45,10 @@ func _run() -> void:
 			stops += 1
 		elif text in hood.street_names:
 			named += 1
-	check(stops == hood.street_z.size() * 2, "each cross street stops for the main road (%d signs)" % stops)
-	check(named == hood.street_z.size() * 2, "corner signs name the streets (%d faces)" % named)
+	var joined := hood.avenue_streets().size()
+	check(joined == 2, "the east avenue joins the streets north of the river (%d)" % joined)
+	check(stops == hood.street_z.size() * 2 + joined, "cross streets stop for the main road and the avenue (%d signs)" % stops)
+	check(named == hood.street_z.size() * 2 + joined * 2, "corner signs name the streets (%d faces)" % named)
 	var spots := hood.driveway_spots()
 	var parked := 0
 	var clear := true

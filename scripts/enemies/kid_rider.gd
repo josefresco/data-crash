@@ -78,8 +78,11 @@ func _decorate(visual_root: Node3D) -> void:
 	var tire := _solid(Color(0.08, 0.08, 0.08))
 	var frame := _solid([Color(0.9, 0.15, 0.2), Color(0.2, 0.5, 0.95), Color(0.2, 0.75, 0.3)].pick_random())
 	for z: float in [-0.5, 0.5]:
-		var wheel := _add_box(bike, Vector3(0.05, 0.55, 0.55), Vector3(0.0, 0.28, z), tire)
+		var wheel := Models.cylinder(bike, 0.28, 0.05, Vector3(0.0, 0.28, z), tire, 16)
+		wheel.rotation.z = PI * 0.5  # the axle runs side to side
 		wheel.name = "Wheel"
+		var hub := Models.cylinder(wheel, 0.2, 0.052, Vector3.ZERO, _solid(Color(0.75, 0.76, 0.78)), 12)
+		hub.name = "Rim"
 	_add_box(bike, Vector3(0.05, 0.06, 1.0), Vector3(0.0, 0.5, 0.0), frame)
 	_add_box(bike, Vector3(0.05, 0.45, 0.06), Vector3(0.0, 0.62, -0.45), frame)
 	_add_box(bike, Vector3(0.5, 0.04, 0.04), Vector3(0.0, 0.85, -0.45), frame)

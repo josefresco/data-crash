@@ -19,6 +19,7 @@ var _rng := RandomNumberGenerator.new()
 var _chunks := {}
 var _hood: NeighborhoodBuilder
 var _skip: Array[Vector3] = []
+var _knockables: Array[Knockable] = []
 
 
 ## Builds everything for `hood`. `avoid`: world points to keep clear (the
@@ -47,6 +48,8 @@ func setup(hood: NeighborhoodBuilder, avoid: Array[Vector3] = []) -> void:
 	_power_lines(mats)
 	_shop_clutter(mats)
 	_bus_stop(mats)
+	for prop in _knockables:
+		prop.finish(view_distance * 0.8)
 	for key in _chunks:
 		var chunk := _chunks[key] as Node3D
 		Models.merge_static(chunk)
@@ -66,19 +69,28 @@ func _chunk(at: Vector3) -> Node3D:
 	return _chunks[key]
 
 
-## A prop root at `at` (world, yaw), in its chunk, or null if too close to
-## something that must stay clear, or in the river.
-func _prop(at: Vector3, yaw := 0.0) -> Node3D:
-	for point in _skip:
-		if Vector2(point.x - at.x, point.z - at.z).length() < 4.0:
-			return null
-	if _hood.in_river(_hood.to_local(at), 1.0):
+## A prop root at `at` (world, yaw), or null if too close to something that
+## must stay clear, or in the river. Fixed props go in their chunk (merged);
+## `knockable` ones are Knockables of their own, which vehicles send flying.
+func _prop(at: Vector3, yaw := 0.0, knockable := false) -> Node3D:
+	if _blocked(at):
 		return null
-	var root := Node3D.new()
+	var root: Node3D = Knockable.new() if knockable else Node3D.new()
 	root.position = at
 	root.rotation.y = yaw
-	_chunk(at).add_child(root)
+	if knockable:
+		add_child(root)
+		_knockables.append(root as Knockable)
+	else:
+		_chunk(at).add_child(root)
 	return root
+
+
+func _blocked(at: Vector3) -> bool:
+	for point in _skip:
+		if Vector2(point.x - at.x, point.z - at.z).length() < 4.0:
+			return true
+	return _hood.in_river(_hood.to_local(at), 1.0)
 
 
 ## Bins at the curb, and one or two things in the front yard.
@@ -90,7 +102,7 @@ func _house_clutter(door: Vector3, facing: Vector3, mats: Dictionary) -> void:
 	var street := _nearest_street(_hood.to_local(door))
 	var curb_offset := absf(_hood.to_local(door).z - street) - _hood.road_width * 0.5 - 2.6
 	var curb := door + out * curb_offset + side * 3.2
-	var bins := _prop(curb, yaw)
+	var bins := _prop(curb, yaw, true)
 	if bins:
 		for k in 2:
 			var bin := Node3D.new()
@@ -106,10 +118,13 @@ func _house_clutter(door: Vector3, facing: Vector3, mats: Dictionary) -> void:
 	# Yard things: between the curb and the house.
 	for n in _rng.randi_range(1, 2):
 		var spot := door + out * _rng.randf_range(1.8, curb_offset - 1.2) + side * _rng.randf_range(-4.0, 1.5)
-		var thing := _prop(spot, _rng.randf() * TAU)
-		if thing == null:
+		var turn := _rng.randf() * TAU
+		if _blocked(spot):
 			continue
-		match _rng.randi() % 6:
+		# Everything but the basketball hoop (a steel post) can be run over.
+		var kind := _rng.randi() % 6
+		var thing := _prop(spot, turn, kind != 1)
+		match kind:
 			0:
 				_bike(thing, mats)
 			1:
@@ -264,7 +279,7 @@ func _power_lines(mats: Dictionary) -> void:
 ## By each Kenney shop's door: a newspaper box and a bench; a dumpster
 ## around the side.
 func _shop_clutter(mats: Dictionary) -> void:
-	for lot: Array in _hood.store_lots:
+	for lot: Array in _hood.all_store_lots():
 		var door := _hood.store_door(lot[2])
 		if door == Vector3.ZERO:
 			continue
@@ -272,14 +287,14 @@ func _shop_clutter(mats: Dictionary) -> void:
 		var lot_at := _hood.to_global(lot[0] as Vector3)
 		var out := Vector3(0.0, 0.0, signf(world_door.z - lot_at.z))
 		var yaw := atan2(out.x, out.z)
-		var box := _prop(world_door + Vector3(-3.0, 0.0, 0.0), yaw)
+		var box := _prop(world_door + Vector3(-3.0, 0.0, 0.0), yaw, true)
 		if box:
 			var paper: Material = [mats["blue"], mats["red"], mats["yellow"]][_rng.randi() % 3]
 			Models.box(box, Vector3(0.5, 0.9, 0.45), Vector3(0.0, 0.55, 0.0), paper)
 			Models.box(box, Vector3(0.4, 0.3, 0.02), Vector3(0.0, 0.8, 0.23), mats["glass"])
 			Models.box(box, Vector3(0.06, 0.1, 0.06), Vector3(0.0, 0.05, 0.0), mats["steel"])
 			Models.collider(box, Vector3(0.5, 1.0, 0.45), Vector3(0.0, 0.5, 0.0))
-		var bench := _prop(world_door + Vector3(4.6, 0.0, 0.0), yaw + PI)
+		var bench := _prop(world_door + Vector3(4.6, 0.0, 0.0), yaw + PI, true)
 		if bench:
 			for k in 3:
 				Models.box(bench, Vector3(1.6, 0.05, 0.12), Vector3(0.0, 0.45, -0.15 + k * 0.15), mats["wood"])

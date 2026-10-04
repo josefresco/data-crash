@@ -59,7 +59,7 @@ intro_objective = "Three corporations are draining the river: PureDrain Bottling
 
 [node name="NavBaker" type="NavigationRegion3D" parent="."]
 script = ExtResource("8_nav")
-bake_bounds = AABB(-92, -2, -96, 184, 20, 260)
+bake_bounds = AABB(-92, -2, -96, 195, 20, 260)
 
 [node name="NavBakerWest" type="NavigationRegion3D" parent="."]
 script = ExtResource("8_nav")
@@ -67,7 +67,7 @@ bake_bounds = AABB(-190, -2, -96, 98, 20, 260)
 
 [node name="NavBakerEast" type="NavigationRegion3D" parent="."]
 script = ExtResource("8_nav")
-bake_bounds = AABB(92, -2, -96, 98, 20, 260)
+bake_bounds = AABB(103, -2, -96, 87, 20, 260)
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = SubResource("Environment")
@@ -150,7 +150,7 @@ site_id = &"puredrain"
 [node name="SupplyVan" type="CharacterBody3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.5, 0.2, 42)
 script = ExtResource("17_van")
-route = Array[Vector3]([Vector3(-2.5, 0.2, 96), Vector3(-2.5, 0.2, -5)])
+route = Array[Vector3]([Vector3(-1.5, 0.2, 96), Vector3(1.5, 0.2, 96), Vector3(1.5, 0.2, 36), Vector3(-2.4, 0.2, 22), Vector3(-2.4, 0.2, -5)])
 
 [node name="StrayDog1" type="CharacterBody3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 24, 0.1, 31)

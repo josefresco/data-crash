@@ -30,10 +30,11 @@ extends Node3D
 @export var park_x := Vector2(-64.0, -10.0)
 @export var construction_site := Vector3(34.0, 0.0, -12.0)
 ## Cars parked along the curbs: (x, z, yaw). Keep them off the driveway
-## mouths (6 m to one side of each house's center).
+## mouths (6 m to one side of each house's center) and west of the main
+## road: the blocks east of it carry the neighbors' traffic.
 @export var parked_cars: Array[Vector3] = [Vector3(-34, 27.3, PI * 0.5), Vector3(-22, 27.3, PI * 0.5),
-	Vector3(22, 27.3, PI * 0.5), Vector3(46, 27.3, PI * 0.5), Vector3(-46, 112.7, -PI * 0.5),
-	Vector3(-14, 112.7, -PI * 0.5), Vector3(32, 112.7, -PI * 0.5)]
+	Vector3(-50, 27.3, PI * 0.5), Vector3(-66, 27.3, PI * 0.5), Vector3(-46, 112.7, -PI * 0.5),
+	Vector3(-14, 112.7, -PI * 0.5), Vector3(-30, 112.7, -PI * 0.5)]
 ## Streets (by index) lined with street trees.
 @export var tree_streets: Array[int] = [0, 2]
 ## Names on the corner signs: one per cross street, and the main road's.
@@ -41,6 +42,23 @@ extends Node3D
 @export var main_street_name := "MAIN ST"
 ## Share of the driveways long enough for a car that have one parked in them.
 @export_range(0.0, 1.0) var driveway_car_share := 0.4
+@export_group("East side")
+## Extra lot columns east of the main grid (not mirrored: the strip west of
+## the houses stays open), on every street the avenue reaches.
+@export var east_columns: Array[float] = [78.0, 94.0]
+## A north-south avenue joining the cross streets at their east end, which
+## turns the streets into blocks traffic can loop (0: none). It stops short
+## of a river.
+@export var east_avenue_x := 108.0
+@export var avenue_name := "EAST AVE"
+## Shops on the east lots, in the `store_lots` format.
+@export var east_store_lots: Array = [
+	[Vector3(78.0, 0.0, 16.0), "b", "BEAN THERE COFFEE", Color(0.75, 0.5, 0.3)],
+	[Vector3(94.0, 0.0, 16.0), "e", "GREEN GROCER", Color(0.45, 0.85, 0.35)],
+	[Vector3(78.0, 0.0, 44.0), "f", "RISE & SHINE BAKERY", Color(1.0, 0.8, 0.45)],
+	[Vector3(94.0, 0.0, 44.0), "g", "TOOL & TIRE AUTO", Color(0.95, 0.35, 0.2)],
+	[Vector3(78.0, 0.0, 84.0), "i", "LUCKY'S BARBER SHOP", Color(0.9, 0.9, 0.95)],
+]
 @export_group("River")
 ## A river along X at `river_z` (bed, reedy banks, a water surface that
 ## follows the water table, and bridges where the main road crosses). Lots,
@@ -124,6 +142,8 @@ var _decor_rng := RandomNumberGenerator.new()
 ## Driveway picks (which have a car, which way it faces): a third stream, for
 ## the same reason.
 var _lot_rng := RandomNumberGenerator.new()
+## The east side's houses and trees draw from their own stream too.
+var _east_rng := RandomNumberGenerator.new()
 ## Where each driveway meets the street (this node's space): the curb drops there.
 var _curb_cuts: Array[Vector3] = []
 ## [position, yaw] of the cars parked in driveways.
@@ -212,9 +232,10 @@ func build() -> void:
 	_rng.seed = layout_seed
 	_decor_rng.seed = layout_seed * 31 + 5
 	_lot_rng.seed = layout_seed * 53 + 11
+	_east_rng.seed = layout_seed * 71 + 29
 
 	var asphalt := Models.mat(Color(0.75, 0.75, 0.75), &"asphalt")
-	var sidewalk := Models.mat(Color(0.92, 0.92, 0.9), &"concrete")
+	var sidewalk := Models.mat(Color(0.92, 0.92, 0.9), &"sidewalk")
 	var line := Models.mat(Color(0.85, 0.75, 0.3))
 	var half_road := road_width * 0.5
 
@@ -241,18 +262,27 @@ func build() -> void:
 	for side in [-1.0, 1.0]:
 		var reach := access_road_x - street_half_length
 		Models.box(self, Vector3(reach, 0.04, road_width), Vector3(side * (street_half_length + reach * 0.5), 0.021, street_z[0]), asphalt)
+	var avenue := avenue_streets()
 	for i in street_z.size():
 		var z: float = street_z[i]
 		Models.box(self, Vector3(street_half_length * 2.0, 0.04, road_width), Vector3(0.0, 0.021, z), asphalt)
+		if i > 0 and i in avenue:
+			# On out to the avenue (the first street already runs to the gates).
+			var far := east_avenue_x + half_road
+			Models.box(self, Vector3(far - street_half_length, 0.04, road_width), Vector3((far + street_half_length) * 0.5, 0.021, z), asphalt)
 		for side in [-1.0, 1.0]:
-			for span in _spans(-street_half_length, street_half_length, [Vector2(0.0, half_road + 2.0)]):
+			for span in _spans(-street_half_length, street_east_end(i), [Vector2(0.0, half_road + 2.0)]):
 				Models.box(self, Vector3(span.y - span.x, 0.06, 2.0), Vector3((span.x + span.y) * 0.5, 0.03, z + side * (half_road + 1.0)), sidewalk)
 		# Center line (the first street's runs on out to the side gates).
-		var reach := access_road_x if i == 0 else street_half_length
-		for x in range(-int(reach) + 4, int(reach) - 3, 6):
-			if absf(x) >= CROSSING_CLEAR:
-				Models.box(self, Vector3(3.0, 0.05, 0.15), Vector3(x, 0.036, z), line)
+		var west_reach := access_road_x if i == 0 else street_half_length
+		var east_reach := access_road_x if i == 0 else (east_avenue_x - 4.0 if i in avenue else street_half_length)
+		for x in range(-int(west_reach) + 4, int(east_reach) - 3, 6):
+			if absf(x) < CROSSING_CLEAR or (i in avenue and absf(x - east_avenue_x) < CROSSING_CLEAR):
+				continue
+			Models.box(self, Vector3(3.0, 0.05, 0.15), Vector3(x, 0.036, z), line)
 		_build_intersection(i)
+	if not avenue.is_empty():
+		_build_avenue(avenue)
 
 	# Houses: both sides of every street except the second, whose north side is
 	# the park and the construction site. Reserved lots stay empty.
@@ -279,6 +309,31 @@ func build() -> void:
 	for lot in reserved_lots:
 		_add_for_sale_sign(lot + Vector3(0.0, 0.0, 8.0))
 
+	# The east side, from its own stream so the main grid's picks never move.
+	var grid_rng := _rng
+	_rng = _east_rng
+	for i: int in avenue:
+		var z: float = street_z[i]
+		var sides: Array[float] = [1.0]
+		if i != park_street:
+			sides.append(-1.0)
+		for side: float in sides:
+			for column: float in east_columns:
+				var at := Vector3(column, 0.0, z + side * house_setback)
+				if in_river(at, 8.0) or reserved_lots.any(func(lot: Vector3) -> bool: return lot.distance_to(at) < reserved_radius):
+					continue
+				var store := _store_at(at)
+				if store.is_empty():
+					_add_house(at, side)
+				else:
+					_add_store(at, side, store)
+			if i in tree_streets:
+				for x in range(74, int(street_east_end(i)) - 4, 16):
+					var spot := Vector3(x, 0.0, z + side * 6.5)
+					if not in_river(spot, 2.0):
+						_add_tree(spot, _rng.randf_range(4.5, 6.0))
+	_rng = grid_rng
+
 	# Curbs along the cross streets, dropped at the corners and every driveway.
 	for z: float in street_z:
 		for side: float in [-1.0, 1.0]:
@@ -286,7 +341,7 @@ func build() -> void:
 			for mouth in _curb_cuts:
 				if absf(mouth.z - (z + side * house_setback)) < 1.0:
 					cuts.append(Vector2(mouth.x, DRIVEWAY_WIDTH * 0.5 + 0.2))
-			for span in _spans(-street_half_length, street_half_length, cuts):
+			for span in _spans(-street_half_length, street_east_end(street_z.find(z)), cuts):
 				Models.box(self, Vector3(span.y - span.x, CURB_HEIGHT, CURB_WIDTH),
 					Vector3((span.x + span.y) * 0.5, CURB_HEIGHT * 0.5, z + side * (half_road + CURB_WIDTH * 0.5)), _curb_material())
 
@@ -369,16 +424,65 @@ func _build_intersection(index: int) -> void:
 		# north one (-Z), and its stop sign stands on the driver's right.
 		Models.box(self, Vector3(0.4, 0.05, half_road - 0.4), Vector3(side * (half_road + 2.8), 0.037, z - side * half_road * 0.5), paint)
 		_add_stop_sign(Vector3(side * (half_road + 3.0), 0.0, z - side * (half_road + 2.3)), side * PI * 0.5)
-	var cross_name := street_names[index] if index < street_names.size() else "%d ST" % (index + 1)
-	_add_street_sign(Vector3(half_road + 2.4, 0.0, z + half_road + 2.4), cross_name)
+	_add_street_sign(Vector3(half_road + 2.4, 0.0, z + half_road + 2.4), _street_name(index), main_street_name)
 
 
-## A stop sign facing local +Z (decorative: no collider, traffic cuts corners).
+func _street_name(index: int) -> String:
+	return street_names[index] if index < street_names.size() else "%d ST" % (index + 1)
+
+
+## The east avenue between the first and last of `joined` (street indices):
+## asphalt, a center line, sidewalks and curbs, corner signs, and stop signs.
+## The first street runs through (the avenue stops for it); every other
+## street stops for the avenue.
+func _build_avenue(joined: Array[int]) -> void:
+	var half_road := road_width * 0.5
+	var x := east_avenue_x
+	var north: float = street_z[joined[0]]
+	var south: float = street_z[joined[-1]]
+	var paint := Models.mat(Color(0.9, 0.9, 0.88))
+	var walk := Models.mat(Color(0.92, 0.92, 0.9), &"sidewalk")
+	Models.box(self, Vector3(road_width, 0.04, south - north + road_width), Vector3(x, 0.02, (north + south) * 0.5), Models.mat(Color(0.75, 0.75, 0.75), &"asphalt"))
+	for z in range(int(north) + 8, int(south) - 7, 6):
+		if not joined.any(func(i: int) -> bool: return absf(z - street_z[i]) < CROSSING_CLEAR):
+			Models.box(self, Vector3(0.15, 0.05, 3.0), Vector3(x, 0.035, z), Models.mat(Color(0.85, 0.75, 0.3)))
+	# West side: broken at every street. East side: only the first runs through.
+	var west_cuts: Array[Vector2] = []
+	var west_corners: Array[Vector2] = []
+	for i: int in joined:
+		west_cuts.append(Vector2(street_z[i], half_road))
+		west_corners.append(Vector2(street_z[i], half_road + 2.0))
+	var east_cuts: Array[Vector2] = [Vector2(north, half_road)]
+	var east_corners: Array[Vector2] = [Vector2(north, half_road + 2.0)]
+	var sides := [[-1.0, west_cuts, west_corners], [1.0, east_cuts, east_corners]]
+	for entry: Array in sides:
+		var side: float = entry[0]
+		var walk_cuts: Array[Vector2] = entry[1]
+		var curb_cuts: Array[Vector2] = entry[2]
+		for span in _spans(north - half_road - 2.0, south + half_road + 2.0, walk_cuts):
+			Models.box(self, Vector3(2.0, 0.06, span.y - span.x), Vector3(x + side * (half_road + 1.0), 0.03, (span.x + span.y) * 0.5), walk)
+		for span in _spans(north - half_road - 2.0, south + half_road + 2.0, curb_cuts):
+			Models.box(self, Vector3(CURB_WIDTH, CURB_HEIGHT, span.y - span.x),
+				Vector3(x + side * (half_road + CURB_WIDTH * 0.5), CURB_HEIGHT * 0.5, (span.x + span.y) * 0.5), _curb_material())
+	# The last street's far sidewalk carries on around the avenue's south end.
+	Models.box(self, Vector3(road_width + 2.0, 0.06, 2.0), Vector3(x + 1.0, 0.03, south + half_road + 1.0), walk)
+	for i: int in joined:
+		var z: float = street_z[i]
+		_add_street_sign(Vector3(x - half_road - 2.4, 0.0, z - half_road - 2.4), _street_name(i), avenue_name)
+		if i == joined[0]:
+			# Northbound (the east lane) stops for the first street.
+			Models.box(self, Vector3(half_road - 0.4, 0.05, 0.4), Vector3(x + half_road * 0.5, 0.037, z + half_road + 2.8), paint)
+			_add_stop_sign(Vector3(x + half_road + 2.3, 0.0, z + half_road + 3.0), 0.0)
+		else:
+			# Eastbound (the south lane) stops for the avenue.
+			Models.box(self, Vector3(0.4, 0.05, half_road - 0.4), Vector3(x - half_road - 2.8, 0.037, z + half_road * 0.5), paint)
+			_add_stop_sign(Vector3(x - half_road - 3.0, 0.0, z + half_road + 2.3), -PI * 0.5)
+
+
+## A stop sign facing local +Z. Knock-over: a car that cuts the corner
+## flattens it instead of stopping dead.
 func _add_stop_sign(at: Vector3, yaw: float) -> void:
-	var root := Node3D.new()
-	root.position = at
-	root.rotation.y = yaw
-	add_child(root)
+	var root := _prop_root(at, yaw)
 	Models.cylinder(root, 0.04, 2.5, Vector3(0.0, 1.25, 0.0), Models.mat(Color(0.55, 0.56, 0.58), &"metal"), 6)
 	var face := Models.cylinder(root, 0.4, 0.03, Vector3(0.0, 2.2, 0.06), Models.mat(Color(0.8, 0.1, 0.08), &"paint"), 8)
 	# An octagon on edge, flat side up.
@@ -391,15 +495,14 @@ func _add_stop_sign(at: Vector3, yaw: float) -> void:
 	text.position = Vector3(0.0, 2.2, 0.08)
 	Models.fit_label(text, Vector2(0.66, 0.3))
 	root.add_child(text)
+	_prop_done(root)
 
 
 ## A corner post with a blade for the cross street and one for the main road.
-func _add_street_sign(at: Vector3, cross_name: String) -> void:
-	var root := Node3D.new()
-	root.position = at
-	add_child(root)
+func _add_street_sign(at: Vector3, cross_name: String, other_name: String) -> void:
+	var root := _prop_root(at)
 	Models.cylinder(root, 0.04, 3.1, Vector3(0.0, 1.55, 0.0), Models.mat(Color(0.55, 0.56, 0.58), &"metal"), 6)
-	var blades := [[cross_name, 2.75, 0.0], [main_street_name, 3.0, PI * 0.5]]
+	var blades := [[cross_name, 2.75, 0.0], [other_name, 3.0, PI * 0.5]]
 	for entry: Array in blades:
 		var blade := Node3D.new()
 		blade.position = Vector3(0.0, entry[1], 0.0)
@@ -416,6 +519,23 @@ func _add_street_sign(at: Vector3, cross_name: String) -> void:
 			text.rotation.y = 0.0 if face > 0.0 else PI
 			Models.fit_label(text, Vector2(1.4, 0.24))
 			blade.add_child(text)
+	_prop_done(root)
+
+
+## A root for a small prop: a Knockable at runtime (vehicles and blasts send
+## it flying), a plain node in the editor preview. Call `_prop_done()` once
+## its parts are in.
+func _prop_root(at: Vector3, yaw := 0.0) -> Node3D:
+	var root: Node3D = Node3D.new() if Engine.is_editor_hint() else Knockable.new()
+	root.position = at
+	root.rotation.y = yaw
+	add_child(root)
+	return root
+
+
+func _prop_done(root: Node3D) -> void:
+	if root is Knockable:
+		(root as Knockable).finish()
 
 
 ## Draw calls: each house, store, and tree lot (a static body) bakes its
@@ -428,8 +548,36 @@ func _batch_details() -> void:
 	Models.merge_static(self, [_river] if _river else [])
 
 
+## Every shop lot: the main grid's and the east side's.
+func all_store_lots() -> Array:
+	return store_lots + east_store_lots
+
+
+## The cross streets (by index) the east avenue joins: from the first street
+## south, stopping at a river.
+func avenue_streets() -> Array[int]:
+	var joined: Array[int] = []
+	if east_avenue_x <= 0.0:
+		return joined
+	for i in street_z.size():
+		if has_river and street_z[i] > river_z - river_width * 0.5:
+			break
+		joined.append(i)
+	if joined.size() < 2:
+		joined.clear()
+	return joined
+
+
+## Where cross street `index`'s sidewalks end in the east: at the avenue's
+## sidewalk if it joins the avenue.
+func street_east_end(index: int) -> float:
+	if index in avenue_streets():
+		return east_avenue_x - road_width * 0.5 - 2.0
+	return street_half_length
+
+
 func _store_at(at: Vector3) -> Array:
-	for lot: Array in store_lots:
+	for lot: Array in all_store_lots():
 		if (lot[0] as Vector3).distance_to(at) < 2.0:
 			return lot
 	return []
@@ -453,6 +601,7 @@ func _add_store(at: Vector3, facing_side: float, lot: Array) -> void:
 	else:
 		var building := Models.model("%scommercial/building-%s.glb" % [KENNEY, lot[1]], STORE_SCALE)
 		body.add_child(building)
+		Models.wall_detail(building, 3.0)
 		bounds = Models.model_bounds(building)
 		var shape := BoxShape3D.new()
 		shape.size = bounds.size
@@ -518,6 +667,7 @@ func _add_house(at: Vector3, facing_side: float) -> void:
 	var roof := _rng.randi() % (ROOF_VARIANTS + 1)
 	if roof < ROOF_VARIANTS:  # the last pick keeps the kit's green roofs
 		Models.retexture(house, load("%ssuburban/Textures/colormap_roof_%d.png" % [KENNEY, roof]))
+	Models.wall_detail(house)
 
 	var bounds := Models.model_bounds(house)
 	_record_footprint(body, bounds, false)
@@ -544,12 +694,11 @@ func _add_house(at: Vector3, facing_side: float) -> void:
 			var flower := Models.model("%snature/%s.glb" % [KENNEY, FLOWER_MODELS[_rng.randi() % FLOWER_MODELS.size()]], 3.0)
 			flower.position = Vector3(side * bounds.size.x * 0.18, 0.0, front_depth + 1.2)
 			body.add_child(flower)
-	var mailbox := Node3D.new()
-	mailbox.position = at + Vector3(2.5, 0.0, 0.0).rotated(Vector3.UP, body.rotation.y) + front * 1.35
-	add_child(mailbox)
+	var mailbox := _prop_root(at + Vector3(2.5, 0.0, 0.0).rotated(Vector3.UP, body.rotation.y) + front * 1.35)
 	Models.box(mailbox, Vector3(0.08, 1.0, 0.08), Vector3(0.0, 0.5, 0.0), Models.mat(Color(0.3, 0.25, 0.2)))
 	Models.box(mailbox, Vector3(0.25, 0.25, 0.45), Vector3(0.0, 1.05, 0.0), Models.mat(Color(0.2, 0.25, 0.5), &"metal"))
 	Models.collider(mailbox, Vector3(0.3, 1.2, 0.5), Vector3(0.0, 0.6, 0.0))
+	_prop_done(mailbox)
 	if _decor_rng.randf() < 0.35:
 		_add_yard_sign(at + Vector3(-2.6, 0.0, 0.0).rotated(Vector3.UP, body.rotation.y) + front * 1.3, body.rotation.y)
 
@@ -557,7 +706,8 @@ func _add_house(at: Vector3, facing_side: float) -> void:
 	# away from the bins and between the street trees; the corner lots keep
 	# theirs away from the main road. A shallow front yard has room for a car.
 	var drive_x := DRIVEWAY_OFFSET
-	if absf(at.x + drive_x * cos(body.rotation.y)) < 10.0:
+	var mouth_x := at.x + drive_x * cos(body.rotation.y)
+	if absf(mouth_x) < 10.0 or (east_avenue_x > 0.0 and absf(mouth_x - east_avenue_x) < 10.0):
 		drive_x = -drive_x
 	var drive_from := front_depth + 0.15
 	var drive_to := house_setback - road_width * 0.5 - 2.0
@@ -573,10 +723,7 @@ func _add_house(at: Vector3, facing_side: float) -> void:
 
 ## A hand-lettered protest sign on a stake in the front lawn.
 func _add_yard_sign(at: Vector3, yaw: float) -> void:
-	var stake := Node3D.new()
-	stake.position = at
-	stake.rotation.y = yaw + _decor_rng.randf_range(-0.25, 0.25)
-	add_child(stake)
+	var stake := _prop_root(at, yaw + _decor_rng.randf_range(-0.25, 0.25))
 	Models.box(stake, Vector3(0.05, 0.9, 0.05), Vector3(0.0, 0.45, 0.0), Models.mat(Color(0.45, 0.32, 0.2)))
 	var colors: Array[Color] = [Color(0.96, 0.95, 0.9), Color(0.98, 0.85, 0.3), Color(0.55, 0.8, 0.95)]
 	Models.box(stake, Vector3(0.9, 0.6, 0.03), Vector3(0.0, 1.05, 0.0), Models.mat(colors[_decor_rng.randi() % colors.size()], &"paint"))
@@ -587,6 +734,7 @@ func _add_yard_sign(at: Vector3, yaw: float) -> void:
 	label.position = Vector3(0.0, 1.05, 0.02)
 	stake.add_child(label)
 	Models.fit_label(label, Vector2(0.84, 0.54))
+	_prop_done(stake)
 
 
 ## Parked cars are real, drivable Cars (keys in the ignition, this is a nice
@@ -655,12 +803,11 @@ func _build_park(x_range: Vector2, z_range: Vector2) -> void:
 		_add_tree(spot, _rng.randf_range(4.0, 7.0))
 	# Benches.
 	for x in [x_range.x + 14.0, x_range.x + 28.0, x_range.x + 40.0]:
-		var bench := Node3D.new()
-		bench.position = Vector3(x, 0.0, z_range.y - 1.0)
-		add_child(bench)
+		var bench := _prop_root(Vector3(x, 0.0, z_range.y - 1.0))
 		Models.box(bench, Vector3(1.8, 0.1, 0.5), Vector3(0.0, 0.45, 0.0), Models.mat(Color(0.45, 0.3, 0.2)))
 		Models.box(bench, Vector3(1.8, 0.5, 0.08), Vector3(0.0, 0.75, 0.22), Models.mat(Color(0.45, 0.3, 0.2)))
 		Models.collider(bench, Vector3(1.9, 1.0, 0.6), Vector3(0.0, 0.5, 0.05))
+		_prop_done(bench)
 
 
 func _build_construction_site(center: Vector3) -> void:

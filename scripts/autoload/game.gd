@@ -45,6 +45,9 @@ var _tips_seen := {}
 ## Datacenter sites on alert (the player attacked them): site id -> true.
 ## Units and props tagged with a site stay passive until theirs is raised.
 var alarms := {}
+## While above zero, damage raises no site alarm (a hacked Failurecab's ram
+## and blast are blamed on its autopilot). Level.raise_alarm checks it.
+var alarm_hold := 0
 ## Radians per pixel of mouse motion (settings menu).
 var mouse_sensitivity := DEFAULT_SENSITIVITY
 var fullscreen := false
@@ -139,6 +142,7 @@ func _release_static_caches() -> void:
 	Car._chrome_mat = null
 	Models._scenes.clear()
 	Models._retextured.clear()
+	Models._detailed.clear()
 	Models._textures.clear()
 	Models._beam_materials.clear()
 	Fx._streak_mats.clear()
@@ -197,7 +201,7 @@ func apply_display() -> void:
 
 
 func damage_taken_scale() -> float:
-	return [0.6, 1.0, 1.4][difficulty]
+	return [0.45, 0.7, 1.1][difficulty]
 
 
 func enemy_health_scale() -> float:

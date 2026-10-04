@@ -25,7 +25,7 @@ const WEDGE_HEIGHT := 1.9
 @export var thermal_runaway := true
 ## Stainless panels: bullets and melee do this fraction of their damage
 ## (EMP, explosives, fire, and rams hit in full). 1.0 for plain vehicles.
-@export var bullet_factor := 0.5
+@export var bullet_factor := 0.8
 @export var acceleration := 6.0
 ## Radians per second of steering.
 @export var turn_rate := 2.2
@@ -218,7 +218,7 @@ func _sense_traffic(delta: float) -> void:
 	if seen:
 		_blocked_left = 0.3
 		_waited += 0.1
-		if _waited > 3.0:
+		if _waited > 1.8:
 			# Still stuck behind it: nudge out and around.
 			_dodge = 0.5 if randf() < 0.5 else -0.5
 			_dodge_left = 1.5

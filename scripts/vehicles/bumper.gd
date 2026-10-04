@@ -14,7 +14,7 @@ var _recent := {}
 static func attach(host: Node3D, box_size: Vector3, center: Vector3) -> Bumper:
 	var bumper := Bumper.new()
 	bumper.collision_layer = 0
-	bumper.collision_mask = 32  # enemies layer: every NPC, hostile or not
+	bumper.collision_mask = 32 | Knockable.LAYER  # every NPC, and knock-over props
 	bumper.monitorable = false
 	var shape := BoxShape3D.new()
 	shape.size = box_size
@@ -32,8 +32,28 @@ func _physics_process(delta: float) -> void:
 		if _recent[id] <= 0.0:
 			_recent.erase(id)
 	for body in get_overlapping_bodies():
+		if body is Knockable:
+			_knock(body as Knockable)
+			continue
 		var unit := body as Enemy
 		if unit == null or unit == get_parent() or not unit.is_alive() or _recent.has(unit.get_instance_id()):
 			continue
 		_recent[unit.get_instance_id()] = COOLDOWN
 		get_parent().call(&"_bump", unit)
+
+
+## A bin, a bench, a mailbox: at any real speed the vehicle sends it flying
+## instead of stopping dead against it.
+func _knock(prop: Knockable) -> void:
+	if prop.knocked:
+		return
+	var host := get_parent() as Node3D
+	var motion: Vector3 = (host as RigidBody3D).linear_velocity if host is RigidBody3D else (host as CharacterBody3D).velocity
+	motion.y = 0.0
+	var pace := motion.length()
+	if pace < Knockable.MIN_SPEED:
+		return
+	var away := prop.global_position - host.global_position
+	away.y = 0.0
+	var push := (motion / pace * 0.7 + away.normalized() * 0.5).normalized()
+	prop.knock(push * minf(pace * 0.9 + 2.0, 14.0) + Vector3.UP * minf(1.5 + pace * 0.15, 4.0))

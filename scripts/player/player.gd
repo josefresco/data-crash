@@ -165,7 +165,27 @@ func _unhandled_input(event: InputEvent) -> void:
 			select_weapon(weapon_index - 1)
 
 
+## Catching your breath: after REGEN_DELAY seconds without a hit, health
+## comes back at REGEN_RATE per second (twice that while crouched in hiding).
+const REGEN_DELAY := 5.0
+const REGEN_RATE := 6.0
+
+var _since_hurt := 0.0
+
+
+func _recover(delta: float) -> void:
+	_since_hurt += delta
+	if health >= max_health or health <= 0.0 or _since_hurt < REGEN_DELAY:
+		return
+	var before := int(health)
+	health = minf(health + REGEN_RATE * (2.0 if crouching else 1.0) * delta, max_health)
+	if int(health) != before:
+		health_changed.emit(health, max_health)
+		_sync_wounds(Vector3.INF)
+
+
 func _physics_process(delta: float) -> void:
+	_recover(delta)
 	_fire_timer = maxf(_fire_timer - delta, 0.0)
 	_protected_left = maxf(_protected_left - delta, 0.0)
 	_aim_hold = maxf(_aim_hold - delta, 0.0)
@@ -215,6 +235,7 @@ func apply_damage(amount: float, from: Vector3, _kind: StringName = &"generic") 
 	amount *= Game.damage_taken_scale()
 	if amount > 0.0:
 		hurt_from.emit(from, amount)
+		_since_hurt = 0.0
 	if drone and amount >= 3.0:
 		drone.recall("You're under fire! The drone came back.", 3.0)
 	if amount >= 3.0:

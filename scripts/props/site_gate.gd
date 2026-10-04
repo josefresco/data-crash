@@ -69,4 +69,4 @@ func _physics_process(delta: float) -> void:
 func remove() -> void:
 	if is_instance_valid(panel) and not panel.is_destroyed:
 		panel.queue_free()
-	get_tree().call_group(&"nav_baker", &"request_rebake")
+	get_tree().call_group(&"nav_baker", &"request_rebake", global_position)

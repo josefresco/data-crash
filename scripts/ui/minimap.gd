@@ -100,6 +100,12 @@ func _draw_roads() -> void:
 	for z: float in _hood.street_z:
 		_line(Vector3(-_hood.street_half_length, 0, z), Vector3(_hood.street_half_length, 0, z), w, ROAD)
 	_line(Vector3(-_hood.access_road_x, 0, _hood.street_z[0]), Vector3(_hood.access_road_x, 0, _hood.street_z[0]), w, ROAD)
+	var joined := _hood.avenue_streets()
+	if not joined.is_empty():
+		var x := _hood.east_avenue_x
+		_line(Vector3(x, 0, _hood.street_z[joined[0]]), Vector3(x, 0, _hood.street_z[joined[-1]] + w * 0.5), w, ROAD)
+		for i: int in joined:
+			_line(Vector3(_hood.street_half_length, 0, _hood.street_z[i]), Vector3(x, 0, _hood.street_z[i]), w, ROAD)
 
 
 func _draw_buildings() -> void:

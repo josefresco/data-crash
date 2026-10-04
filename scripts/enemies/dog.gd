@@ -45,6 +45,11 @@ func befriend() -> bool:
 	speak("Good dog!")
 	_emit_defeated()
 	_flash(Color(0.6, 1.0, 0.6))
+	# A friendly dog never blocks the player's way.
+	var player := get_tree().get_first_node_in_group("player") as PhysicsBody3D
+	if player:
+		add_collision_exception_with(player)
+		player.add_collision_exception_with(self)
 	return true
 
 
@@ -133,7 +138,67 @@ func _idle() -> void:
 	if faction == Faction.HOSTILE and territory_radius > 0.0 and global_position.distance_to(home) > 6.0:
 		_nav.target_position = home
 		return
+	if faction == Faction.ALLY and order_point == Vector3.INF:
+		_roam_near_player()
+		return
 	super()
+
+
+## A tamed dog keeps you company at a distance: it noses around within
+## ROAM_RADIUS, gets out from underfoot when you walk into it, and only runs
+## to catch up once you're CATCH_UP away.
+const ROAM_RADIUS := 9.0
+const PERSONAL_SPACE := 3.0
+const CATCH_UP := 13.0
+
+
+func _roam_near_player() -> void:
+	var player := get_tree().get_first_node_in_group("player") as Node3D
+	if player == null or not player.is_visible_in_tree():
+		_wander()
+		return
+	var offset := global_position - player.global_position
+	offset.y = 0.0
+	var gap := offset.length()
+	_roam_left -= THINK_INTERVAL
+	if gap > CATCH_UP:
+		# Run to a spot short of the player, not onto their feet.
+		_nav.target_position = player.global_position + offset.normalized() * 5.0
+		_roam_left = 1.5
+		move_speed = maxf(move_speed, 6.5)
+	elif gap < PERSONAL_SPACE:
+		# Pick a way out once and commit to it (re-picking every tick dithers).
+		if _roam_left <= 0.0 or _nav.is_navigation_finished():
+			var away := offset.normalized() if gap > 0.1 else Vector3(1.0, 0.0, 0.0).rotated(Vector3.UP, randf() * TAU)
+			_nav.target_position = _open_spot(player.global_position, away, 5.0, 7.0, 1.2)
+			_roam_left = 2.0
+	elif _roam_left <= 0.0:
+		_roam_left = randf_range(2.5, 6.0)
+		var own := offset.normalized() if gap > 0.1 else Vector3.RIGHT
+		_nav.target_position = _open_spot(player.global_position, own, 4.5, ROAM_RADIUS, PI)
+
+
+## A spot `near_from`..`near_to` meters from `center`, within `spread`
+## radians of `heading`, that is open ground: on the navmesh where it was
+## asked for (not snapped off a wall or a roof) and in a straight line from
+## here, so the dog never has to double back past the player to reach it.
+func _open_spot(center: Vector3, heading: Vector3, near_from: float, near_to: float, spread: float) -> Vector3:
+	var map := get_world_3d().navigation_map
+	var space := get_world_3d().direct_space_state
+	var best := center + heading * near_from
+	for i in 6:
+		var spot := center + heading.rotated(Vector3.UP, randf_range(-spread, spread)) * randf_range(near_from, near_to)
+		var snapped := NavigationServer3D.map_get_closest_point(map, spot)
+		if Vector2(snapped.x - spot.x, snapped.z - spot.z).length() > 0.8 or absf(snapped.y - global_position.y) > 1.5:
+			continue
+		var ray := PhysicsRayQueryParameters3D.create(global_position + Vector3.UP * 0.5, snapped + Vector3.UP * 0.5, 1 | 16, [get_rid()])
+		if space.intersect_ray(ray).is_empty():
+			return snapped
+		best = snapped
+	return best
+
+
+var _roam_left := 0.0
 
 
 func _build_visual() -> Node3D:
