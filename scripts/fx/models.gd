@@ -537,9 +537,100 @@ static func fit_label(label: Label3D, box: Vector2, fill := 0.84) -> void:
 	label.double_sided = false
 
 
+## Boxes this thick or thicker get beveled edges (see `box_mesh`).
+const BEVEL_FROM := 0.1
+static var _boxes := {}
+
+
+## The mesh for a box of `size`, shared by every box that size. Thin slabs
+## (paint lines, road strips) stay plain BoxMeshes. Anything thicker gets its
+## 12 edges and 8 corners chamfered, with the normals of the three faces
+## blended across each chamfer: edges catch a soft highlight instead of
+## ending in a razor line, which is most of what made the world look made
+## of blocks. 24 vertices, 44 triangles.
+static func box_mesh(size: Vector3) -> Mesh:
+	var key := "%.3f/%.3f/%.3f" % [size.x, size.y, size.z]
+	if _boxes.has(key):
+		return _boxes[key]
+	var thin := minf(size.x, minf(size.y, size.z))
+	var mesh: Mesh
+	if thin < BEVEL_FROM:
+		var plain := BoxMesh.new()
+		plain.size = size
+		mesh = plain
+	else:
+		mesh = _beveled(size, clampf(thin * 0.14, 0.012, 0.07))
+	_boxes[key] = mesh
+	return mesh
+
+
+static func _beveled(size: Vector3, bevel: float) -> ArrayMesh:
+	var half := size * 0.5
+	var points := PackedVector3Array()
+	var normals := PackedVector3Array()
+	var uvs := PackedVector2Array()
+	# Per corner, one vertex on each of its three faces (index: corner * 3 + axis).
+	for corner in 8:
+		var sign_of := Vector3(1.0 if corner & 1 else -1.0, 1.0 if corner & 2 else -1.0, 1.0 if corner & 4 else -1.0)
+		for axis in 3:
+			var p := Vector3.ZERO
+			var n := Vector3.ZERO
+			for k in 3:
+				p[k] = sign_of[k] * (half[k] if k == axis else half[k] - bevel)
+			n[axis] = sign_of[axis]
+			points.append(p)
+			normals.append(n)
+			var u := (axis + 1) % 3
+			var v := (axis + 2) % 3
+			uvs.append(Vector2(p[u] / maxf(size[u], 0.001) + 0.5, p[v] / maxf(size[v], 0.001) + 0.5))
+	var indices := PackedInt32Array()
+	var add := func(a: int, b: int, c: int, outward: Vector3) -> void:
+		# Front faces wind clockwise seen from outside.
+		if (points[b] - points[a]).cross(points[c] - points[a]).dot(outward) > 0.0:
+			indices.append_array([a, c, b])
+		else:
+			indices.append_array([a, b, c])
+	for axis in 3:
+		var u := (axis + 1) % 3
+		var v := (axis + 2) % 3
+		for positive in 2:
+			# The face itself: its four corners in order around it.
+			var ring: Array[int] = []
+			for step: Array in [[0, 0], [1, 0], [1, 1], [0, 1]]:
+				ring.append(((positive << axis) | (int(step[0]) << u) | (int(step[1]) << v)) * 3 + axis)
+			var out := Vector3.ZERO
+			out[axis] = 1.0 if positive else -1.0
+			add.call(ring[0], ring[1], ring[2], out)
+			add.call(ring[0], ring[2], ring[3], out)
+	# Edge chamfers: between the faces of axes u and v, running along `axis`.
+	for axis in 3:
+		var u := (axis + 1) % 3
+		var v := (axis + 2) % 3
+		for su in 2:
+			for sv in 2:
+				var low := (su << u) | (sv << v)
+				var high := low | (1 << axis)
+				var out := Vector3.ZERO
+				out[u] = 1.0 if su else -1.0
+				out[v] = 1.0 if sv else -1.0
+				add.call(low * 3 + u, high * 3 + u, high * 3 + v, out)
+				add.call(low * 3 + u, high * 3 + v, low * 3 + v, out)
+	for corner in 8:
+		add.call(corner * 3, corner * 3 + 1, corner * 3 + 2,
+			Vector3(1.0 if corner & 1 else -1.0, 1.0 if corner & 2 else -1.0, 1.0 if corner & 4 else -1.0))
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = points
+	arrays[Mesh.ARRAY_NORMAL] = normals
+	arrays[Mesh.ARRAY_TEX_UV] = uvs
+	arrays[Mesh.ARRAY_INDEX] = indices
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	return mesh
+
+
 static func box(parent: Node3D, size: Vector3, at: Vector3, material: Material) -> MeshInstance3D:
-	var mesh := BoxMesh.new()
-	mesh.size = size
+	var mesh := box_mesh(size)
 	var node := MeshInstance3D.new()
 	node.mesh = mesh
 	node.material_override = material
@@ -555,7 +646,9 @@ static func cylinder(parent: Node3D, radius: float, height: float, at: Vector3, 
 	mesh.top_radius = radius
 	mesh.bottom_radius = radius
 	mesh.height = height
-	mesh.radial_segments = segments
+	# Anything thicker than a pipe gets a round silhouette, not a hexagon (set
+	# `radial_segments` afterwards for a shape that is meant to be faceted).
+	mesh.radial_segments = maxi(segments, 14) if radius >= 0.1 else segments
 	mesh.rings = 1
 	var node := MeshInstance3D.new()
 	node.mesh = mesh

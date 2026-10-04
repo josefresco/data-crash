@@ -579,6 +579,7 @@ func _test_solid_props() -> void:
 
 ## GTA-style: getting knocked out clears the alarms; damage stays.
 func _test_heat_reset() -> void:
+	var hud_rows := func() -> int: return (level.get_node("Hud") as Hud).checklist_rows("deeds").size()
 	level.call("raise_alarm", &"scgrewgle", "test")
 	# A hunter with no site (like Elmo once he's out of his datacenter), whose
 	# standing objective is the player.
@@ -588,6 +589,13 @@ func _test_heat_reset() -> void:
 	level.add_child(hunter)
 	await seconds(1.5)
 	check(Game.is_alarmed(&"scgrewgle"), "the Scgrewgle alarm is up")
+	var others := 0
+	for node in get_tree().get_nodes_in_group("hostiles"):
+		var unit := node as Enemy
+		if unit and unit.is_alive() and unit.site in [&"felsa", &"forprofit"] and not unit.is_dormant() and not Game.is_alarmed(unit.site):
+			others += 1
+	check(others == 0, "one site's alarm leaves the other sites' security asleep (%d awake)" % others)
+	check(level.phase == level.Phase.ASSAULT and hud_rows.call() > 0, "the good deeds stay on the list while a site is on alert")
 	check(hunter.target == player, "a hunter with no site is on the player")
 	var hud := level.get_node("Hud") as Hud
 	player.apply_damage(99999.0, player.global_position + Vector3(0, 0, -3), &"bullet")

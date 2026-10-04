@@ -485,6 +485,7 @@ func _add_stop_sign(at: Vector3, yaw: float) -> void:
 	var root := _prop_root(at, yaw)
 	Models.cylinder(root, 0.04, 2.5, Vector3(0.0, 1.25, 0.0), Models.mat(Color(0.55, 0.56, 0.58), &"metal"), 6)
 	var face := Models.cylinder(root, 0.4, 0.03, Vector3(0.0, 2.2, 0.06), Models.mat(Color(0.8, 0.1, 0.08), &"paint"), 8)
+	(face.mesh as CylinderMesh).radial_segments = 8
 	# An octagon on edge, flat side up.
 	face.basis = Basis(Vector3.RIGHT, PI * 0.5) * Basis(Vector3.UP, PI / 8.0)
 	var text := Label3D.new()

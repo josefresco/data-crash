@@ -121,6 +121,7 @@ var _lost_grace := 0.0
 const REACQUIRE_RANGE := 22.0
 ## Seconds out of sight before site security gives up the chase.
 const HIDE_SECONDS := 7.0
+const BOSS_HIDE_SECONDS := 15.0
 var _unseen := 0.0
 var _last_seen := Vector3.INF
 const LOST_GRACE := 8.0
@@ -433,11 +434,68 @@ func _physics_process(delta: float) -> void:
 			_animate(delta)
 		return
 	_was_resting = false
+	_slide_around_vehicles()
 	move_and_slide()
 	_animate(delta)
 
 	if global_position.y < -30.0:
 		_die()
+
+
+## Vehicles and people don't collide physically (a crowd would wedge a car),
+## so someone on foot treats a parked or slow vehicle as solid on their own:
+## the part of their velocity heading into it is removed and they're eased
+## back out, so they walk around the car instead of through it. A vehicle
+## moving faster than VEHICLE_SOLID_SPEED is left to its bumper, which
+## shoves them aside.
+const VEHICLE_SOLID_SPEED := 2.5
+static var _vehicle_probe: SphereShape3D
+
+
+func _slide_around_vehicles() -> void:
+	if _lod_far:
+		return
+	if _vehicle_probe == null:
+		_vehicle_probe = SphereShape3D.new()
+	_vehicle_probe.radius = body_radius + 0.15
+	var query := PhysicsShapeQueryParameters3D.new()
+	query.shape = _vehicle_probe
+	query.transform = Transform3D(Basis.IDENTITY, global_position + Vector3.UP * 0.7)
+	query.collision_mask = Game.LAYER_VEHICLES
+	query.exclude = [get_rid()]
+	var contact := get_world_3d().direct_space_state.get_rest_info(query)
+	if contact.is_empty():
+		return
+	var body := instance_from_id(contact["collider_id"])
+	var pace := 0.0
+	if body is RigidBody3D:
+		pace = (body as RigidBody3D).linear_velocity.length()
+	elif body is CharacterBody3D:
+		pace = (body as CharacterBody3D).velocity.length()
+	if pace > VEHICLE_SOLID_SPEED:
+		return
+	var out: Vector3 = contact["normal"]
+	out.y = 0.0
+	# Deep in (shoved there, or spawned overlapping) the contact normal can
+	# point up or back into the body: fall back to straight away from it.
+	var from_center := global_position - (body as Node3D).global_position
+	from_center.y = 0.0
+	if out.length_squared() < 0.04 or out.dot(from_center) < 0.0:
+		out = from_center
+	if out.length_squared() < 0.0001:
+		return
+	out = out.normalized()
+	var into := velocity.dot(out)
+	if into >= 0.0:
+		return  # already heading away from it
+	# Walk along the body instead of pushing at it: toward whichever end the
+	# unit was already drifting to, or (head-on) the side it picked for good.
+	var along := out.cross(Vector3.UP)
+	var drift := velocity.dot(along)
+	if absf(drift) < 0.3:
+		drift = 1.0 if get_instance_id() % 2 == 0 else -1.0
+	velocity -= out * into
+	velocity = along * signf(drift) * maxf(-into, move_speed * 0.8) + out * 0.8
 
 
 ## True when this frame needs no physics move: on the floor, not steering,
@@ -588,14 +646,19 @@ func lose_track() -> void:
 ## goes back to its post, and only re-engages on seeing them again. Crouching
 ## out of sight shakes them faster. Returns true when it just gave up.
 func _lose_hidden_player(tick: float) -> bool:
-	if site == &"" or not boss_name.is_empty() or not (target is Player):
+	if not (target is Player) or rushing:
+		return false
+	# A boss on the loose (Elmo in his truck or on foot) is harder to shake,
+	# but he can be shaken too. Wave units (no site, no name) never give up.
+	var loose_boss := site == &"" and not boss_name.is_empty()
+	if not loose_boss and (site == &"" or not boss_name.is_empty()):
 		return false
 	if _has_los:
 		_unseen = 0.0
 		_last_seen = target.global_position
 		return false
 	_unseen += tick * (1.8 if (target as Player).crouching else 1.0)
-	if _unseen < HIDE_SECONDS:
+	if _unseen < (BOSS_HIDE_SECONDS if loose_boss else HIDE_SECONDS):
 		return false
 	_unseen = 0.0
 	lose_track()

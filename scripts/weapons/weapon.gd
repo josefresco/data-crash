@@ -76,7 +76,7 @@ static func default_loadout() -> Array[Weapon]:
 			"owned": false, "sound": &"throw", "model": &"bat"}),
 		make("Rocks", {"kind": Kind.THROWN, "throw_kind": &"rock", "damage": 5.0, "cooldown": 0.6, "ammo": 0,
 			"max_ammo": 12, "owned": false, "sound": &"throw", "model": &"rock"}),
-		make("Pistol", {"damage": 24.0, "cooldown": 0.25, "spread": 0.01, "max_range": 60.0, "owned": false,
+		make("Pistol", {"damage": 24.0, "cooldown": 0.25, "spread": 0.01, "max_range": 60.0, "owned": false, "ammo": 60,
 			"model": &"pistol", "flash_size": 0.75, "recoil": 0.025, "casing": &"brass"}),
 		make("Shotgun", {"damage": 13.0, "pellets": 8, "spread": 0.045, "cooldown": 0.8,
 			"max_range": 25.0, "ammo": 24, "owned": false, "sound": &"shotgun", "model": &"shotgun", "two_handed": true,

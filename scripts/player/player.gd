@@ -1169,5 +1169,18 @@ func set_spawn(xform: Transform3D) -> void:
 	velocity = Vector3.ZERO
 
 
+## Adds rounds to an owned weapon (by name), up to its maximum. Returns how
+## many were actually added.
+func add_ammo(weapon_name: String, amount: int) -> int:
+	for weapon in weapons:
+		if weapon.display_name == weapon_name and weapon.owned and weapon.max_ammo > 0:
+			var added := mini(amount, weapon.max_ammo - weapon.ammo)
+			weapon.ammo += added
+			if added > 0 and weapon == current_weapon():
+				weapon_changed.emit(weapon)
+			return added
+	return 0
+
+
 func is_spawn_protected() -> bool:
 	return _protected_left > 0.0

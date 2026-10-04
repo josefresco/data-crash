@@ -147,9 +147,7 @@ func _build() -> void:
 		_mesh.mesh = custom
 		_mesh.position.y = 0.0
 	else:
-		var box := BoxMesh.new()
-		box.size = size
-		_mesh.mesh = box
+		_mesh.mesh = Models.box_mesh(size)
 		_mesh.position.y = size.y * 0.5
 
 	_material = StandardMaterial3D.new()

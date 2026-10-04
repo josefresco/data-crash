@@ -118,7 +118,8 @@ func _physics_process(delta: float) -> void:
 		_line_left = line_interval
 		_line_index = (_line_index + 1) % LINES.size()
 		say(LINES[_line_index])
-		if _line_index % 2 == 1:
+		# His fans only pile on while he's actually after someone.
+		if _line_index % 2 == 1 and _is_valid(target):
 			ReplyGuy.summon(self, 2)
 
 	if _charge_left > 0.0:

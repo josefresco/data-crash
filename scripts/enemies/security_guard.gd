@@ -242,6 +242,22 @@ func _upper_pose() -> StringName:
 	return &"pistol_aim" if _is_valid(target) and _has_los else &"pistol_idle"
 
 
+## Pistol rounds a fallen guard leaves for a player within reach.
+const AMMO_DROP := 8
+const AMMO_REACH := 45.0
+
+
+func _on_death() -> void:
+	super()
+	if not uses_cover:
+		return  # turrets, holograms, and robots carry nothing you can use
+	var player := get_tree().get_first_node_in_group("player") as Player
+	if player and player.global_position.distance_to(global_position) <= AMMO_REACH:
+		var rounds := player.add_ammo("Pistol", AMMO_DROP)
+		if rounds > 0:
+			Game.notify("Picked up %d pistol rounds from the guard." % rounds, 2.5)
+
+
 ## The gun arm: straightened onto the target while it has one in sight (the
 ## gun lies along the forearm, so the muzzle really points at you), with a
 ## kick upward on every shot.

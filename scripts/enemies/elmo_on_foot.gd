@@ -105,7 +105,7 @@ func _physics_process(delta: float) -> void:
 		if _posting_left <= 0.0:
 			is_posting = false
 			var extra := 1 if health < max_health * 0.5 else 0
-			var came := ReplyGuy.summon(self, reply_guys_per_post + extra)
+			var came := ReplyGuy.summon(self, 0 if lost_player else reply_guys_per_post + extra)
 			_speech.text = ("%d reply guys answered the call!" % came) if came > 0 else TAUNTS.pick_random()
 			if came > 0:
 				Game.tip("reply_guys", "Every Twat Elmo posts summons Reply Guys. They're slow: shoot Elmo while he's typing (2.5x damage), and they log off when he goes down.")

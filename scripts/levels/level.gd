@@ -992,7 +992,7 @@ func _announce_phase() -> void:
 	_update_deeds()
 	match phase:
 		Phase.ASSAULT:
-			Game.show_banner("THE ASSAULT", "Wreck the cooling units to bring the datacenter down")
+			Game.show_banner("ONE SITE ON ALERT", "Only that datacenter is hunting you. The others are still quiet.")
 		Phase.BUILD:
 			Game.show_banner("BUILD PHASE", "[B] build defenses around the Green Core")
 		Phase.WON:
@@ -1633,7 +1633,8 @@ func _on_grock_camera_smashed(camera: GrockCamera) -> void:
 
 
 func _update_deeds() -> void:
-	if phase != Phase.ACTIVISM:
+	# The neighbors still need help while a datacenter is on alert.
+	if phase != Phase.ACTIVISM and phase != Phase.ASSAULT:
 		Game.set_checklist("deeds", "", [])
 		return
 	var cams := &"done" if _cameras_smashed >= _cameras_total else &"info"

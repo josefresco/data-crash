@@ -125,6 +125,51 @@ func _test_town_life() -> void:
 	dog.queue_free()
 	check(int(level.call("pledged_crew")) >= 2, "the deeds list says how many neighbors will join the defense")
 
+	# The pistol has a real magazine count, and a fallen guard's rounds are yours.
+	var pistol: Weapon = null
+	for weapon in player.weapons:
+		if weapon.display_name == "Pistol":
+			pistol = weapon
+	check(pistol != null and pistol.max_ammo == 60, "the pistol carries 60 rounds")
+	var owned := pistol.owned
+	pistol.owned = true
+	pistol.ammo = 10
+	var guard := SecurityGuard.new()
+	guard.position = player.global_position + Vector3(6.0, 0.2, 0.0)
+	level.add_child(guard)
+	await seconds(0.2)
+	guard.apply_damage(9999.0, player.global_position, &"bullet")
+	await seconds(0.2)
+	check(pistol.ammo == 10 + SecurityGuard.AMMO_DROP, "a guard you put down leaves pistol rounds (%d)" % pistol.ammo)
+	pistol.ammo = pistol.max_ammo
+	pistol.owned = owned
+	# People on foot walk around a parked car, not through it.
+	var parked := level.get_node("Car") as Car
+	parked.linear_velocity = Vector3.ZERO
+	await seconds(1.0)
+	var officer := Police.new()
+	officer.site = &"police"
+	officer.stay_put = true
+	officer.position = parked.global_position + parked.global_basis.x * 4.5 - Vector3.UP * (parked.global_position.y - 0.2)
+	level.add_child(officer)
+	var far_side := parked.global_position - parked.global_basis.x * 4.5
+	far_side.y = 0.2
+	officer.home = far_side
+	var deepest := 99.0
+	for i in 60:
+		await seconds(0.1)
+		var inside := parked.to_local(officer.global_position)
+		# Distance in from the car's flank (negative = inside the body).
+		deepest = minf(deepest, maxf(absf(inside.x) - 0.9, absf(inside.z) - 1.9))
+	check(deepest > -0.25, "an officer never walks through a parked car (closest: %.2f m outside its body)" % deepest)
+	check(officer.global_position.distance_to(far_side) < 3.0, "and still gets to the other side of it (%.1f m off)" % officer.global_position.distance_to(far_side))
+	officer.queue_free()
+
+	var slab := Models.box_mesh(Vector3(1.0, 1.0, 1.0))
+	var line := Models.box_mesh(Vector3(3.0, 0.05, 0.15))
+	check(slab is ArrayMesh and line is BoxMesh and slab == Models.box_mesh(Vector3(1.0, 1.0, 1.0)),
+		"solid boxes get beveled edges (one shared mesh per size); thin strips stay plain")
+
 
 ## Waits out any navmesh rebake (they finish in real time, so under
 ## --fixed-fps one can land in the middle of a later scenario).

@@ -143,6 +143,7 @@ func _release_static_caches() -> void:
 	Models._scenes.clear()
 	Models._retextured.clear()
 	Models._detailed.clear()
+	Models._boxes.clear()
 	Models._textures.clear()
 	Models._beam_materials.clear()
 	Fx._streak_mats.clear()
